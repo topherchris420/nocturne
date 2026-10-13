@@ -1,0 +1,353 @@
+{
+  "generated": "2026-10-13T16:05:51",
+  "spec": "VD-DSL-SPEC-001 RevA, Section 6.3",
+  "night": "2026-10-13 18:00 to 2026-10-14 08:00 local",
+  "lights": 75000,
+  "class_mix": {
+    "arterial": 0.18,
+    "collector": 0.17,
+    "local": 0.45,
+    "alley": 0.15,
+    "park": 0.05
+  },
+  "scenarios": {
+    "today": {
+      "scenario": "today",
+      "title": "Today: static 100 %, current CCT",
+      "energy_mwh_night": 55.6,
+      "delivered_lumen_h_rel": 1.0,
+      "mode_share": {
+        "arterial": {
+          "STATIC": 1.0
+        },
+        "collector": {
+          "STATIC": 1.0
+        },
+        "local": {
+          "STATIC": 1.0
+        },
+        "alley": {
+          "STATIC": 1.0
+        },
+        "park": {
+          "STATIC": 1.0
+        }
+      },
+      "elapsed_s": 5.6,
+      "energy_vs_today": 1.0,
+      "delivered_vs_today": 1.0,
+      "skyglow_index": 1.0
+    },
+    "dimming": {
+      "scenario": "dimming",
+      "title": "Adaptive dimming only",
+      "energy_mwh_night": 36.96,
+      "delivered_lumen_h_rel": 0.6667,
+      "mode_share": {
+        "arterial": {
+          "ONLINE": 1.0
+        },
+        "collector": {
+          "ONLINE": 1.0
+        },
+        "local": {
+          "ONLINE": 1.0
+        },
+        "alley": {
+          "ONLINE": 1.0
+        },
+        "park": {
+          "ONLINE": 1.0
+        }
+      },
+      "elapsed_s": 13.1,
+      "energy_vs_today": 0.665,
+      "delivered_vs_today": 0.667,
+      "skyglow_index": 0.67
+    },
+    "dimming_u0": {
+      "scenario": "dimming_u0",
+      "title": "+ U0 optics",
+      "energy_mwh_night": 36.96,
+      "delivered_lumen_h_rel": 0.6667,
+      "mode_share": {
+        "arterial": {
+          "ONLINE": 1.0
+        },
+        "collector": {
+          "ONLINE": 1.0
+        },
+        "local": {
+          "ONLINE": 1.0
+        },
+        "alley": {
+          "ONLINE": 1.0
+        },
+        "park": {
+          "ONLINE": 1.0
+        }
+      },
+      "elapsed_s": 12.7,
+      "energy_vs_today": 0.665,
+      "delivered_vs_today": 0.667,
+      "skyglow_index": 0.536
+    },
+    "nocturne": {
+      "scenario": "nocturne",
+      "title": "+ warm spectrum (full Nocturne)",
+      "energy_mwh_night": 40.22,
+      "delivered_lumen_h_rel": 0.6667,
+      "mode_share": {
+        "arterial": {
+          "ONLINE": 1.0
+        },
+        "collector": {
+          "ONLINE": 1.0
+        },
+        "local": {
+          "ONLINE": 1.0
+        },
+        "alley": {
+          "ONLINE": 1.0
+        },
+        "park": {
+          "ONLINE": 1.0
+        }
+      },
+      "elapsed_s": 13.1,
+      "energy_vs_today": 0.723,
+      "delivered_vs_today": 0.667,
+      "skyglow_index": 0.484
+    },
+    "outage": {
+      "scenario": "outage",
+      "title": "Full Nocturne during a 7-hour carrier outage",
+      "energy_mwh_night": 38.78,
+      "delivered_lumen_h_rel": 0.6427,
+      "mode_share": {
+        "arterial": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "collector": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "local": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "alley": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "park": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        }
+      },
+      "elapsed_s": 12.3,
+      "energy_vs_today": 0.697,
+      "delivered_vs_today": 0.643,
+      "skyglow_index": 0.467
+    },
+    "legacy_outage": {
+      "scenario": "legacy_outage",
+      "title": "Cloud-dependent nodes in the same outage",
+      "energy_mwh_night": 52.33,
+      "delivered_lumen_h_rel": 0.9422,
+      "mode_share": {
+        "arterial": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "collector": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "local": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "alley": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        },
+        "park": {
+          "AUTONOMOUS": 0.482,
+          "MESH": 0.018,
+          "ONLINE": 0.5
+        }
+      },
+      "elapsed_s": 13.3,
+      "energy_vs_today": 0.941,
+      "delivered_vs_today": 0.942,
+      "skyglow_index": 0.944
+    },
+    "emergency": {
+      "scenario": "emergency",
+      "title": "Full Nocturne with a CAD incident on the local street 00:40-01:40",
+      "energy_mwh_night": 40.59,
+      "delivered_lumen_h_rel": 0.673,
+      "mode_share": {
+        "arterial": {
+          "ONLINE": 1.0
+        },
+        "collector": {
+          "ONLINE": 1.0
+        },
+        "local": {
+          "ONLINE": 1.0
+        },
+        "alley": {
+          "ONLINE": 1.0
+        },
+        "park": {
+          "ONLINE": 1.0
+        }
+      },
+      "elapsed_s": 13.5,
+      "energy_vs_today": 0.73,
+      "delivered_vs_today": 0.673,
+      "skyglow_index": 0.489
+    },
+    "rain": {
+      "scenario": "rain",
+      "title": "Full Nocturne with rain 23:00-02:00",
+      "energy_mwh_night": 42.57,
+      "delivered_lumen_h_rel": 0.7044,
+      "mode_share": {
+        "arterial": {
+          "ONLINE": 1.0
+        },
+        "collector": {
+          "ONLINE": 1.0
+        },
+        "local": {
+          "ONLINE": 1.0
+        },
+        "alley": {
+          "ONLINE": 1.0
+        },
+        "park": {
+          "ONLINE": 1.0
+        }
+      },
+      "elapsed_s": 13.5,
+      "energy_vs_today": 0.766,
+      "delivered_vs_today": 0.704,
+      "skyglow_index": 0.511
+    }
+  },
+  "waterfall": [
+    {
+      "step": "Today",
+      "index": 1.0,
+      "delta": null
+    },
+    {
+      "step": "Adaptive dimming",
+      "index": 0.67,
+      "delta": -0.33
+    },
+    {
+      "step": "U0 optics",
+      "index": 0.536,
+      "delta": -0.134
+    },
+    {
+      "step": "Warm spectrum",
+      "index": 0.484,
+      "delta": -0.052
+    },
+    {
+      "step": "Full Nocturne",
+      "index": 0.484,
+      "delta": null
+    }
+  ],
+  "spectral": [
+    {
+      "spectrum": "4000K",
+      "cct_K": 4013,
+      "duv": 0.0006,
+      "rayleigh_rel": 1.0,
+      "skyglow_scotopic_rel": 1.0,
+      "mie_rel": 1.0,
+      "mel_der": 0.606,
+      "blue_fraction": 0.22,
+      "ler_lm_per_W": 334.3,
+      "efficacy_rel_3000K": 1.03
+    },
+    {
+      "spectrum": "3000K",
+      "cct_K": 3012,
+      "duv": 0.001,
+      "rayleigh_rel": 0.863,
+      "skyglow_scotopic_rel": 0.767,
+      "mie_rel": 0.948,
+      "mel_der": 0.449,
+      "blue_fraction": 0.144,
+      "ler_lm_per_W": 338.2,
+      "efficacy_rel_3000K": 1.0
+    },
+    {
+      "spectrum": "2700K",
+      "cct_K": 2702,
+      "duv": 0.0011,
+      "rayleigh_rel": 0.822,
+      "skyglow_scotopic_rel": 0.683,
+      "mie_rel": 0.939,
+      "mel_der": 0.393,
+      "blue_fraction": 0.118,
+      "ler_lm_per_W": 336.3,
+      "efficacy_rel_3000K": 0.97
+    },
+    {
+      "spectrum": "2200K",
+      "cct_K": 2197,
+      "duv": -0.0009,
+      "rayleigh_rel": 0.733,
+      "skyglow_scotopic_rel": 0.475,
+      "mie_rel": 0.905,
+      "mel_der": 0.255,
+      "blue_fraction": 0.068,
+      "ler_lm_per_W": 338.1,
+      "efficacy_rel_3000K": 0.88
+    },
+    {
+      "spectrum": "PC-Amber",
+      "cct_K": 1853,
+      "duv": 0.008,
+      "rayleigh_rel": 0.542,
+      "skyglow_scotopic_rel": 0.174,
+      "mie_rel": 0.73,
+      "mel_der": 0.059,
+      "blue_fraction": 0.005,
+      "ler_lm_per_W": 410.3,
+      "efficacy_rel_3000K": 0.7
+    },
+    {
+      "spectrum": "Narrow-band amber",
+      "cct_K": 1802,
+      "duv": 0.0088,
+      "rayleigh_rel": 0.444,
+      "skyglow_scotopic_rel": 0.074,
+      "mie_rel": 0.588,
+      "mel_der": 0.012,
+      "blue_fraction": 0.0,
+      "ler_lm_per_W": 518.1,
+      "efficacy_rel_3000K": 0.55
+    }
+  ],
+  "annual_savings_gwh": 5.61
+}
