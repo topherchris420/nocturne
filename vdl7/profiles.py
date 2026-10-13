@@ -9,8 +9,9 @@ carry policy minimums.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class RoadClass(str, Enum):
@@ -145,8 +146,9 @@ class ProfileBundle:
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProfileBundle":
+        """Raises KeyError/ValueError/TypeError on a malformed bundle."""
         return cls(
-            version=int(d["version"]), issued=d["issued"], valid_days=int(d.get("valid_days", 400)),
+            version=int(d["version"]), issued=str(d["issued"]), valid_days=int(d.get("valid_days", 400)),
             profiles={RoadClass(k): ClassProfile.from_dict(v) for k, v in d["profiles"].items()},
             mix={Phase(k): tuple(v) for k, v in d["mix"].items()},
             hin_floor=int(d.get("hin_floor", HIN_FLOOR)), rain_boost=int(d.get("rain_boost", RAIN_BOOST)),
@@ -157,3 +159,60 @@ class ProfileBundle:
 
 def default_bundle(version: int = 1, issued: str = "2026-10-13") -> ProfileBundle:
     return ProfileBundle(version=version, issued=issued)
+
+
+# ----------------------------------------------------------------- guards
+# Compiled into firmware. A signed bundle may raise these, never lower them:
+# a bad or compromised bundle cannot take a street below its RP-8 class or
+# policy minimum, or a High-Injury Network segment below 60 %.
+FIRMWARE_MIN_FLOOR: Dict[RoadClass, int] = {r: p.floor for r, p in DEFAULT_PROFILES.items()}
+FIRMWARE_MIN_HIN = 60
+MAX_RAIN_BOOST = 30
+MAX_HOLD_S = 600.0
+
+
+def validate_bundle(b: ProfileBundle) -> List[str]:
+    """Every reason the node would refuse this bundle; empty means valid."""
+    errs: List[str] = []
+    for road in RoadClass:
+        p = b.profiles.get(road)
+        if p is None:
+            errs.append(f"{road.value}: missing")
+            continue
+        if p.road != road:
+            errs.append(f"{road.value}: profile labelled {p.road.value}")
+        if len(p.levels) != len(PHASE_ORDER):
+            errs.append(f"{road.value}: {len(p.levels)} levels, need {len(PHASE_ORDER)}")
+            continue
+        if p.floor < FIRMWARE_MIN_FLOOR[road]:
+            errs.append(f"{road.value}: floor {p.floor} below firmware minimum {FIRMWARE_MIN_FLOOR[road]}")
+        if not (p.floor <= p.boost_cap <= 100):
+            errs.append(f"{road.value}: boost cap {p.boost_cap} outside [floor, 100]")
+        for ph, lv in zip(PHASE_ORDER, p.levels):
+            if not (p.floor <= lv <= 100):
+                errs.append(f"{road.value}: {ph.value} level {lv} outside [floor {p.floor}, 100]")
+        if p.design_volume is not None and p.design_volume <= 0:
+            errs.append(f"{road.value}: design volume must be positive")
+    for ph in PHASE_ORDER:
+        mix = b.mix.get(ph)
+        if mix is None or len(mix) != 2 or min(mix) < 0 or sum(mix) != 100:
+            errs.append(f"mix {ph.value}: {mix} must be two non-negative parts summing to 100")
+    if b.hin_floor < FIRMWARE_MIN_HIN:
+        errs.append(f"hin_floor {b.hin_floor} below {FIRMWARE_MIN_HIN}")
+    if not (0 <= b.rain_boost <= MAX_RAIN_BOOST):
+        errs.append(f"rain_boost {b.rain_boost} outside [0, {MAX_RAIN_BOOST}]")
+    for name in ("presence_hold_s", "carpet_hold_s"):
+        v = getattr(b, name)
+        if not (0 < v <= MAX_HOLD_S):
+            errs.append(f"{name} {v} outside (0, {MAX_HOLD_S}]")
+    if not (1 <= b.valid_days <= 400):
+        errs.append(f"valid_days {b.valid_days} outside [1, 400]")
+    try:
+        date.fromisoformat(b.issued)
+    except ValueError:
+        errs.append(f"issued {b.issued!r} is not an ISO date")
+    return errs
+
+
+def bundle_expired(b: ProfileBundle, today: date) -> bool:
+    return today > date.fromisoformat(b.issued) + timedelta(days=b.valid_days)

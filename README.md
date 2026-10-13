@@ -1,125 +1,201 @@
 # Nocturne · VDL-7 reference firmware
 
-Reference implementation of the VDL-7 edge controller from **VD-DSL-SPEC-001 RevA, *DC Dark-Sky Lighting Engineering Specification*** (Christopher Woodyard, Oct 2026), with the acceptance suite from Section 6.2 and the network night simulation behind Section 6.3.
+Reference implementation of the VDL-7 streetlight edge controller from **VD-DSL-SPEC-001 RevA, *DC Dark-Sky Lighting Engineering Specification*** (Christopher Woodyard, Vers3Dynamics, Oct 2026). It includes the Section 6.2 acceptance suite, the Section 6.3 network night simulation and an interactive operator console.
 
-The design premise of the spec is that **the node, not the CMS, owns the curfew**. Every VDL-7 carries its own astronomical clock, the US DST rule, a signed profile bundle and an event store, so a cellular or cloud outage changes only *which events arrive*, never whether the lights dim. This package is that premise, written down as code that runs and tests that pass.
+The spec's central design rule is that **the node, not the CMS, owns the curfew**. Every VDL-7 carries its own astronomical clock, the US DST rule, a signed profile bundle and an event store. A cellular or cloud outage therefore changes only *which events arrive*, never whether the lights dim. This repository is that rule written as code that runs and tests that pass.
+
+> **Status: prototype.** This is a Python reference model of the firmware's behaviour, structured to port to C on a Cortex-M33. It is not certified firmware. The traffic, pedestrian, class-mix and efficacy inputs are the ASSUMED values from Section 6.4.
+
+![Mean output by road class](out/night_profile.png)
 
 ```
 nocturne-vdl7/
-├── vdl7/                   reference firmware (pure Python, no runtime deps)
-│   ├── clock.py            NOAA solar position, POSIX DST rule, RTC holdover, photocell debounce
-│   ├── profiles.py         road-class profiles, phases, floors, tunable-white mix, signed bundle
-│   ├── security.py         Ed25519 signing (bench HMAC fallback), canonical encoding
-│   ├── events.py           signed events with monotonic TTLs
-│   ├── driver.py           DALI-2/D4i 2-channel driver, 0-10 V, NC relay, system-failure level
-│   ├── controller.py       the 1 Hz loop: mode ladder, arbitration, slew, CLO, SAFE-mode clock
-│   ├── mesh.py             Wi-SUN segment mesh: gateway reachability, 3-hop carpet, flood relay
-│   ├── spectral.py         LED spectra, Rayleigh / scotopic / Mie factors, melanopic DER
-│   ├── bench.py            single-node bench with a modelled sky and CMS
-│   └── cli.py              `nocturne trace | spectral | simulate | bundle`
-├── sim/run_night.py        100-node network simulation, 8 scenarios, scaled to 75,000 lights
-├── tests/test_controller.py  36 acceptance tests, each named for its requirement ID
-└── out/                    simulation outputs: summary.json, report.md, timeseries.csv, PNG charts
+├── vdl7/
+│   ├── controller.py     the 1 Hz loop: mode ladder, arbitration, slew, CLO, SAFE clock, alarms, metering
+│   ├── clock.py          NOAA solar position, POSIX DST rule, RTC holdover + counter, photocell debounce
+│   ├── profiles.py       road-class profiles, phases, floors, tunable-white mix, bundle validation
+│   ├── events.py         signed, addressed, sequenced events; monotonic TTLs; anti-replay window
+│   ├── cms.py            what the CMS signs and sends: events, overrides, geofences, bundles
+│   ├── security.py       Ed25519 signing and key files (HMAC bench signer only on request)
+│   ├── driver.py         DALI-2/D4i two-channel driver, 0-10 V, NC relay, failure level, metering model
+│   ├── mesh.py           Wi-SUN segment mesh: 12-hop gateway reachability, 3-hop carpet, flood relay
+│   ├── spectral.py       LED spectra; Rayleigh, scotopic, Mie, melanopic-DER; LM-79 CSV loader
+│   ├── bench.py          single-node bench with a modelled sky and CMS
+│   └── cli.py            nocturne trace | spectral | simulate | keygen | bundle
+├── sim/run_night.py      400-node night simulation, 8 scenarios, scaled to 75,000 lights
+├── tests/                63 acceptance tests: the 19 rows of Section 6.2 plus extensions
+├── console/index.html    the operator console as a standalone page
+└── out/                  simulation results: summary.json, report.md, timeseries.csv, charts
 ```
 
 ## Run it
 
 ```bash
-pip install -e ".[dev]"            # or just: pip install pytest cryptography matplotlib
-python -m pytest -q                # 36 passed in ~7 s
-python -m vdl7.cli spectral        # Section 4 metrics table
-python -m vdl7.cli trace --road local --offline-at 22:15 --event emergency@00:40:30
-python -m sim.run_night --out out  # all scenarios, ~3 min, writes charts and summary.json
+pip install -e ".[dev]"                 # Python 3.10+; cryptography is the only runtime dependency
+pytest -q                               # 63 passed in ~11 s
+nocturne trace --road local --offline-at 22:15 --event emergency@00:40:30
+nocturne spectral                       # Section 4 metrics; add --spd name=lm79.csv for a measured engine
+nocturne simulate --out out             # all scenarios, about 4 min on 2 cores
+nocturne keygen --out cms_key.pem       # CMS signing key; prints the public key for the nodes
+nocturne bundle --key cms_key.pem --version 2 --out bundle.json
 ```
 
-`cryptography` is optional: with it the CMS signs bundles and events with Ed25519 as the spec requires; without it the bench falls back to an HMAC signer that is never valid for a fleet.
+Open `console/index.html` in a browser for the interactive console. It runs the same control logic in JavaScript over five streets.
 
-## What the controller does, step by step (Section 2.4)
+## The control loop (Section 2.4)
 
-`VDL7Controller.tick(mono, dt)` runs once per second and is the whole of the node's behaviour:
+`VDL7Controller.tick(mono, dt)` runs once per second and determines everything the node does:
 
-| Step | Code | Spec |
+| Step | What the code does | Spec |
 |---|---|---|
-| Mode | `SAFE` if the RTC is not trusted; `ONLINE` if backhaul heard ≤ 15 min; `MESH` if a gateway path is ≤ 15 min old; else `AUTONOMOUS` | 5.2 |
-| Lit | sun below −3° on the node's own clock **or** photocell dark. The photocell can switch lights on early (storm darkness) but can never hold them off at night. In SAFE the photocell alone decides | 2.4 step 2 |
-| Phase | local civil hour → evening / step / curfew / deep / dawn, boundaries in local time so the curfew follows DST | 2.2 |
-| Activity | loop volume ÷ design volume while < 15 min old; presence within 90 s or a carpet event sets A = 1 on occupancy classes, A ≥ 0.5 on arterials and collectors | 2.3 |
-| Raise | `target = base + (cap − base) × A` | 2.4 step 5 |
-| Weather | rain +15 points to the cap; fog and snow nothing, logged | 2.3 |
-| Floor | class floor, 60 on the High-Injury Network | 2.2 |
-| Emergency | 100 inside an active geofence | 2.3 |
-| Override | highest priority wins; only incident-command priority can pull an emergency below 100 | 2.4 step 9 |
-| Slew | up 25 %/s, down 1 %/s | 2.4 step 10 |
-| CLO | drive = level × (0.86 → 1.00 over 100,000 h) | 2.4 step 11 |
-| Output | two DALI channels (white, amber) with the tunable-white mix by phase; NC relay; checkpoint to flash every 60 s | 4.3, 5.2 |
+| 1 Mode | `SAFE` if the RTC isn't trusted; `ONLINE` if backhaul heard ≤ 15 min ago; `MESH` if a gateway path is ≤ 15 min old; otherwise `AUTONOMOUS` | 5.2 |
+| 2 Lit | Lit when the sun is below −3° on the node's own clock **or** the photocell reads dark. The photocell can switch lights on early but can never hold them off. In SAFE mode the photocell alone decides | 2.4 |
+| 3 Phase | Local civil hour gives the phase, which gives the class base level; DST-aware | 2.2 |
+| 4 Activity | Loop volume ÷ design volume, used only in ONLINE or MESH and only while under 15 min old. Presence (90 s) or carpet (60 s) sets A = 1 on occupancy classes, A ≥ 0.5 on arterials and collectors | 2.3, 5.2 |
+| 5 Raise | `target = max(base, base + (cap − base) × A)` | 2.4 *(clamped, see below)* |
+| 6 Weather | Rain: `max(target, min(cap, target + 15))`; fog and snow are logged with no boost | 2.3 |
+| 7 Floor | Class floor; 60 % on the High-Injury Network | 2.2 |
+| 8 Emergency | 100 % inside an active, addressed geofence | 2.3 |
+| 9 Override | Highest priority wins; only incident-command priority can pull an emergency below 100 %. Who, when and why are logged | 2.4, 5.4 |
+| 10 Slew | Up 25 %/s, down 1 %/s | 2.4 |
+| 11 CLO | drive = level × (0.86 → 1.00 over 100,000 h) | 2.4 |
+| 12 Output | Two DALI channels with the tunable-white mix; NC relay; DALI failure level; checkpoint every 60 s; alarms; 15-min metering | 4.3, 5.1, 5.2 |
 
-Everything timed is in node-monotonic seconds. Events carry a TTL from the moment they arrive, so a stale emergency expires in SAFE mode without a wall clock (`R-EM-1`).
+## Where this code departs from the spec, and the spec text to change
 
-### SAFE mode without a clock (Section 5.3)
+An independent review of the first version against the spec found places where following the spec literally is unsafe or ambiguous. The code fixes each one, and each has a test.
 
-When the RTC is lost, the node estimates the night-hour as
-`learned midpoint + (time since dusk − previous night length / 2)`. Dusk is the debounced photocell transition seen this boot; if the node rebooted mid-night, the flash checkpoint written within the last 60 s anchors the estimate instead. The midpoint and night length are re-learned after every clocked night from the astro clock (`learned_night()`), and seeded from it on the first time sync. `R-FS-3` lands the curfew within 10 min after a power cut that zeroes the monotonic clock and loses the RTC; `R-FS-4` lands it within 15 min from a cold boot in daylight with no clock at all.
-
-### Failure below the controller
-
-`LuminaireDriver.commissioned_for(profile)` stores the class's 22:00 level as the DALI system-failure level, and the relay is a normally-closed monostable energised only to switch the light off. A dead node is a slightly over-lit light, never a dark one (`R-FS-5`).
+1. **Activity and rain could dim a street (§2.4 steps 5–6).** For the local, alley and park classes the evening level is above or at the boost cap (local: 80 vs 70). Read literally, `base + (cap − base) × A` takes a local street from 80 to 70 % when a pedestrian walks in, and rain takes a park edge from 60 to 50 %. The code clamps both so they never lower the light (`EXT-DIM-4`). **Spec change:** add `max(base, …)` to steps 5 and 6.
+2. **SAFE mode could misplace the curfew after a long cut (§5.2, §5.3, R-FS-3).** Per §5.2 the clock is lost only when the supercap drains, after more than 7 days. A flash checkpoint from before such a cut can't be dated, yet using it as if no time had passed moved the curfew by however long the power was off. The checkpoint now stores the RTC counter, and the node resumes from it only when the counter rode through the cut and can measure the gap (`R-FS-3`). After an RTC reset the node holds the 22:00 level until its photocell sees dusk (`EXT-FS-5`). **Spec change:** R-FS-3 should state that the RTC counter survived the cut.
+3. **SAFE mode ran 8 minutes early (§5.3 step 5).** It counted from the photocell dusk but used a midpoint learned from the −3° sun. The node now learns the midpoint and night length from its photocell's own dusk and dawn on clocked nights. The clockless curfew lands at 22:58 (`R-FS-3`, `EXT-FS-4`).
+4. **A dead node on the High-Injury Network fell below 60 % (§5.2).** The driver failure level is now the higher of the class's 22:00 level and 60 % on HIN segments (`EXT-FS-6`).
+5. **Signed messages need more than a signature (§2.3, §5.4).**
+   - Events now carry an explicit target list (the 400 m geofence node list, a segment, or "all"), and nodes ignore events addressed elsewhere (`EXT-SEC-5`).
+   - Events carry a CMS sequence number checked against a 64-wide anti-replay window whose top is kept in flash (`EXT-SEC-6`).
+   - With a trusted clock, nodes refuse events that expired before arrival or claim a future issue time (`EXT-SEC-7`).
+   - Bundles are checked against firmware-minimum floors, completeness, mix sums and the 400-day validity before they are stored (`EXT-SEC-3`, `EXT-SEC-4`).
+   - When the store is full, emergencies and overrides are evicted last, and unknown event kinds are ignored (`EXT-SEC-8`).
+6. **Number corrections.** §6.2 says "24 acceptance tests"; the suite has 63 (Section 6.2's 19 rows plus extensions). The Section 6.3 and Section 4 figures are reconciled below.
 
 ## Acceptance suite
 
-| Requirement | Test | What it checks |
+`test_R_*` covers the 19 rows of the Section 6.2 table one-for-one. `test_EXT_*` covers requirements stated elsewhere in the spec that the table omits, plus the safety fixes above.
+
+| Section 6.2 row | Test checks |
+|---|---|
+| R-CLK-1 | Firmware POSIX DST rule matches the IANA database at every 6-hour step, 2024–2030 (10,228 checks) |
+| R-CLK-2 | Sunrise and sunset in Oct, Dec and Jun within 3 min; dusk and dawn are the −3.00° crossings; the controller switches on at that crossing with the photocell blinded |
+| R-CLK-3 | Trusted at 1 year, not at 4; never before the first sync; 7-day supercap; longer cut resets the clock and counter |
+| R-DIM-1 | Arterial at 60 % at 23:30 |
+| R-FS-1 | Total outage: AUTONOMOUS, local street at 30 % at 01:00 |
+| R-FS-2 | Backhaul-only loss: MESH mode applies an emergency at 100 % |
+| R-FS-3 | Power cut at 21:00 zeroes the monotonic clock; from the photocell and checkpoint alone the node lands the curfew within 10 min (actual: 2 min early) |
+| R-ADP-1 | Local street 30 → 70 % in under 2 s, back to 30 % after hold and fade |
+| R-ADP-2 | Arterial at 50 % + 50 % × (150/300) = 75 % |
+| R-ADP-3 | Loop boost kept for one 15-min slot after backhaul loss, then dropped |
+| R-SAF-1 | HIN floor wins over the rain boost |
+| R-SAF-2 | Fog and snow: no boost |
+| R-SAF-3 | A blocked photocell cannot keep the lights off at night |
+| R-SAF-4 | Storm darkness at 14:00 under 3 lx: lights on at the evening level |
+| R-EM-1 | Emergency in SAFE mode expires on monotonic time |
+| R-EM-2 | A planned override cannot lower an emergency; incident command can; cancelling restores it |
+| R-CLO-1 | Drive 86 % new, 100 % at 100,000 h |
+| R-MESH-1/2 | 12-hop budget; broken-path isolation; 3-hop carpet |
+
+The extensions cover:
+- the full dimming table, DST and phase boundaries;
+- the boost clamp;
+- clockless cold boot, RTC reset, the driver watchdog and HIN failure level, one hello leaving SAFE, and loop handling by mode;
+- presence on arterials and the carpet;
+- forged, tampered, unsafe, expired, misaddressed, replayed and stale messages, plus store eviction and the override audit trail;
+- the full tunable-white mix;
+- photocell 15/40 lx with 60 s debounce, the 0–10 V path, tilt above 2°, driver-fault, day-burner and cycling alarms, and metering buffered offline then replayed on recovery;
+- spectral limits, and round-tripping a measured spectrum.
+
+CI runs the suite on Python 3.10–3.13 (`.github/workflows/tests.yml`).
+
+## Simulation results (Section 6.3)
+
+`sim/run_night.py` uses the spec's layout: 4 streets × 20 poles per class at 30 m spacing, 400 VDL-7 nodes, run through the night of 13–14 October 2026 in 10-second steps. A modelled CMS sends 15-minute hellos and one signed loop-volume message per segment. Seeded pedestrians walk 4–14 poles. Results are scaled to 75,000 lights by the Section 6.4 class mix.
+
+| Scenario | Energy vs today | Spec 6.3 | Light vs today | Spec 6.3 | Skyglow index |
+|---|---|---|---|---|---|
+| Today: static 100 %, current CCT | 1.00 (55.6 MWh) | 1.00 | 1.00 | 1.00 | 1.00 |
+| Adaptive dimming only | 0.67 | 0.65 | 0.67 | 0.65 | 0.67 |
+| + U0 optics | 0.67 | 0.65 | 0.67 | 0.65 | 0.54 |
+| + warm spectrum (full Nocturne) | 0.73 | 0.70 | 0.67 | 0.65 | 0.49 |
+| Full Nocturne, 7-hour carrier outage | 0.70 | 0.68 | 0.65 | 0.63 | 0.47 |
+| Same hardware, cloud-dependent control, same outage | 1.02 | 1.00 | 0.95 | 0.92 | 0.70 |
+| Full Nocturne, CAD incident on one local street | 0.73 | — | 0.68 | — | 0.49 |
+| Full Nocturne, rain 23:00–02:00 | 0.77 | — | 0.71 | — | 0.51 |
+
+The skyglow waterfall goes 1.00 → −0.326 (dimming) → −0.135 (U0 optics) → −0.052 (warm spectrum) → **0.49**. The saving is 15.1 MWh per night, about **5.5 GWh a year**.
+
+**How these compare with the spec.** Every row is within 2–3 points of the printed Table 6.3, but they don't match exactly, and the spec's prose figures should be updated to these or to a re-run on real DDOT data:
+
+| Spec says | This version |
+|---|---|
+| 35 % less light | 33 % |
+| 30 % less energy | 27 % |
+| About 6 GWh a year (16.8 MWh per night) | 5.5 GWh (15.1 MWh per night) |
+| Spectrum step "4 points" of skyglow | 5 points |
+
+The source of the remaining 2-point gap isn't identified. The boost clamp accounts for less than half a point of it: the version before the fixes gave 0.665 / 0.667. The run that produced the printed table isn't available to compare against.
+
+The cloud-dependent row now uses the same luminaires as the outage row, so it isolates the control architecture. Failing bright for seven hours costs 30 points of delivered light: 0.95 against 0.65.
+
+![Outage comparison](out/outage_comparison.png)
+![Skyglow waterfall](out/skyglow_waterfall.png)
+
+## Spectral model (Section 4)
+
+`vdl7/spectral.py` builds generic LED spectra on the Planckian locus:
+- white: a 450 nm pump plus two broad phosphor bands, fitted to Duv ≈ 0;
+- PC-Amber: a 600 nm phosphor with a 0.4 % residual pump;
+- narrow-band amber.
+
+For each spectrum it computes, per photopic lumen:
+- Rayleigh scatter;
+- skyglow weighted by scotopic sensitivity;
+- Mie (λ⁻¹·³) scatter;
+- CIE S 026 melanopic DER.
+
+The model comes close to the Section 4 claims for 3000 → 2700K: −11 % perceived skyglow against the spec's −10 %, and −12.5 % melanopic against −11 %. It matches PC-Amber exactly: −75 % and −85 %. **It does not reproduce the 2700 → 2200K figures:**
+
+| 2700 → 2200K | Spec §4 | Model |
 |---|---|---|
-| R-CLK-1 | `test_R_CLK_1_dst_rule_matches_iana_2024_2030` | firmware POSIX rule vs the IANA database at every 6-hour step, 10,228 checks |
-| R-CLK-2 | `test_R_CLK_2_astronomical_night_at_dc` | known sunrise/sunset for DC in Oct, Dec, Jun within 3 min |
-| R-CLK-3 | `test_R_CLK_3_rtc_holdover_trust` | trusted at 1 year, not at 4, never before sync; 7-day supercap |
-| R-DIM-1..3 | `test_R_DIM_*` | arterial 60 % at 23:30; every class follows its table; curfew follows DST |
-| R-FS-1..5 | `test_R_FS_*` | total outage → AUTONOMOUS; MESH applies an emergency; clock-lost reboot; cold-boot re-anchor; driver fails to 22:00 level |
-| R-ADP-1..4 | `test_R_ADP_*` | presence 30→70 in < 2 s, hold, fade; loop volume 75 %; one-slot cache; half activity on arterials |
-| R-SAF-1..4 | `test_R_SAF_*` | HIN floor beats rain; fog/snow no boost; photocell veto; storm darkness |
-| R-EM-1..2 | `test_R_EM_*` | emergency in SAFE expires on monotonic TTL; override vs emergency priority |
-| R-CLO-1 | `test_R_CLO_1_constant_light_output` | 86 % drive new, 100 % at 100,000 h |
-| R-MESH-1..3 | `test_R_MESH_*` | 12-hop budget; broken-path isolation; 3-hop carpet |
-| R-SEC-1..2 | `test_R_SEC_*` | forged and tampered messages rejected; bundle version monotonic, survives reboot |
-| R-TW-1 | `test_R_TW_1_channel_mix_follows_phase_and_presence` | 100:0 → 60:40 → 0:100, white on presence |
-| R-SPEC-1 | `test_R_SPEC_1_spectral_metrics_order_and_limits` | CCT within 2 %, Duv within ±0.003, ≤ 7 % below 500 nm at 2200K, melanopic EDI at a window |
+| Perceived skyglow | −22 % | −30 % |
+| Melanopic | −23 % | −35 % |
 
-## Simulation results
+**Mie scatter also differs:**
 
-`python -m sim.run_night` drives 100 VDL-7 nodes (five streets, one per road class, twenty poles each on a Wi-SUN chain) through the night of 13–14 October 2026 at 10-second steps, with a modelled CMS sending 15-minute hellos and ATSPM loop volumes, Poisson pedestrians who trip each radar as they walk 4–14 poles, and the fault scenarios from Section 6.3. Results scale to 75,000 lights by the Section 6.4 class mix.
+| Mie scatter, 2200K | Spec §4 | Model |
+|---|---|---|
+| vs 4000K | 4 % less | about 10 % less |
+| vs 3000K | "about the same" | 5 % less |
 
-| Scenario | Energy vs today | Delivered light vs today | Skyglow index | MWh / night |
-|---|---|---|---|---|
-| Today: static 100 %, current CCT | 1.00 | 1.00 | 1.00 | 55.6 |
-| Adaptive dimming only | 0.67 | 0.67 | 0.67 | 37.0 |
-| + U0 optics | 0.67 | 0.67 | 0.54 | 37.0 |
-| + warm spectrum (full Nocturne) | 0.72 | 0.67 | 0.48 | 40.2 |
-| Full Nocturne during a 7-hour carrier outage | 0.70 | 0.64 | 0.47 | 38.8 |
-| Cloud-dependent nodes in the same outage | 0.94 | 0.94 | 0.94 | 52.3 |
-| Full Nocturne with a CAD incident on the local street 00:40-01:40 | 0.73 | 0.67 | 0.49 | 40.6 |
-| Full Nocturne with rain 23:00-02:00 | 0.77 | 0.70 | 0.51 | 42.6 |
+The model's 2200K spectrum is leaner in cyan than many commercial 2200K engines. Neither set of numbers is a measurement. Load the LM-79 spectra of the engines you'll actually procure with `nocturne spectral --spd name=file.csv` and use those figures in Section 4.
 
-Skyglow waterfall (upward flux × Rayleigh, today = 1.00): Today 1.00 → Adaptive dimming 0.67 (-0.330) → U0 optics 0.54 (-0.134) → Warm spectrum 0.48 (-0.052). Annual saving against the static baseline: about 5.61 GWh.
+## SAFE mode without a clock (Sections 5.2, 5.3)
 
-These land within a few points of the spec's own Table 6.3 (dimming 0.65 / 0.65, full Nocturne 0.70 / 0.65, outage 0.68 / 0.63, waterfall −0.35 / −0.12 / −0.04 → 0.49) from independently written traffic and pedestrian models, which is the point: the numbers follow from the profile table and the controller logic, not from tuning.
+On every clocked night the node records the local time of its photocell's dusk and dawn, and keeps the midpoint and night length in flash. In SAFE mode it estimates the night-hour as **learned midpoint + (time since photocell dusk − previous night length / 2)**, so it counts from the same kind of dusk it learned from.
 
-Charts in `out/`: `night_profile.png` (mean output by class), `outage_comparison.png` (VDL-7 in AUTONOMOUS mode vs a cloud-dependent node that fails bright), `skyglow_waterfall.png`.
-
-## Spectral model
-
-`vdl7/spectral.py` builds parametric white-LED spectra (450 nm pump + two phosphor bands) fitted to the Planckian locus, PC-Amber (600 nm phosphor, 0.4 % residual pump) and narrow-band amber, then computes per photopic lumen:
-
-- `G_R = ∫S λ⁻⁴ / ∫S V` — physical Rayleigh scatter,
-- `G_scot = ∫S λ⁻⁴ V′ / ∫S V` — skyglow as the rod-dominated dark-adapted eye sees it,
-- the Mie λ⁻¹·³ factor that dominates near the city and is almost colour-blind,
-- `mel-DER` per CIE S 026 (D65 = 1).
-
-Colour-matching functions are the Wyman–Sloan–Shirley multi-lobe fit; V′(λ) is the CIE 1951 scotopic table; the melanopic template is a 480 nm Govardovskii nomogram behind a 32-year-old lens (peak 484 nm). Absolute error a few percent, less in ratios.
+If it reboots mid-night, it resumes from the 60-second flash checkpoint plus the gap the RTC counter measured. If the counter itself was lost, it holds the 22:00 level until the next dusk. Accuracy after a long outage degrades with the season, by roughly 1–2 minutes per day of outage near the equinoxes, until the next time sync.
 
 ## Porting notes
 
-The loop allocates nothing but its output record, reads no wall clock outside `tick`, and keeps every timer in monotonic seconds, so the structure maps onto a Cortex-M33 directly: `clock.py` becomes the NOAA routine plus a POSIX rule, `events.py` a fixed-size ring of 64 records, `controller.py` the 1 Hz task, `mesh.py` the Wi-SUN FAN callbacks. Signing uses Ed25519 over canonical JSON; on the MCU the same bytes verify against the public key in the secure element.
+- The loop keeps fixed-size state: a 64-entry event store, a 64-bit replay bitmap, a 672-slot metering ring.
+- It reads no wall clock outside `tick` and `receive`, and keeps every timer in monotonic seconds.
+- On the MCU, the replay-window top belongs in FRAM or the secure element's monotonic counter, because it is written on every accepted event.
+- Python allocates small lists per tick; the C port should use static buffers.
 
-## Open items carried from the spec
+## Known limits
 
-- Replay within an event's TTL is not prevented (a nonce cache or issued-time window at the CMS would close it).
-- The installed RMCS node's lost-comms behaviour, the class mix, design wattages, efficacies and traffic curves are the spec's ASSUMED values (Section 6.4); the simulation reads them from `sim/run_night.py` constants and should be re-run against the DDOT inventory and ATSPM data.
-- Luminaire optics (Section 3) are verification rules on LM-79 data, not firmware; the VDL-7 only watches tilt.
+- Carpet events between neighbouring nodes are not signed here. The spec's device keys would sign them, but that is out of scope for this model.
+- The JavaScript console re-implements the loop. It was checked against the Python by hand: same learned midpoint, same evening levels, static baseline within 0.1 MWh. No automated parity test exists yet.
+- Section 3 (optics) is verification of LM-79 data, not firmware. The node only watches tilt.
+- The CMS side (TALQ, LwM2M, DTLS) is modelled only by the messages it signs.
+
+## License
+
+MIT. See `LICENSE`.

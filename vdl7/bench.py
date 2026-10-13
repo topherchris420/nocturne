@@ -1,18 +1,19 @@
 """Single-node bench: drives one VDL-7 through simulated time with a modelled
-sky, a CMS that sends hellos and signed events, and optional mesh/backhaul
-faults. Used by the acceptance suite and the `trace` CLI."""
+sky, a CMS that sends hellos and signed, addressed events, and optional
+mesh/backhaul faults. Used by the acceptance suite and the `trace` CLI."""
 from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from .clock import DC_LAT, DC_LON, Photocell, RtcHoldover, parse_local, solar_elevation_deg, to_local
-from .controller import Flash, Mode, NodeConfig, Output, VDL7Controller
+from .clock import DC_LAT, DC_LON, RtcHoldover, parse_local, solar_elevation_deg, to_local
+from .cms import Cms
+from .controller import Flash, NodeConfig, Output, VDL7Controller
 from .driver import LuminaireDriver
-from .events import Event, EventKind, Priority
+from .events import EventKind, Priority, make_targets
 from .profiles import RoadClass, default_bundle
-from .security import Signer, make_signer
+from .security import SignedMessage
 
 
 def sky_lux(elev_deg: float) -> float:
@@ -27,18 +28,19 @@ def sky_lux(elev_deg: float) -> float:
 class Bench:
     def __init__(self, road: RoadClass = RoadClass.LOCAL, start: str = "2026-10-13 18:00",
                  hin: bool = False, online: bool = True, tunable: bool = False,
-                 signer: Optional[Signer] = None, burn_hours: float = 0.0,
+                 cms: Optional[Cms] = None, burn_hours: float = 0.0,
                  hello_every_s: float = 600.0, flash: Optional[Flash] = None,
-                 rtc: Optional[RtcHoldover] = None, bundle_version: int = 1):
-        self.signer = signer or make_signer()
-        self.verifier = self.signer.public()
+                 rtc: Optional[RtcHoldover] = None, bundle_version: int = 1,
+                 interface: str = "dali2", node_id: Optional[str] = None, segment_id: str = "seg-bench"):
+        self.cms = cms or Cms()
+        self.verifier = self.cms.verifier
         self.flash = flash or Flash()
         if flash is None:
-            assert self.flash.install(self.signer.sign_obj(default_bundle(bundle_version).to_dict()), self.verifier)
+            assert self.flash.install(self.cms.bundle(default_bundle(bundle_version)), self.verifier)
         self.rtc = rtc or RtcHoldover()
-        self.cfg = NodeConfig(node_id=f"bench-{road.value}", road=road, hin=hin, tunable_white=tunable,
-                              burn_hours=burn_hours)
-        self.driver = LuminaireDriver.commissioned_for(self.flash.bundle.profiles[road])
+        self.cfg = NodeConfig(node_id=node_id or f"bench-{road.value}", road=road, hin=hin,
+                              tunable_white=tunable, burn_hours=burn_hours, segment_id=segment_id)
+        self.driver = LuminaireDriver.commissioned_for(self.flash.bundle.profiles[road], hin, interface)
         self.node = VDL7Controller(self.cfg, self.flash, self.rtc, self.verifier, self.driver)
         self.mono = 0.0
         self.utc = parse_local(start)
@@ -49,6 +51,11 @@ class Bench:
         self._last_hello = -math.inf
         self.outputs: List[Output] = []
         self.keep_history = False
+        self.uplinks: List[dict] = []
+
+    @property
+    def signer(self):
+        return self.cms.signer
 
     # ------------------------------------------------------------- the world
     @property
@@ -68,6 +75,10 @@ class Bench:
             self.node.mesh_gateway_seen(self.mono)
         self.node.photocell_sample(self.lx_now(), self.mono)
         out = self.node.tick(self.mono, dt)
+        if self.online:
+            up = self.node.take_uplink()
+            if up and (up["metering"] or up["alarms"]):
+                self.uplinks.append(up)
         if self.keep_history:
             self.outputs.append(out)
         self.mono += dt
@@ -89,17 +100,27 @@ class Bench:
         return out
 
     # ------------------------------------------------------------------- CMS
-    def send(self, kind: EventKind, ttl_s: float, payload: Optional[dict] = None,
-             priority: int = Priority.NONE, via: str = "backhaul", event_id: Optional[str] = None) -> Event:
-        ev = Event(kind=kind, ttl_s=ttl_s, payload=payload or {}, priority=priority,
-                   issued=self.utc.isoformat())
-        if event_id:
-            ev.id = event_id
-        assert self.node.receive(self.signer.sign_obj(ev.to_dict()), self.mono, via=via)
-        return ev
+    def deliver(self, msg: SignedMessage, via: Optional[str] = None) -> bool:
+        return self.node.receive(msg, self.mono, via=via or ("backhaul" if self.online else "mesh"))
 
-    def loop_volume(self, veh15: float) -> Event:
-        return self.send(EventKind.LOOP_VOLUME, ttl_s=900, payload={"veh15": veh15})
+    def send(self, kind: EventKind, ttl_s: float, payload: Optional[dict] = None,
+             priority: int = Priority.NONE, via: Optional[str] = None, event_id: Optional[str] = None,
+             targets: Optional[dict] = None) -> SignedMessage:
+        """Sign an event addressed to this node's segment and deliver it; the
+        delivery must be accepted."""
+        payload = dict(payload or {})
+        if kind == EventKind.OVERRIDE:
+            payload.setdefault("by", "bench-operator")
+            payload.setdefault("reason", "acceptance test")
+        msg = self.cms.event(kind, ttl_s, targets or make_targets(segments=[self.cfg.segment_id]),
+                             payload, priority, event_id, issued=self.utc)
+        assert self.deliver(msg, via), self.node.log[-3:]
+        return msg
+
+    def loop_volume(self, veh15: float) -> SignedMessage:
+        msg = self.cms.loop_volume(self.cfg.segment_id, veh15, issued=self.utc)
+        assert self.deliver(msg)
+        return msg
 
     def go_offline(self) -> None:
         self.online = False
@@ -119,3 +140,4 @@ class Bench:
         self.mono = 0.0
         self._last_hello = -math.inf
         self.node = self.node.reboot()
+        self.flash = self.node.flash

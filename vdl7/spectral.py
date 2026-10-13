@@ -13,7 +13,14 @@ colour-blind, which is why dimming leads the spec.
 Model notes: CIE 1931 colour-matching functions from the Wyman-Sloan-Shirley
 (2013) multi-lobe fit; V'(λ) from the CIE 1951 scotopic table at 10 nm;
 s_mel(λ) as a Govardovskii A1 nomogram at 480 nm behind a 32-year-old lens
-(peaks ~487 nm); D65 at 10 nm. Absolute error a few percent, less in ratios.
+(peaks at 484 nm); D65 at 10 nm.
+
+The white spectra are a 450 nm pump plus two broad phosphor bands fitted to
+the Planckian locus, so they are generic, not any vendor's engine. Ratios
+between neighbouring CCTs are good to a few percent; the 2200K model is
+leaner in cyan than many commercial 2200K engines, which makes its skyglow
+and melanopic figures lower than the Section 4 text quotes. For procurement
+numbers, load the LM-79 spectra with `load_spd_csv` instead.
 """
 from __future__ import annotations
 
@@ -161,7 +168,7 @@ def white_led(pump: float, green: float, red: float, pump_mu: float = 450.0, pum
 
 
 def pc_amber(pump_fraction: float = 0.004) -> List[float]:
-    """Phosphor-converted amber: broad phosphor at 590 nm with a residual
+    """Phosphor-converted amber: broad phosphor at 600 nm (~1850 K) with a residual
     pump ≤ 0.5 % of radiant power."""
     phos = [gauss(l, 600.0, 72.0) for l in LAMBDA]   # ~1850 K, typical PC-Amber
     pump = [gauss(l, 450.0, 20.0) for l in LAMBDA]
@@ -249,6 +256,37 @@ def spectrum(name: str) -> List[float]:
     if name in ("NBA", "Narrow-band amber"):
         return narrow_band_amber()
     raise KeyError(name)
+
+
+def load_spd_csv(path: str) -> List[float]:
+    """Read a measured spectrum (two columns: wavelength nm, power in any
+    unit; header optional; comma, tab or whitespace separated) and resample
+    it linearly onto the 1 nm grid. Outside the measured range is zero."""
+    pts: List[Tuple[float, float]] = []
+    with open(path, newline="") as f:
+        for line in f:
+            parts = line.replace(",", " ").replace("\t", " ").replace(";", " ").split()
+            if len(parts) < 2:
+                continue
+            try:
+                pts.append((float(parts[0]), float(parts[1])))
+            except ValueError:
+                continue                       # header or comment line
+    if len(pts) < 2:
+        raise ValueError(f"{path}: need at least two numeric rows")
+    pts.sort()
+    out: List[float] = []
+    j = 0
+    for lam in LAMBDA:
+        if lam < pts[0][0] or lam > pts[-1][0]:
+            out.append(0.0)
+            continue
+        while j < len(pts) - 2 and pts[j + 1][0] < lam:
+            j += 1
+        (l0, v0), (l1, v1) = pts[j], pts[j + 1]
+        f = 0.0 if l1 == l0 else (lam - l0) / (l1 - l0)
+        out.append(max(0.0, v0 + (v1 - v0) * f))
+    return out
 
 
 SPECTRA = ["4000K", "3000K", "2700K", "2200K", "PC-Amber", "Narrow-band amber"]

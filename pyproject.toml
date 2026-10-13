@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nocturne-vdl7"
-version = "0.1.0"
+version = "0.2.0"
 description = "VDL-7 reference firmware, acceptance suite and night simulation for the Nocturne dark-sky lighting layer (VD-DSL-SPEC-001)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-dependencies = []
+authors = [{name = "Christopher Woodyard (Vers3Dynamics)"}]
+dependencies = ["cryptography>=41"]
 
 [project.optional-dependencies]
-signing = ["cryptography>=41"]
 charts = ["matplotlib>=3.7"]
-dev = ["pytest>=7", "cryptography>=41", "matplotlib>=3.7"]
+dev = ["pytest>=7", "matplotlib>=3.7"]
 
 [project.scripts]
 nocturne = "vdl7.cli:main"

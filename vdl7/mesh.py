@@ -13,7 +13,7 @@ when the carrier does not. Three things live here:
 from __future__ import annotations
 
 from collections import deque
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from .security import SignedMessage
 
@@ -58,6 +58,23 @@ class MeshNetwork:
                     seen[m] = h + 1
                     q.append(m)
         return seen
+
+    def reachable_from(self, sources: Iterable[str], max_hops: Optional[int] = None) -> Set[str]:
+        """Every node within the hop budget of any source: one multi-source
+        BFS, so a whole segment's gateway reachability costs O(nodes)."""
+        budget = self.hop_budget if max_hops is None else max_hops
+        seen: Dict[str, int] = {s: 0 for s in sources if s in self.links}
+        q = deque(seen)
+        while q:
+            n = q.popleft()
+            h = seen[n]
+            if h >= budget:
+                continue
+            for m in self.links.get(n, ()):
+                if m not in seen:
+                    seen[m] = h + 1
+                    q.append(m)
+        return set(seen)
 
     def hops_to_gateway(self, node_id: str, is_gateway: Callable[[str], bool]) -> Optional[int]:
         """Fewest hops to a node with live backhaul, or None beyond the budget."""

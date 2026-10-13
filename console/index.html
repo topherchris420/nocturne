@@ -194,7 +194,7 @@ th.n { text-align: right; }
       <div class="field"><label for="clickMode">Clicking a pole on the board will</label>
         <select id="clickMode">
           <option value="inspect">Inspect the node</option>
-          <option value="cad">Drop a CAD incident (±3 poles, 60 min)</option>
+          <option value="cad">Drop a CAD incident (400 m geofence, 60 min)</option>
           <option value="walker">Start a pedestrian walking</option>
           <option value="clock">Lose that node's clock (SAFE)</option>
         </select></div>
@@ -224,7 +224,7 @@ th.n { text-align: right; }
       <div class="kpis">
         <div class="kpi"><div class="v" id="kOut">—</div><div class="l">Network output</div><div class="s">% of design lumens</div></div>
         <div class="kpi"><div class="v" id="kPow">—</div><div class="l">Power now</div><div class="s" id="kPowS">75,000 lights</div></div>
-        <div class="kpi"><div class="v" id="kEn">—</div><div class="l">Energy tonight</div><div class="s" id="kEnS">vs 55.6 MWh static</div></div>
+        <div class="kpi"><div class="v" id="kEn">—</div><div class="l">Energy tonight</div><div class="s" id="kEnS">static so far —</div></div>
         <div class="kpi"><div class="v" id="kSky">—</div><div class="l">Skyglow now</div><div class="s">index, static today = 1.00</div></div>
         <div class="kpi"><div class="v" id="kMag">—</div><div class="l">Park SQM</div><div class="s">Δ mag/arcsec², 50 % share</div></div>
         <div class="kpi"><div class="v" id="kModes">—</div><div class="l">Node modes</div><div class="s" id="kModesS">online / mesh / auto / safe</div></div>
@@ -274,7 +274,7 @@ th.n { text-align: right; }
 const DT = 10, T_END = 50400, START_HOUR = 18, LAT = 38.8977, LON = -77.0365;
 const CLASSES = [
   { id: 'arterial',  name: 'Arterial',  sub: 'RP-8 Major · 300 veh/15 min = full', levels: [100, 80, 60, 50, 75], floor: 50, cap: 100, vol: 300, occ: false, watts: 120, cctToday: '3000K', cctTarget: '2700K', color: 'var(--c5)', series: 5 },
-  { id: 'collector', name: 'Collector', sub: '120 veh/15 min = full',             levels: [100, 70, 50, 40, 65], floor: 40, cap: 90,  vol: 120, occ: false, watts: 80,  cctToday: '3000K', cctTarget: '2200K', color: 'var(--c4)', series: 4 },
+  { id: 'collector', name: 'Collector', sub: '120 veh/15 min = full',             levels: [100, 70, 50, 40, 65], floor: 40, cap: 90,  vol: 120, occ: false, watts: 80,  cctToday: '3000K', cctTarget: '2200K', color: 'var(--c4)', series: 4, tunable: true },
   { id: 'local',     name: 'Local residential', sub: 'radar presence + carpet', levels: [80, 60, 40, 30, 50],  floor: 30, cap: 70,  vol: 0,   occ: true,  watts: 40,  cctToday: '2700K', cctTarget: '2200K', color: 'var(--c3)', series: 3, tunable: true },
   { id: 'alley',     name: 'Alley',     sub: 'policy minimum 20',                levels: [70, 50, 30, 20, 40],  floor: 20, cap: 70,  vol: 0,   occ: true,  watts: 30,  cctToday: '2700K', cctTarget: '2200K', color: 'var(--c2)', series: 2 },
   { id: 'park',      name: 'Park / river edge', sub: 'ecological minimum 10',   levels: [60, 40, 20, 10, 30],  floor: 10, cap: 50,  vol: 0,   occ: true,  watts: 30,  cctToday: '2700K', cctTarget: 'PC-Amber', color: 'var(--c1)', series: 1 },
@@ -326,7 +326,11 @@ const ELEV = []; for (let i = 0; i <= T_END / 60; i++) ELEV.push(solarElev(UTC0 
 const elevAt = t => ELEV[Math.min(ELEV.length - 1, Math.floor(t / 60))];
 const skyLux = el => el > 0 ? 100 + 100000 * Math.sin(el * Math.PI / 180) : (el > -6 ? 100 * Math.pow(10, el / 2) : 0.05);
 let DUSK = 0, DAWN = T_END; for (let t = 0; t < T_END; t += 60) { if (DUSK === 0 && elevAt(t) < -3) DUSK = t; if (DUSK && t > DUSK && elevAt(t) >= -3) { DAWN = t; break; } }
-const LEARNED_MID = (localHour(DUSK) + (DAWN - DUSK) / 7200) % 24, NIGHT_LEN = (DAWN - DUSK) / 3600;
+// SAFE mode counts from the dark midpoint the node learned from its photocell on the previous clocked night
+const PREV = (() => { let dusk = null, dawn = null; for (let k = 0; k <= 18 * 60; k++) { const lx = skyLux(solarElev(UTC0 - 86400000 + k * 60000)); if (dusk === null && lx < 15) dusk = k + 1; else if (dusk !== null && lx > 40) { dawn = k + 1; break; } } return { dusk, dawn }; })();
+const NIGHT_LEN = (PREV.dawn - PREV.dusk) / 60, LEARNED_MID = (START_HOUR + PREV.dusk / 60 + NIGHT_LEN / 2) % 24;
+const CLO = 0.86 + 0.14 * Math.min(1, 20000 / 100000);   // constant light output factor at 20,000 burn hours
+const STATIC_W = CLASSES.reduce((w, c) => w + N_LIGHTS * MIX_SHARE[c.id] * c.watts / EFF[c.cctToday], 0);
 
 // seeded RNG (mulberry32)
 function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -339,23 +343,21 @@ class Node {
     this.level = 0; this.mode = 'SAFE'; this.lastBackhaul = -1e9; this.lastGateway = -1e9;
     this.presenceUntil = -1e9; this.carpetUntil = -1e9; this.loop = null; this.events = [];
     this.rtcTrusted = false; this.pcDark = false; this.pcRaw = false; this.pcRawSince = 0;
-    this.cp = { nightHour: null, lit: false, written: -1e9 }; this.safeAnchor = null; this.pcDuskMono = null;
+    this.pcDuskMono = null;
     this.out = null;
   }
   hello(t) { this.lastBackhaul = t; this.rtcTrusted = true; }
   photocell(lx, t) {
     const want = this.pcDark ? !(lx > 40) : (lx < 15);
     if (want !== this.pcRaw) { this.pcRaw = want; this.pcRawSince = t; }
-    if (want !== this.pcDark && t - this.pcRawSince >= 60) { this.pcDark = want; if (want) { this.pcDuskMono = t; this.safeAnchor = null; } else { this.pcDuskMono = null; this.safeAnchor = null; } }
+    if (want !== this.pcDark && t - this.pcRawSince >= 60) { this.pcDark = want; this.pcDuskMono = want ? t : null; }
   }
   receive(ev, t) { const e = Object.assign({}, ev, { received: t }); const k = this.events.findIndex(x => x.id === e.id); if (k >= 0) this.events[k] = e; else this.events.push(e); if (e.kind === 'loop') this.loop = { v: e.veh15, t }; }
   cancel(id) { for (const e of this.events) if (e.id === id) e.cancelled = true; }
   active(kind, t) { return this.events.filter(e => e.kind === kind && !e.cancelled && t - e.received < e.ttl); }
   safeHour(t) {
     if (this.pcDuskMono !== null) return ((LEARNED_MID - NIGHT_LEN / 2) + (t - this.pcDuskMono) / 3600 + 24) % 24;
-    if (!this.safeAnchor && this.pcDark && this.cp.nightHour !== null && this.cp.lit) this.safeAnchor = [this.cp.nightHour, t];
-    if (this.safeAnchor) return (this.safeAnchor[0] + (t - this.safeAnchor[1]) / 3600) % 24;
-    return null;
+    return null;   // no dusk seen since the clock was lost: hold the 22:00 level
   }
   tick(t, dt, lx) {
     const c = this.cls, reasons = [];
@@ -368,11 +370,11 @@ class Node {
     else { lit = this.pcDark; hour = lit ? this.safeHour(t) : null; reasons.push(hour === null ? 'SAFE_NO_ANCHOR' : 'SAFE_CLOCK'); }
     const phase = hour === null ? 'step' : phaseFor(hour), base = c.levels[PHASES.indexOf(phase)];
     let a = 0;
-    if (this.loop && c.vol && t - this.loop.t <= 900) { a = Math.min(1, Math.max(0, this.loop.v / c.vol)); if (a > 0) reasons.push('LOOP'); }
+    if ((mode === 'ONLINE' || mode === 'MESH') && this.loop && c.vol && t - this.loop.t <= 900) { a = Math.min(1, Math.max(0, this.loop.v / c.vol)); if (a > 0) reasons.push('LOOP'); }
     const presence = t < this.presenceUntil, carpet = t < this.carpetUntil;
     if (presence || carpet) { a = Math.max(a, c.occ ? 1 : 0.5); reasons.push(presence ? 'PRESENCE' : 'CARPET'); }
-    let target = base; if (a > 0) target += (c.cap - target) * a;
-    if (this.active('rain', t).length) { target = Math.min(c.cap, target + RAIN_BOOST); reasons.push('RAIN'); }
+    let target = base; if (a > 0) target = Math.max(target, target + (c.cap - target) * a);   // never dims a street
+    if (this.active('rain', t).length) { target = Math.max(target, Math.min(c.cap, target + RAIN_BOOST)); reasons.push('RAIN'); }
     if (this.active('fog', t).length) reasons.push('FOG_NO_BOOST');
     if (this.active('snow', t).length) reasons.push('SNOW_NO_BOOST');
     const floor = Math.max(c.floor, this.hin ? HIN_FLOOR : 0);
@@ -386,8 +388,7 @@ class Node {
     const mix = this.tunable ? ((presence || carpet || em) ? [100, 0] : MIX[phase]) : [100, 0];
     const relay = lit || this.level > 0.5;
     const white = relay ? this.level * mix[0] / 100 : 0, amber = relay ? this.level * mix[1] / 100 : 0;
-    if (t - this.cp.written >= 60) this.cp = { nightHour: hour, lit, written: t };
-    this.out = { mode, lit, phase, hour, base, a, target, level: this.level, white, amber, reasons };
+    this.out = { mode, lit, phase, hour, base, a, target, level: this.level, drive: this.level * CLO, white, amber, reasons };
     return this.out;
   }
 }
@@ -400,7 +401,7 @@ function bucketChain(st) { st.links = []; for (let i = 0; i < POLES; i++) { st.l
 function bfs(st, from, maxHops) { const seen = new Map([[from, 0]]), q = [from]; while (q.length) { const n = q.shift(), h = seen.get(n); if (h >= maxHops) continue; for (const m of st.links[n]) if (!seen.has(m)) { seen.set(m, h + 1); q.push(m); } } return seen; }
 
 function resetSim() {
-  sim.streets = CLASSES.map((cls, s) => { const st = { cls, s, nodes: [], walkers: [], links: null, lastHello: new Array(POLES).fill(-1e9), rnd: rng(100 + s), legacyLevel: 0 }; for (let i = 0; i < POLES; i++) st.nodes.push(new Node(cls, i)); st.nodes[6].hin = st.nodes[7].hin = true; bucketChain(st); return st; });
+  sim.streets = CLASSES.map((cls, s) => { const st = { cls, s, nodes: [], walkers: [], links: null, lastHello: new Array(POLES).fill(-1e9), rnd: rng(100 + s), legacyLevel: 0 }; for (let i = 0; i < POLES; i++) st.nodes.push(new Node(cls, i)); bucketChain(st); return st; });
   sim.series = []; sim.legacy = []; sim.log = []; sim.t = 0; sim.lastRain = -1e9; sim.fired = new Set();
   sim.metrics = { kwh: 0, lumh: 0, sky: 0, baseLumh: 0, baseKwh: 0, baseSky: 0, acc: CLASSES.map(() => [0, 0]), accLegacy: [0, 0], bucket: 0 };
 }
@@ -432,7 +433,7 @@ function cmsStep(t) {
   for (const act of state.actions) {
     if (act.t !== t || sim.fired.has(act.key)) continue; sim.fired.add(act.key);
     const st = sim.streets[act.s];
-    if (act.kind === 'cad') { const idx = []; for (let i = Math.max(0, act.p - 3); i <= Math.min(POLES - 1, act.p + 3); i++) idx.push(i); deliver(st, idx, { kind: 'emergency', id: act.key, ttl: 3600 }, t, `CAD incident at ${st.cls.name} pole ${act.p}`); }
+    if (act.kind === 'cad') { const idx = []; for (let i = 0; i < POLES; i++) if (Math.abs(i - act.p) * 30 <= 400) idx.push(i); deliver(st, idx, { kind: 'emergency', id: act.key, ttl: 3600 }, t, `CAD incident at ${st.cls.name} pole ${act.p}`); }
     else if (act.kind === 'walker') { st.walkers.push({ pole: act.p, dir: act.p < POLES / 2 ? 1 : -1, remaining: 14, next: t }); logLine(t, `Pedestrian starts at ${st.cls.name} pole ${act.p}`); }
     else if (act.kind === 'clock') { st.nodes[act.p].rtcTrusted = false; logLine(t, `${st.nodes[act.p].id}: RTC lost, SAFE mode until the next time sync`, true); }
     else if (act.kind === 'override') { const idx = []; for (let i = 0; i < POLES; i++) idx.push(i); for (const s2 of sim.streets) deliver(s2, idx, { kind: 'override', id: act.key, ttl: 3600, level: act.level, priority: act.priority }, t, null); logLine(t, `Override ${act.level} % p${act.priority} sent to all streets, 60 min`); }
@@ -469,7 +470,7 @@ function step() {
       const watts = st.cls.watts * (white / 100 / EFF[wcct] + amber / 100 / EFF['PC-Amber']);
       const ray = lum > 0 ? (white * RAY[wcct] + amber * RAY['PC-Amber']) / (white + amber) : 0;
       m.kwh += watts * n * hours / 1000; m.lumh += lum * n * hours; m.sky += lum * (up + 0.12) * ray * n * hours;
-      if (litToday) { m.baseLumh += st.cls.watts * n * hours; m.baseKwh += st.cls.watts * n * hours / 1000; m.baseSky += st.cls.watts * 0.15 * RAY[st.cls.cctToday] * n * hours; }
+      if (litToday) { m.baseLumh += st.cls.watts * n * hours; m.baseKwh += st.cls.watts / EFF[st.cls.cctToday] * n * hours / 1000; m.baseSky += st.cls.watts * 0.15 * RAY[st.cls.cctToday] * n * hours; }
       acc[0] += o.level; acc[1]++;
       // cloud-dependent comparison: profile while commanded, 100 % after 15 min silent
       if (st.cls.id === 'local') legacySum += (t - st.lastHello[i] > 900) ? (litToday ? 100 : 0) : o.level;
@@ -532,7 +533,7 @@ function render() {
   const m = sim.metrics, lit = elevAt(t) < -3;
   let powNow = 0; for (const st of sim.streets) { const n = N_LIGHTS * MIX_SHARE[st.cls.id] / POLES; for (const nd of st.nodes) { const o = nd.out; if (!o) continue; const wcct = state.acct.warm ? (nd.tunable || st.cls.cctTarget === 'PC-Amber' ? '2700K' : st.cls.cctTarget) : st.cls.cctToday; let w = o.white, a = o.amber; if (state.acct.warm && st.cls.cctTarget === 'PC-Amber') { a = w + a; w = 0; } powNow += st.cls.watts * (w / 100 / EFF[wcct] + a / 100 / EFF['PC-Amber']) * n; } }
   $('kOut').textContent = outN ? (outSum / outN).toFixed(0) + ' %' : '—';
-  $('kPow').textContent = (powNow / 1e6).toFixed(2) + ' MW'; $('kPowS').textContent = `static would be ${(N_LIGHTS * 59.2 / 1e6 * (lit ? 1 : 0)).toFixed(2)} MW`;
+  $('kPow').textContent = (powNow / 1e6).toFixed(2) + ' MW'; $('kPowS').textContent = `static would be ${(STATIC_W / 1e6 * (lit ? 1 : 0)).toFixed(2)} MW`;
   $('kEn').textContent = (m.kwh / 1000).toFixed(1) + ' MWh'; $('kEnS').textContent = `static so far ${(m.baseKwh / 1000).toFixed(1)} MWh`;
   const skyIdx = m.baseSky > 0 ? m.sky / m.baseSky : 0; $('kSky').textContent = m.baseSky > 0 ? skyIdx.toFixed(2) : '—';
   const lumRatio = m.baseLumh > 0 ? m.lumh / m.baseLumh : 1; const dmag = -2.5 * Math.log10(1 - 0.5 * (1 - lumRatio));
@@ -555,7 +556,8 @@ function renderInspector() {
       <dt>Activity</dt><dd>${o.a.toFixed(2)}</dd>
       <dt>Target</dt><dd>${o.target.toFixed(0)} %</dd>
       <dt>Level</dt><dd>${o.level.toFixed(1)} %</dd>
-      <dt>Channels</dt><dd>white ${o.white.toFixed(0)} · amber ${o.amber.toFixed(0)}</dd>
+      <dt>Drive</dt><dd>${o.drive.toFixed(1)} % (CLO ×${CLO.toFixed(3)} at 20,000 h)</dd>
+      <dt>Channels</dt><dd>white ${o.white.toFixed(0)} · amber ${o.amber.toFixed(0)} % of design</dd>
       <dt>Backhaul</dt><dd>${bh > 1e8 ? 'never' : Math.round(bh / 60) + ' min ago'}</dd>
       <dt>Gateway</dt><dd>${gw > 1e8 ? 'none seen' : Math.round(gw / 60) + ' min ago'}</dd>
       <dt>Clock</dt><dd>${nd.rtcTrusted ? 'RTC trusted' : 'lost · SAFE estimate'}</dd>

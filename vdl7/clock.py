@@ -208,7 +208,12 @@ class RtcHoldover:
     The clock is trusted while drift_ppm x seconds-since-sync stays under the
     5-minute budget: at 3 ppm that is just over three years. It is never
     trusted before its first sync. A supercapacitor holds the clock for seven
-    days without mains; a longer cut resets it."""
+    days without mains; a longer cut resets it.
+
+    Separately from wall time, the RTC counter keeps running across short
+    cuts whether or not it was ever synced. `raw()` and `epoch` let SAFE mode
+    measure how long the power was off without trusting the absolute time;
+    `epoch` changes whenever the counter itself was lost."""
     drift_ppm: float = 3.0
     trust_budget_s: float = 300.0
     holdover_days: float = 7.0
@@ -216,6 +221,13 @@ class RtcHoldover:
     utc_at_sync: Optional[datetime] = None
     mono_at_sync: float = 0.0
     age_before_mono_s: float = 0.0   # drift accumulated across reboots
+    epoch: int = 0                   # bumps on every RTC reset
+    _raw_base: float = 0.0
+    _raw_mono_base: float = 0.0
+
+    def raw(self, mono: float) -> float:
+        """Seconds counted by the RTC since its last reset."""
+        return self._raw_base + (mono - self._raw_mono_base)
 
     def sync(self, mono: float, utc: datetime) -> None:
         self.synced = True
@@ -244,10 +256,12 @@ class RtcHoldover:
     def power_cycle(self, mono_at_cut: float, outage_s: float) -> None:
         """Mains lost at node-monotonic `mono_at_cut` for `outage_s`; the
         monotonic clock restarts at zero on the far side."""
-        if not self.synced:
-            return
         if outage_s > self.holdover_days * 86400.0:
             self.reset()
+            return
+        self._raw_base = self.raw(mono_at_cut) + outage_s
+        self._raw_mono_base = 0.0
+        if not self.synced:
             return
         elapsed = (mono_at_cut - self.mono_at_sync) + outage_s
         self.utc_at_sync = self.utc_at_sync + timedelta(seconds=elapsed)
@@ -255,10 +269,14 @@ class RtcHoldover:
         self.mono_at_sync = 0.0
 
     def reset(self) -> None:
+        """Supercap drained: wall time and the counter are both gone."""
         self.synced = False
         self.utc_at_sync = None
         self.mono_at_sync = 0.0
         self.age_before_mono_s = 0.0
+        self.epoch += 1
+        self._raw_base = 0.0
+        self._raw_mono_base = 0.0
 
 
 # --------------------------------------------------------------------------
