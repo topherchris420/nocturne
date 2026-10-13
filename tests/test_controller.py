@@ -248,7 +248,7 @@ def test_R_EM_2_override_vs_emergency_priority():
     assert out.level == 100 and any(r.startswith("OVERRIDE_BLOCKED") for r in out.reasons)
     b.send(EventKind.OVERRIDE, ttl_s=3600, payload={"level": 50}, priority=Priority.INCIDENT_COMMAND, event_id="ic-1")
     assert b.advance(60, dt=5).level == 50
-    assert b.deliver(b.cms.cancel("ic-1", segments=[b.cfg.segment_id], issued=b.utc))
+    assert b.deliver(b.cms.cancel("ic-1", b.cfg.segment_id, issued=b.utc))
     assert b.advance(5).level == 100
 
 
@@ -385,11 +385,15 @@ def test_EXT_FS_6_dead_controller_falls_to_failure_level(road):
     for hin in (False, True):
         b = Bench(road, hin=hin)
         b.run_until("2026-10-14 02:00", dt=5)
-        drv = b.driver
-        assert not drv.watchdog(drv.last_write_mono + 3)  # one slow pass is fine
-        assert drv.watchdog(drv.last_write_mono + 10)     # node hung: bus silent
         expected = max(DEFAULT_PROFILES[road].base(Phase.STEP), 60 if hin else 0)
-        assert drv.relay_closed and drv.output_pct == expected
+        b.advance(1, dt=1)                                # last write one second ago
+        b.hang()                                          # firmware stops; the bus goes quiet
+        b.advance(3, dt=1)
+        assert b.driver.controller_alive                  # a slow pass is not a failure
+        b.advance(10, dt=1)
+        assert not b.driver.controller_alive
+        assert b.driver.relay_closed and b.driver.output_pct == expected
+        assert b.node.failure_level_writes <= 1           # DALI NVM written at most once
     d = LuminaireDriver.commissioned_for(DEFAULT_PROFILES[RoadClass.LOCAL])
     d.set(0.0, 0.0, relay_on=False)
     d.control_power_lost()
@@ -440,7 +444,7 @@ def test_EXT_SEC_1_forged_or_tampered_messages_rejected():
     b = Bench(RoadClass.LOCAL)
     b.run_until("2026-10-14 02:00", dt=5)
     stranger = Cms()
-    seg = make_targets(segments=[b.cfg.segment_id])
+    seg = b.cfg.segment_id
     assert not b.deliver(stranger.event(EventKind.EMERGENCY, 3600, seg, issued=b.utc))
     good = b.cms.event(EventKind.EMERGENCY, 3600, seg, issued=b.utc)
     assert not b.deliver(SignedMessage(good.payload.replace(b"3600", b"9999"), good.signature))
@@ -508,10 +512,11 @@ def test_EXT_SEC_5_events_apply_only_inside_their_geofence():
     outside = Bench(RoadClass.LOCAL, cms=cms, node_id="local-27", segment_id="seg-k")
     for b in (inside, outside):
         b.run_until("2026-10-14 02:00", dt=10)
-    msg = cms.emergency(fence, ttl_s=3600, incident="F26-1183", issued=inside.utc)
-    assert inside.deliver(msg) and not outside.deliver(msg)
+    msgs = cms.emergency({"seg-k": fence}, ttl_s=3600, incident="F26-1183", issued=inside.utc)
+    assert len(msgs) == 1
+    assert inside.deliver(msgs[0]) and not outside.deliver(msgs[0])
     assert inside.advance(5).level == 100 and outside.advance(5).level == 30
-    other = cms.event(EventKind.EMERGENCY, 3600, make_targets(segments=["seg-elsewhere"]), issued=inside.utc)
+    other = cms.event(EventKind.EMERGENCY, 3600, "seg-elsewhere", issued=inside.utc)
     assert not outside.deliver(other) and outside.advance(5).level == 30
 
 
@@ -524,7 +529,7 @@ def test_EXT_SEC_6_replay_window():
     assert b.advance(5).level == 30
     rain = b.send(EventKind.RAIN, ttl_s=1800)
     assert not b.deliver(rain, via="mesh")               # same message by mesh: applied once
-    seg = make_targets(segments=[b.cfg.segment_id])
+    seg = b.cfg.segment_id
     fog = b.cms.event(EventKind.FOG, 600, seg, issued=b.utc)
     snow = b.cms.event(EventKind.SNOW, 600, seg, issued=b.utc)
     assert b.deliver(snow) and b.deliver(fog)            # out of order inside the window
@@ -538,10 +543,34 @@ def test_EXT_SEC_6_replay_window():
     assert b.deliver(b.cms.event(EventKind.FOG, 600, seg, issued=b.utc))
 
 
+def test_EXT_SEC_6b_fleet_traffic_does_not_starve_a_late_emergency():
+    """Counters are per segment: a burst of signed traffic for the rest of
+    the city between an emergency and its late mesh arrival changes nothing."""
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=5)
+    seg = b.cfg.segment_id
+    emergency = b.cms.event(EventKind.EMERGENCY, 3600, seg, issued=b.utc)
+    for i in range(1300):                                # one 15-min loop burst, fleet-wide
+        b.cms.loop_volume(f"arterial-{i}", 120, issued=b.utc)
+    rain = b.cms.event(EventKind.RAIN, 1800, seg, issued=b.utc)
+    assert b.deliver(rain)                               # later message first, by cellular
+    assert b.deliver(emergency, via="mesh")              # earlier one late, by mesh
+    assert b.advance(5).level == 100
+
+
+def test_EXT_SEC_6c_cms_failover_epoch():
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=5)
+    old = b.send(EventKind.FOG, ttl_s=600)
+    b.cms.failover()                                     # standby CMS, counters lost
+    assert b.deliver(b.cms.event(EventKind.SNOW, 600, b.cfg.segment_id, issued=b.utc))
+    assert not b.deliver(old)                            # previous epoch stays rejected
+
+
 def test_EXT_SEC_7_expired_on_arrival_or_from_the_future():
     b = Bench(RoadClass.LOCAL)
     b.run_until("2026-10-14 02:00", dt=5)
-    seg = make_targets(segments=[b.cfg.segment_id])
+    seg = b.cfg.segment_id
     assert not b.deliver(b.cms.event(EventKind.RAIN, 1800, seg, issued=b.utc - timedelta(hours=2)))
     assert "expired" in b.node.log[-1]
     assert not b.deliver(b.cms.event(EventKind.RAIN, 1800, seg, issued=b.utc + timedelta(hours=1)))
@@ -557,9 +586,8 @@ def test_EXT_SEC_8_event_store_keeps_emergencies_and_ignores_unknown_kinds():
     assert len(b.node.events) == 64
     assert b.node.events.latest(EventKind.EMERGENCY, b.mono) is not None
     assert b.advance(5).level == 100
-    b.cms.seq += 1
-    odd = b.cms.signer.sign_obj({"kind": "teleport", "id": "x", "ttl_s": 10, "seq": b.cms.seq,
-                                 "targets": make_targets(everyone=True), "issued": b.utc.isoformat()})
+    odd = b.cms.signer.sign_obj({"kind": "teleport", "id": "x", "ttl_s": 10, "seq": b.cms.next_seq(b.cfg.segment_id),
+                                 "targets": make_targets(b.cfg.segment_id), "issued": b.utc.isoformat()})
     assert not b.deliver(odd)
     assert "REJECT unknown or malformed" in b.node.log[-1]
 
@@ -567,17 +595,19 @@ def test_EXT_SEC_8_event_store_keeps_emergencies_and_ignores_unknown_kinds():
 def test_EXT_SEC_9_override_audit_who_when_why():
     b = Bench(RoadClass.LOCAL)
     b.run_until("2026-10-14 02:00", dt=5)
-    seg = [b.cfg.segment_id]
-    assert not b.deliver(b.cms.override(55, 3600, Priority.OPERATOR, by="", reason="x", segments=seg, issued=b.utc))
+    seg = b.cfg.segment_id
+    assert not b.deliver(b.cms.override(55, 3600, Priority.OPERATOR, by="", reason="x", segment=seg, issued=b.utc))
     assert b.deliver(b.cms.override(55, 3600, Priority.OPERATOR, by="J. Rivera, DDOT", reason="water main break",
-                                    segments=seg, event_id="ov-1", issued=b.utc))
+                                    segment=seg, event_id="ov-1", issued=b.utc))
     assert b.advance(30).level == 55
     rec = b.node.audit[-1]
     assert (rec.by, rec.reason, rec.priority, rec.action) == ("J. Rivera, DDOT", "water main break", 2, "applied")
     assert rec.utc is not None
-    assert b.deliver(b.cms.cancel("ov-1", segments=seg, issued=b.utc))
+    assert b.deliver(b.cms.cancel("ov-1", seg, issued=b.utc))
     assert b.node.audit[-1].action == "cancelled"
     assert b.advance(60, dt=5).level == 30
+    sent = [r for u in b.uplinks for r in u["audit"]]   # the CMS audit trail got both records
+    assert [r["action"] for r in sent] == ["applied", "cancelled"] and sent[0]["by"] == "J. Rivera, DDOT"
 
 
 # ============================================= EXT: TUNABLE WHITE
@@ -645,22 +675,29 @@ def test_EXT_HW_4_driver_fault_and_day_burner_alarms():
     assert "DAY_BURNER" in day.advance(120, dt=5).alarms
 
 
-def test_EXT_HW_5_metering_buffers_offline_and_replays_on_recovery():
+def test_EXT_HW_5_metering_survives_a_dead_link_and_a_reboot():
+    """The carrier dies just after a hello, so the node still believes it is
+    ONLINE for 15 min and transmits into the void. Nothing is lost: records
+    stay until the CMS acknowledges them, survive a reboot in flash, and are
+    replayed in order on recovery (Section 5.3 step 6)."""
     b = Bench(RoadClass.LOCAL)
-    b.run_until("2026-10-13 21:00", dt=5)
+    b.run_until("2026-10-13 20:50", dt=5)
     evening = [r for u in b.uplinks for r in u["metering"]]
     # an evening slot: 15 min x (0.5 W standby + 40 W x 80 % x 0.86 CLO)
     assert evening[-1]["wh"] == pytest.approx(0.25 * (0.5 + 40 * 0.80 * 0.86), rel=0.01)
+    b.node.backhaul_hello(b.mono, b.utc)
     b.go_offline()
+    assert b.run_until("2026-10-13 21:01", dt=5).mode == Mode.ONLINE     # the node hasn't noticed yet
     b.run_until("2026-10-13 23:00", dt=5)
-    buffered = list(b.node.outbox)
-    assert len(buffered) >= 7 and any(r["mode"] == "AUTONOMOUS" for r in buffered)
-    sent_before = len(b.uplinks)
+    assert len(b.node.outbox) >= 8 and any(r["mode"] == "AUTONOMOUS" for r in b.node.outbox)
+    b.power_cut(outage_s=60)
+    assert len(b.node.outbox) >= 8                       # kept in flash
     b.go_online()
     b.advance(2)
-    up = b.uplinks[sent_before]
-    assert up["metering"][:len(buffered)] == buffered and up["bundle_version"] == 1
     assert len(b.node.outbox) == 0
+    sent = [r for u in b.uplinks for r in u["metering"]]
+    ns = [r["n"] for r in sent]
+    assert ns == list(range(ns[0], ns[0] + len(ns)))     # every slot exactly once, in order
 
 
 def test_EXT_HW_6_cycling_alarm():
@@ -695,3 +732,138 @@ def test_EXT_SPEC_2_measured_spd_round_trip(tmp_path):
     ref = spectral.table()["2700K"]
     assert m.cct == pytest.approx(ref.cct, rel=0.01)
     assert m.mel_der == pytest.approx(ref.mel_der, rel=0.02)
+
+
+# ============================================ EXT: REVIEW ROUND 2
+@pytest.mark.parametrize("targets", [
+    {"segment": "seg-bench", "nodes": "bench-local-x"},       # string, not a list: no substring match
+    {"segment": "seg-bench", "nodes": None},
+    {"segment": "seg-bench", "nodes": [], "all": "false"},    # unknown key
+    {"segments": ["seg-bench"]},
+    None,
+])
+def test_EXT_SEC_10_malformed_targets_fail_closed(targets):
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=10)
+    msg = b.cms.signer.sign_obj({"kind": "emergency", "id": "e", "ttl_s": 600, "payload": {},
+                                 "seq": b.cms.next_seq("seg-bench"), "targets": targets,
+                                 "issued": b.utc.isoformat()})
+    assert not b.deliver(msg)
+    assert b.advance(5).level == 30
+
+
+def test_EXT_SEC_11_ttl_counts_from_issue_when_the_clock_is_good():
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=5)
+    late = b.cms.event(EventKind.EMERGENCY, 3600, b.cfg.segment_id, issued=b.utc - timedelta(minutes=55))
+    assert b.deliver(late)
+    assert b.advance(10).level == 100
+    assert b.advance(5 * 60, dt=5).level < 100           # 5 min left, not 60
+
+
+def test_EXT_SEC_12_anti_rollback_survives_factory_fallback():
+    b = Bench(RoadClass.LOCAL, bundle_version=5)
+    assert b.deliver(b.cms.bundle(default_bundle(version=6)))
+    for i in (0, 1):                                     # both banks rot
+        if b.flash.banks[i]:
+            p, sig = b.flash.banks[i]
+            b.flash.banks[i] = (p + b" ", sig)
+    b.power_cut(outage_s=30)
+    assert b.flash.version == 0 and "factory" in b.flash.install_log[-1]
+    assert b.run_until("2026-10-14 02:00", dt=10).level == 30      # factory profile still dims
+    assert not b.deliver(b.cms.bundle(default_bundle(version=4)))   # old signed bundle: refused
+    assert b.deliver(b.cms.bundle(default_bundle(version=7)))
+
+
+@pytest.mark.parametrize("field, value", [("floor", "10"), ("occupancy", "false"), ("levels", [80, 60, 40]),
+                                          ("design_watts", None)])
+def test_EXT_SEC_13_wrongly_typed_bundle_is_refused_not_crashed(field, value):
+    b = Bench(RoadClass.LOCAL)
+    d = default_bundle(version=2).to_dict()
+    d["profiles"]["local"][field] = value
+    assert not b.deliver(b.cms.signer.sign_obj(d))
+    assert "REJECT malformed" in b.flash.install_log[-1] and b.flash.version == 1
+
+
+def test_EXT_SEC_14_emergency_cancellation():
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=5)
+    b.send(EventKind.EMERGENCY, ttl_s=3600, event_id="cad-77")
+    assert b.advance(5).level == 100
+    assert b.deliver(b.cms.cancel("cad-77", b.cfg.segment_id, issued=b.utc))
+    assert b.advance(80, dt=5).level == 30
+
+
+def test_EXT_SEC_15_operator_outranks_planned_when_both_active():
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=5)
+    b.send(EventKind.OVERRIDE, ttl_s=3600, payload={"level": 70}, priority=Priority.PLANNED, event_id="permit-1")
+    b.send(EventKind.OVERRIDE, ttl_s=3600, payload={"level": 40}, priority=Priority.OPERATOR, event_id="op-1")
+    out = b.advance(60, dt=5)
+    assert out.level == 40 and "OVERRIDE:op-1:p2" in out.reasons
+    b.deliver(b.cms.cancel("op-1", b.cfg.segment_id, issued=b.utc))
+    assert b.advance(5).level == 70                      # planned override takes over again
+
+
+def test_EXT_FS_9_storm_darkness_is_not_learned_as_dusk():
+    """Darkness from 17:15 that runs into the night must not become the
+    learned dusk; the next clockless night still lands the curfew on time."""
+    b = Bench(RoadClass.LOCAL, start="2026-10-12 17:00")
+    b.run_until("2026-10-13 08:00", dt=10)
+    good = (b.flash.checkpoint.learned_midpoint_h, b.flash.checkpoint.prev_night_len_h)
+    b.run_until("2026-10-13 17:15", dt=10)
+    b.lx_override = 3.0                                  # storm, then night
+    b.run_until("2026-10-13 19:30", dt=10)
+    b.lx_override = None
+    b.run_until("2026-10-14 08:00", dt=10)
+    assert (b.flash.checkpoint.learned_midpoint_h, b.flash.checkpoint.prev_night_len_h) == good
+    rtc = b.rtc
+    rtc.reset()
+    c = Bench(RoadClass.LOCAL, start="2026-10-14 15:00", flash=b.flash, rtc=rtc, online=False, cms=b.cms)
+    start = c.utc
+    c.keep_history = True
+    c.run_until("2026-10-14 23:30", dt=10)
+    first = next(o for o in c.outputs if o.phase == Phase.CURFEW)
+    assert abs(hm(to_local(start + timedelta(seconds=first.mono))) - 23 * 60) <= 10
+
+
+def test_EXT_FS_10_clockless_second_night_rejects_a_storm_dusk():
+    """In SAFE mode with yesterday's dusk seen, a dusk 80 min early is
+    treated as weather and the curfew still lands on time."""
+    learner = Bench(RoadClass.LOCAL, start="2026-10-12 17:00")
+    learner.run_until("2026-10-13 08:00", dt=10)
+    rtc = learner.rtc
+    rtc.reset()
+    b = Bench(RoadClass.LOCAL, start="2026-10-13 15:00", flash=learner.flash, rtc=rtc, online=False, cms=learner.cms)
+    start = b.utc
+    b.run_until("2026-10-14 17:15", dt=10)               # first clockless night seen normally
+    b.lx_override = 3.0                                  # storm on the second evening
+    b.run_until("2026-10-14 19:30", dt=10)
+    b.lx_override = None
+    b.keep_history = True
+    b.run_until("2026-10-14 23:30", dt=10)
+    first = next(o for o in b.outputs if o.phase == Phase.CURFEW)
+    assert abs(hm(to_local(start + timedelta(seconds=first.mono))) - 23 * 60) <= 10
+    assert any("off schedule" in line for line in b.node.log)
+
+
+def test_EXT_HW_7_photocell_stuck_dark_in_daylight():
+    b = Bench(RoadClass.LOCAL, start="2026-10-14 08:00")
+    b.lx_override = 0.5                                  # cell covered or failed dark
+    out = b.run_until("2026-10-14 10:00", dt=10)
+    assert out.lit and "PHOTOCELL_FAULT" not in out.alarms   # could still be a storm
+    out = b.run_until("2026-10-14 11:30", dt=10)
+    assert out.lit and "PHOTOCELL_FAULT" in out.alarms       # lights stay on; the CMS is told
+    assert any("PHOTOCELL_FAULT" in u["alarms"] for u in b.uplinks)
+
+
+def test_EXT_HW_8_hour_meter_and_tilt_baseline_live_in_flash():
+    b = Bench(RoadClass.LOCAL, burn_hours=1234.0)
+    b.node.commission_tilt(0.7)
+    b.run_until("2026-10-13 21:00", dt=10)
+    hours = b.cfg.burn_hours
+    b.cfg.burn_hours = 0.0                               # pretend RAM config was lost
+    b.power_cut(outage_s=60)
+    assert b.cfg.burn_hours == pytest.approx(hours, abs=0.05)
+    b.node.tilt_sample(3.0, b.mono)
+    assert "TILT" in b.advance(2).alarms                 # baseline 0.7 came back from flash

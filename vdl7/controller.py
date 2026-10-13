@@ -31,7 +31,7 @@ from enum import Enum
 from typing import Deque, Dict, List, Optional, Tuple
 
 from .clock import (DC_LAT, DC_LON, NIGHT_ELEVATION_DEG, Photocell, RtcHoldover,
-                    learned_night, local_hour, solar_elevation_deg, to_local)
+                    learned_night, local_hour, night_bounds, solar_elevation_deg, to_local)
 from .driver import STANDBY_W, LuminaireDriver, failure_level
 from .events import Event, EventKind, EventStore, Priority, ReplayWindow, addressed_to
 from .profiles import (BOOST_MIX, ClassProfile, Phase, ProfileBundle, RoadClass, bundle_expired,
@@ -51,6 +51,9 @@ STALE_SKEW_S = 300.0                       # 5-min clock error budget
 TILT_ALARM_DEG = 2.0                       # Section 6.1
 METER_SLOT_S = 900.0                       # 15-min metering
 METER_BUFFER_SLOTS = 96 * 7                # a week offline
+LEARN_GATE_S = 45 * 60                     # a photocell dusk/dawn this far from the sun's is weather
+PHOTOCELL_FAULT_S = 3 * 3600               # lit by the photocell in daylight this long: stuck dark
+LOG_LINES = 256
 
 
 @dataclass
@@ -83,6 +86,8 @@ class Checkpoint:
     rtc_epoch: int = -1                   # RTC counter identity at last write
     rtc_raw: float = 0.0                  # RTC counter at last write
     bundle_version: int = 0
+    tilt_baseline: Optional[float] = None # commissioning accelerometer reading
+    burn_hours: float = 0.0               # LED hour meter for CLO
 
 
 class Flash:
@@ -96,6 +101,9 @@ class Flash:
         self.checkpoint = Checkpoint()
         self.replay_hi: int = 0
         self._bundle: ProfileBundle = bundle or default_bundle(version=0)
+        self.version_floor: int = self._bundle.version    # anti-rollback counter (secure element)
+        self.outbox: Deque[dict] = deque(maxlen=METER_BUFFER_SLOTS)   # unacknowledged uplink records
+        self.outbox_seq: int = 0
         self.install_log: List[str] = []
 
     @property
@@ -114,19 +122,20 @@ class Flash:
             return False
         try:
             d = msg.decode()
-            if d.get("kind") != "bundle":
+            if not isinstance(d, dict) or d.get("kind") != "bundle":
                 self.install_log.append("REJECT not a bundle")
                 return False
             new = ProfileBundle.from_dict(d)
-        except (KeyError, ValueError, TypeError) as e:
+            errs = validate_bundle(new)
+        except (KeyError, ValueError, TypeError, AttributeError) as e:
             self.install_log.append(f"REJECT malformed bundle: {e!r}")
             return False
-        errs = validate_bundle(new)
         if errs:
             self.install_log.append("REJECT invalid bundle: " + "; ".join(errs))
             return False
-        if new.version <= self._bundle.version:
-            self.install_log.append(f"REJECT version {new.version} <= {self._bundle.version}")
+        floor = max(self._bundle.version, self.version_floor)
+        if new.version <= floor:
+            self.install_log.append(f"REJECT version {new.version} <= {floor}")
             return False
         if today is not None and bundle_expired(new, today):
             self.install_log.append(f"REJECT expired bundle v{new.version} issued {new.issued}")
@@ -135,14 +144,16 @@ class Flash:
         self.banks[inactive] = (msg.payload, msg.signature)
         self.active = inactive
         self._bundle = new
+        self.version_floor = new.version
         self.checkpoint.bundle_version = new.version
         self.install_log.append(f"INSTALL v{new.version} bank {inactive}")
         return True
 
     # ------------------------------------------------------- persistence
     def image(self) -> dict:
-        return {"banks": list(self.banks), "active": self.active,
-                "checkpoint": replace(self.checkpoint), "replay_hi": self.replay_hi}
+        return {"banks": list(self.banks), "active": self.active, "checkpoint": replace(self.checkpoint),
+                "replay_hi": self.replay_hi, "version_floor": self.version_floor,
+                "outbox": [dict(r) for r in self.outbox], "outbox_seq": self.outbox_seq}
 
     @classmethod
     def boot(cls, image: dict, verifier: Verifier) -> "Flash":
@@ -152,6 +163,9 @@ class Flash:
         f.banks = list(image["banks"])
         f.checkpoint = replace(image["checkpoint"])
         f.replay_hi = int(image["replay_hi"])
+        f.version_floor = int(image.get("version_floor", 0))     # survives even a factory fallback
+        f.outbox.extend(dict(r) for r in image.get("outbox", []))
+        f.outbox_seq = int(image.get("outbox_seq", 0))
         order = [image["active"], 1 - image["active"]]
         for bank in order:
             entry = f.banks[bank]
@@ -163,10 +177,11 @@ class Flash:
                 continue
             try:
                 b = ProfileBundle.from_dict(SignedMessage(payload, sig).decode())
-            except (KeyError, ValueError, TypeError):
+                bad = validate_bundle(b)
+            except (KeyError, ValueError, TypeError, AttributeError):
                 f.install_log.append(f"BOOT bank {bank} malformed")
                 continue
-            if validate_bundle(b):
+            if bad:
                 f.install_log.append(f"BOOT bank {bank} invalid")
                 continue
             f.active, f._bundle = bank, b
@@ -223,8 +238,10 @@ class VDL7Controller:
         self.mode = Mode.SAFE
         self.level = 0.0
         self.output: Optional[Output] = None
-        self.log: List[str] = []
-        self.audit: List[AuditRecord] = []
+        self.log: Deque[str] = deque(maxlen=LOG_LINES)
+        self.audit: Deque[AuditRecord] = deque(maxlen=LOG_LINES)   # every record also goes to the CMS
+        self.failure_level_writes = 0
+        self.output_reasons_early = False
         # timers, all node-monotonic
         self._boot_mono: Optional[float] = None
         self._last_backhaul = -math.inf
@@ -238,17 +255,18 @@ class VDL7Controller:
         self._seeded = False
         # SAFE-mode anchors
         self._pc_dusk_mono: Optional[float] = None
+        self._last_good_dusk_mono: Optional[float] = None
         self._safe_anchor: Optional[Tuple[float, float]] = None   # (hour, mono)
         # alarms and metering
         self.alarms: Dict[str, float] = {}          # name -> raised at mono
         self._cond_since: Dict[str, float] = {}
-        self._tilt_baseline: Optional[float] = None
+        self._tilt_baseline: Optional[float] = flash.checkpoint.tilt_baseline
         self._tilt_last: Optional[float] = None
+        cfg.burn_hours = max(cfg.burn_hours, flash.checkpoint.burn_hours)
         self._lit_flips: Deque[float] = deque(maxlen=32)
         self._prev_lit: Optional[bool] = None
         self._meter_slot_start: Optional[float] = None
         self._meter_wh = 0.0
-        self.outbox: Deque[dict] = deque(maxlen=METER_BUFFER_SLOTS)
 
     # ------------------------------------------------------------------ inputs
     @property
@@ -280,12 +298,13 @@ class VDL7Controller:
         """Accelerometer tilt from vertical. The first sample after
         commissioning is the baseline; > 2 deg change raises TILT."""
         if self._tilt_baseline is None:
-            self._tilt_baseline = deg
+            self.commission_tilt(deg)
         self._tilt_last = deg
 
     def commission_tilt(self, deg: float) -> None:
         self._tilt_baseline = deg
         self._tilt_last = deg
+        self.flash.checkpoint.tilt_baseline = deg
 
     def photocell_sample(self, lx: float, mono: float) -> None:
         flip = self.photocell.sample(lx, mono)
@@ -294,11 +313,18 @@ class VDL7Controller:
         trusted = self.rtc.trusted(mono)
         utc = self.rtc.utc_now(mono) if trusted else None
         if flip:                               # light -> dark: dusk observed
-            self._pc_dusk_mono = mono
             self._safe_anchor = None
-            self._pc_dusk_local = to_local(utc) if utc else None
+            self._pc_dusk_local = None
+            if utc is not None:                # clocked: learn only from a dusk near the sun's
+                self._pc_dusk_mono = mono
+                if self._near_sun_transition(utc, dusk=True):
+                    self._pc_dusk_local = to_local(utc)
+                    self._last_good_dusk_mono = mono
+            else:                              # SAFE: reject weather against yesterday's dusk
+                self._pc_dusk_mono = self._plausible_dusk(mono)
         else:                                  # dark -> light: dawn observed
-            if utc is not None and self._pc_dusk_local is not None:
+            if (utc is not None and self._pc_dusk_local is not None
+                    and self._near_sun_transition(utc, dusk=False)):
                 self._learn_from_photocell(self._pc_dusk_local, to_local(utc))
             self._pc_dusk_mono = None
             self._safe_anchor = None
@@ -317,9 +343,11 @@ class VDL7Controller:
         except ValueError:
             self.log.append(f"{mono:.0f} REJECT undecodable message")
             return False
-        if d.get("kind") == "bundle":
+        if isinstance(d, dict) and d.get("kind") == "bundle":
             return self.flash.install(msg, self.verifier, today=self._today(mono))
         try:
+            if not isinstance(d, dict):
+                raise TypeError("not an object")
             ev = Event.from_dict(d)
         except (KeyError, ValueError, TypeError) as e:
             self.log.append(f"{mono:.0f} REJECT unknown or malformed event: {e!r}")
@@ -332,42 +360,62 @@ class VDL7Controller:
         if status == "stale":
             self.log.append(f"{mono:.0f} REJECT replayed seq {ev.seq} (window top {self.replay.hi})")
             return False
-        self.replay.accept(ev.seq)
-        self.flash.replay_hi = self.replay.hi              # FRAM write in hardware
         reason = self._stale_on_arrival(ev, mono)
         if reason:
             self.log.append(f"{mono:.0f} REJECT {ev.kind.value} {ev.id}: {reason}")
             return False
+        record = None
+        if ev.kind == EventKind.OVERRIDE:
+            level = ev.payload.get("level")
+            by, why = ev.payload.get("by"), ev.payload.get("reason")
+            if (isinstance(level, bool) or not isinstance(level, (int, float)) or not (0 <= level <= 100)
+                    or not isinstance(by, str) or not by or not isinstance(why, str) or not why):
+                self.log.append(f"{mono:.0f} REJECT override {ev.id}: needs level 0-100, by and reason")
+                return False
+            utc = self.rtc.utc_now(mono) if self.rtc.trusted(mono) else None
+            record = AuditRecord(mono, utc.isoformat() if utc else None, ev.id, float(level),
+                                 int(ev.priority), by, why)
+        if ev.kind == EventKind.LOOP_VOLUME:
+            veh = ev.payload.get("veh15")
+            if isinstance(veh, bool) or not isinstance(veh, (int, float)) or veh < 0:
+                self.log.append(f"{mono:.0f} REJECT loop volume {ev.id}: bad veh15")
+                return False
+        # Valid and new: only now consume the sequence number.
+        self.replay.accept(ev.seq)
+        self.flash.replay_hi = self.replay.hi              # FRAM write in hardware
         ev.via = via
+        ev.ttl_s = self._remaining_ttl(ev, mono)
         if ev.kind == EventKind.CANCEL:
             target = str(ev.payload.get("target", ""))
             ok = self.events.cancel(target)
             if ok and any(a.event_id == target for a in self.audit):
-                self._audit_note(mono, target, "cancelled")
+                self._audit(self._audit_last(target), mono, "cancelled")
             return ok
-        if ev.kind == EventKind.OVERRIDE:
-            level = ev.payload.get("level")
-            by, why = ev.payload.get("by"), ev.payload.get("reason")
-            if not isinstance(level, (int, float)) or not (0 <= level <= 100) or not by or not why:
-                self.log.append(f"{mono:.0f} REJECT override {ev.id}: needs level 0-100, by and reason")
-                return False
-            utc = self.rtc.utc_now(mono) if self.rtc.trusted(mono) else None
-            self.audit.append(AuditRecord(mono, utc.isoformat() if utc else None, ev.id, float(level),
-                                          int(ev.priority), str(by), str(why)))
+        if record is not None:
+            self._audit(record, mono, "applied")
         if ev.kind == EventKind.LOOP_VOLUME:
-            self._loop = (float(ev.payload.get("veh15", 0.0)), mono)
+            self._loop = (float(ev.payload["veh15"]), mono)
         self.events.put(ev, mono)
         return True
 
-    def take_uplink(self) -> Optional[dict]:
-        """Status, alarms and buffered metering, delivered only while the
-        backhaul is up (Section 2.1 uplink; Section 5.3 step 6 replay)."""
+    def pending_uplink(self) -> Optional[dict]:
+        """Status, alarms, audit records and buffered metering for the CMS
+        (Section 2.1 uplink; Section 5.3 step 6 replay). Records stay in the
+        outbox until `ack_uplink`, so a link that dies before the node
+        notices loses nothing."""
         if self.mode != Mode.ONLINE:
             return None
         records = list(self.outbox)
-        self.outbox.clear()
         return {"node": self.cfg.node_id, "bundle_version": self.flash.version,
-                "alarms": sorted(self.alarms), "metering": records}
+                "alarms": sorted(self.alarms), "records": records,
+                "metering": [r for r in records if r["type"] == "meter"],
+                "audit": [r for r in records if r["type"] == "audit"],
+                "upto": records[-1]["n"] if records else None}
+
+    def ack_uplink(self, upto: Optional[int]) -> None:
+        """The CMS confirmed every record up to and including `upto`."""
+        while self.outbox and upto is not None and self.outbox[0]["n"] <= upto:
+            self.outbox.popleft()
 
     # ---------------------------------------------------------------- helpers
     def _today(self, mono: float) -> Optional[date]:
@@ -394,9 +442,56 @@ class VDL7Controller:
             return "issued in the future"
         return None
 
-    def _audit_note(self, mono: float, event_id: str, action: str) -> None:
-        last = next(a for a in reversed(self.audit) if a.event_id == event_id)
-        self.audit.append(replace(last, mono=mono, action=action))
+    def _audit_last(self, event_id: str) -> AuditRecord:
+        return next(a for a in reversed(self.audit) if a.event_id == event_id)
+
+    def _audit(self, rec: AuditRecord, mono: float, action: str) -> None:
+        rec = replace(rec, mono=mono, action=action)
+        self.audit.append(rec)
+        self._outbox_put({"type": "audit", **rec.__dict__})
+
+    @property
+    def outbox(self) -> Deque[dict]:
+        return self.flash.outbox
+
+    def _outbox_put(self, record: dict) -> None:
+        self.flash.outbox_seq += 1
+        record["n"] = self.flash.outbox_seq
+        self.flash.outbox.append(record)
+
+    def _remaining_ttl(self, ev: Event, mono: float) -> float:
+        """With a trusted clock an event expires at issued + TTL, not at
+        receipt + TTL, so a late delivery cannot extend it."""
+        if not self.rtc.trusted(mono) or not ev.issued:
+            return ev.ttl_s
+        try:
+            age = (self.rtc.utc_now(mono) - datetime.fromisoformat(ev.issued)).total_seconds()
+        except (ValueError, TypeError):
+            return ev.ttl_s
+        return max(1.0, min(ev.ttl_s, ev.ttl_s - max(0.0, age)))
+
+    def _near_sun_transition(self, utc: datetime, dusk: bool) -> bool:
+        """Learn only from photocell transitions within 45 min of the sun's
+        own dusk or dawn: storm darkness must not become 'dusk'."""
+        loc = to_local(utc)
+        d = loc.date() if (dusk or loc.hour >= 12) else (loc - timedelta(days=1)).date()
+        sun_dusk, sun_dawn = night_bounds(self.cfg.lat, self.cfg.lon, d)
+        ref = sun_dusk if dusk else sun_dawn
+        return abs((utc - ref).total_seconds()) <= LEARN_GATE_S
+
+    def _plausible_dusk(self, mono: float) -> float:
+        """SAFE-mode anchor. If a dusk was seen yesterday in this boot, a
+        dusk more than 45 min off 24 h later is weather: anchor on the
+        expected time instead."""
+        last = self._last_good_dusk_mono
+        if last is not None:
+            expected = last + 86400.0 * round((mono - last) / 86400.0)
+            if expected > last and abs(mono - expected) > LEARN_GATE_S:
+                self.log.append(f"{mono:.0f} SAFE dusk {(mono - expected) / 60:+.0f} min off schedule: using expected")
+                self._last_good_dusk_mono = expected
+                return expected
+        self._last_good_dusk_mono = mono
+        return mono
 
     def _seed_learning(self, utc: datetime) -> None:
         """First trusted tick: seed tonight's dark midpoint from the astro
@@ -446,6 +541,8 @@ class VDL7Controller:
         cp.night_hour, cp.lit = hour, lit
         cp.rtc_epoch, cp.rtc_raw = self.rtc.epoch, self.rtc.raw(mono)
         cp.bundle_version = self.flash.version
+        cp.burn_hours = self.cfg.burn_hours
+        cp.tilt_baseline = self._tilt_baseline
         self._last_checkpoint = mono
 
     def _hold(self, name: str, cond: bool, mono: float, after_s: float) -> None:
@@ -481,15 +578,18 @@ class VDL7Controller:
         flips = sum(1 for m in self._lit_flips if mono - m <= 3600.0)
         self._hold("CYCLING", flips > 6, mono, 0.0)
         self._hold("BUNDLE_EXPIRED", expired, mono, 0.0)
+        # photocell stuck dark: lit by the photocell alone in daylight for hours
+        early = bool(self.output_reasons_early)
+        self._hold("PHOTOCELL_FAULT", early, mono, PHOTOCELL_FAULT_S)
         # 15-min metering into the outbox (sent when ONLINE, buffered otherwise)
         if self._meter_slot_start is None:
             self._meter_slot_start = mono
         self._meter_wh += measured * dt / 3600.0
         if mono + dt - self._meter_slot_start >= METER_SLOT_S:
             utc = self.rtc.utc_now(mono) if self.rtc.trusted(mono) else None
-            self.outbox.append({"slot_end_mono": round(mono + dt, 1),
-                                "slot_end_utc": utc.isoformat() if utc else None,
-                                "wh": round(self._meter_wh, 3), "mode": self.mode.value})
+            self._outbox_put({"type": "meter", "slot_end_mono": round(mono + dt, 1),
+                              "slot_end_utc": utc.isoformat() if utc else None,
+                              "wh": round(self._meter_wh, 3), "mode": self.mode.value})
             self._meter_slot_start = mono + dt
             self._meter_wh = 0.0
 
@@ -526,11 +626,13 @@ class VDL7Controller:
             hour: Optional[float] = local_hour(utc)
             astro_night = solar_elevation_deg(cfg.lat, cfg.lon, utc) < cfg.night_elevation_deg
             lit = astro_night or pc_dark
+            self.output_reasons_early = pc_dark and not astro_night
             if pc_dark and not astro_night:
                 reasons.append("PHOTOCELL_EARLY")
             if astro_night and not pc_dark:
                 reasons.append("PHOTOCELL_VETOED")
         else:
+            self.output_reasons_early = False
             lit = pc_dark
             hour = self._safe_night_hour(mono) if lit else None
             reasons.append("SAFE_CLOCK" if hour is not None else "SAFE_NO_ANCHOR")
@@ -607,7 +709,10 @@ class VDL7Controller:
 
         # 12. Output, DALI failure level, checkpoint, alarms, metering, hour meter
         relay_on = lit or self.level > 0.5          # let the dawn fade finish
-        self.driver.system_failure_level = failure_level(prof, cfg.hin, bundle.hin_floor)
+        want_fail = failure_level(prof, cfg.hin, bundle.hin_floor)
+        if self.driver.system_failure_level != want_fail:     # DALI NVM write only on change
+            self.driver.system_failure_level = want_fail
+            self.failure_level_writes += 1
         self.driver.set(white, amber, relay_on, mono)
         if mono - self._last_checkpoint >= cfg.checkpoint_interval_s:
             self._write_checkpoint(mono, hour, lit)
@@ -629,7 +734,5 @@ class VDL7Controller:
         RAM state (events, timers, slew level, audit buffer) is gone; the
         flash image is re-verified as at power-up."""
         flash = Flash.boot(self.flash.image(), self.verifier)
-        node = VDL7Controller(self.cfg, flash, self.rtc, self.verifier, self.driver,
+        return VDL7Controller(self.cfg, flash, self.rtc, self.verifier, self.driver,
                               Photocell(self.photocell.on_lx, self.photocell.off_lx, self.photocell.debounce_s))
-        node._tilt_baseline = self._tilt_baseline       # commissioning value lives in flash
-        return node

@@ -11,7 +11,7 @@ from .clock import DC_LAT, DC_LON, RtcHoldover, parse_local, solar_elevation_deg
 from .cms import Cms
 from .controller import Flash, NodeConfig, Output, VDL7Controller
 from .driver import LuminaireDriver
-from .events import EventKind, Priority, make_targets
+from .events import EventKind, Priority
 from .profiles import RoadClass, default_bundle
 from .security import SignedMessage
 
@@ -52,6 +52,8 @@ class Bench:
         self.outputs: List[Output] = []
         self.keep_history = False
         self.uplinks: List[dict] = []
+        self._last_alarms: tuple = ()
+        self.hung = False                       # controller firmware hung: no ticks, bus silent
 
     @property
     def signer(self):
@@ -71,14 +73,22 @@ class Bench:
         if self.online and self.mono - self._last_hello >= self.hello_every_s:
             self.node.backhaul_hello(self.mono, self.utc)
             self._last_hello = self.mono
+        if self.hung:                           # the driver's watchdog is all that runs
+            self.driver.watchdog(self.mono)
+            self.mono += dt
+            self.utc += timedelta(seconds=dt)
+            return self.node.output
         if self.mesh_gateway:
             self.node.mesh_gateway_seen(self.mono)
         self.node.photocell_sample(self.lx_now(), self.mono)
         out = self.node.tick(self.mono, dt)
-        if self.online:
-            up = self.node.take_uplink()
-            if up and (up["metering"] or up["alarms"]):
+        up = self.node.pending_uplink()        # the node transmits whenever it thinks it is ONLINE
+        if up and self.online:                  # ...but only a live carrier delivers, and only then the CMS acks
+            alarms = tuple(up["alarms"])
+            if up["records"] or alarms != self._last_alarms:
                 self.uplinks.append(up)
+                self._last_alarms = alarms
+            self.node.ack_uplink(up["upto"])
         if self.keep_history:
             self.outputs.append(out)
         self.mono += dt
@@ -105,17 +115,21 @@ class Bench:
 
     def send(self, kind: EventKind, ttl_s: float, payload: Optional[dict] = None,
              priority: int = Priority.NONE, via: Optional[str] = None, event_id: Optional[str] = None,
-             targets: Optional[dict] = None) -> SignedMessage:
+             segment: Optional[str] = None, nodes=()) -> SignedMessage:
         """Sign an event addressed to this node's segment and deliver it; the
         delivery must be accepted."""
         payload = dict(payload or {})
         if kind == EventKind.OVERRIDE:
             payload.setdefault("by", "bench-operator")
             payload.setdefault("reason", "acceptance test")
-        msg = self.cms.event(kind, ttl_s, targets or make_targets(segments=[self.cfg.segment_id]),
-                             payload, priority, event_id, issued=self.utc)
-        assert self.deliver(msg, via), self.node.log[-3:]
+        msg = self.cms.event(kind, ttl_s, segment or self.cfg.segment_id, payload, priority, event_id,
+                             nodes=nodes, issued=self.utc)
+        assert self.deliver(msg, via), list(self.node.log)[-3:]
         return msg
+
+    def hang(self) -> None:
+        """The controller stops running; only the driver's bus watchdog is left."""
+        self.hung = True
 
     def loop_volume(self, veh15: float) -> SignedMessage:
         msg = self.cms.loop_volume(self.cfg.segment_id, veh15, issued=self.utc)

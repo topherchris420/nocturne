@@ -23,7 +23,7 @@ nocturne-vdl7/
 │   ├── bench.py          single-node bench with a modelled sky and CMS
 │   └── cli.py            nocturne trace | spectral | simulate | keygen | bundle
 ├── sim/run_night.py      400-node night simulation, 8 scenarios, scaled to 75,000 lights
-├── tests/                63 acceptance tests: the 19 rows of Section 6.2 plus extensions
+├── tests/                82 acceptance tests: every row of the Section 6.2 table plus extensions
 ├── console/index.html    the operator console as a standalone page
 └── out/                  simulation results: summary.json, report.md, timeseries.csv, charts
 ```
@@ -32,7 +32,7 @@ nocturne-vdl7/
 
 ```bash
 pip install -e ".[dev]"                 # Python 3.10+; cryptography is the only runtime dependency
-pytest -q                               # 63 passed in ~11 s
+pytest -q                               # 82 passed in ~13 s
 nocturne trace --road local --offline-at 22:15 --event emergency@00:40:30
 nocturne spectral                       # Section 4 metrics; add --spd name=lm79.csv for a measured engine
 nocturne simulate --out out             # all scenarios, about 4 min on 2 cores
@@ -69,17 +69,19 @@ An independent review of the first version against the spec found places where f
 2. **SAFE mode could misplace the curfew after a long cut (§5.2, §5.3, R-FS-3).** Per §5.2 the clock is lost only when the supercap drains, after more than 7 days. A flash checkpoint from before such a cut can't be dated, yet using it as if no time had passed moved the curfew by however long the power was off. The checkpoint now stores the RTC counter, and the node resumes from it only when the counter rode through the cut and can measure the gap (`R-FS-3`). After an RTC reset the node holds the 22:00 level until its photocell sees dusk (`EXT-FS-5`). **Spec change:** R-FS-3 should state that the RTC counter survived the cut.
 3. **SAFE mode ran 8 minutes early (§5.3 step 5).** It counted from the photocell dusk but used a midpoint learned from the −3° sun. The node now learns the midpoint and night length from its photocell's own dusk and dawn on clocked nights. The clockless curfew lands at 22:58 (`R-FS-3`, `EXT-FS-4`).
 4. **A dead node on the High-Injury Network fell below 60 % (§5.2).** The driver failure level is now the higher of the class's 22:00 level and 60 % on HIN segments (`EXT-FS-6`).
-5. **Signed messages need more than a signature (§2.3, §5.4).**
-   - Events now carry an explicit target list (the 400 m geofence node list, a segment, or "all"), and nodes ignore events addressed elsewhere (`EXT-SEC-5`).
-   - Events carry a CMS sequence number checked against a 64-wide anti-replay window whose top is kept in flash (`EXT-SEC-6`).
-   - With a trusted clock, nodes refuse events that expired before arrival or claim a future issue time (`EXT-SEC-7`).
-   - Bundles are checked against firmware-minimum floors, completeness, mix sums and the 400-day validity before they are stored (`EXT-SEC-3`, `EXT-SEC-4`).
+5. **Signed messages need more than a signature (§2.3, §5.4).** See *Message security* below for the design.
+   - Every event is addressed to one street segment, optionally narrowed to the geofence nodes within it, and nodes ignore anything else. Malformed targets match nothing (`EXT-SEC-5`, `EXT-SEC-10`).
+   - Events carry the segment's sequence number, checked against an anti-replay window kept in flash (`EXT-SEC-6`, `6b`, `6c`).
+   - With a trusted clock, an event expires at issue time + TTL, not receipt + TTL. Nodes refuse events that expired before they arrived or claim a future issue time (`EXT-SEC-7`, `EXT-SEC-11`).
+   - Bundles are type-checked and bounds-checked against firmware-minimum floors, completeness, mix sums and the 400-day validity before they are stored. The anti-rollback version survives even a fall back to the factory profile (`EXT-SEC-3`, `4`, `12`, `13`).
    - When the store is full, emergencies and overrides are evicted last, and unknown event kinds are ignored (`EXT-SEC-8`).
-6. **Number corrections.** §6.2 says "24 acceptance tests"; the suite has 63 (Section 6.2's 19 rows plus extensions). The Section 6.3 and Section 4 figures are reconciled below.
+   - Override audit records (who, when, why, cancelled) go to the CMS (`EXT-SEC-9`).
+6. **Weather must not teach the node a false dusk (§5.3).** A photocell dusk or dawn more than 45 min from the sun's is treated as weather and not learned. In SAFE mode, a dusk more than 45 min off yesterday's is replaced by the expected time (`EXT-FS-9`, `EXT-FS-10`).
+7. **Number corrections.** §6.2 says "24 acceptance tests"; the suite has 82. The table's 18 rows become 19 tests, because R-MESH-1/2 is split in two; the rest are extensions. The Section 6.3 and Section 4 figures are reconciled below.
 
 ## Acceptance suite
 
-`test_R_*` covers the 19 rows of the Section 6.2 table one-for-one. `test_EXT_*` covers requirements stated elsewhere in the spec that the table omits, plus the safety fixes above.
+`test_R_*` covers the 18 rows of the Section 6.2 table, with R-MESH-1/2 split into two tests. `test_EXT_*` covers requirements stated elsewhere in the spec that the table omits, plus the safety fixes above.
 
 | Section 6.2 row | Test checks |
 |---|---|
@@ -103,14 +105,24 @@ An independent review of the first version against the spec found places where f
 | R-MESH-1/2 | 12-hop budget; broken-path isolation; 3-hop carpet |
 
 The extensions cover:
-- the full dimming table, DST and phase boundaries;
-- the boost clamp;
-- clockless cold boot, RTC reset, the driver watchdog and HIN failure level, one hello leaving SAFE, and loop handling by mode;
-- presence on arterials and the carpet;
-- forged, tampered, unsafe, expired, misaddressed, replayed and stale messages, plus store eviction and the override audit trail;
-- the full tunable-white mix;
-- photocell 15/40 lx with 60 s debounce, the 0–10 V path, tilt above 2°, driver-fault, day-burner and cycling alarms, and metering buffered offline then replayed on recovery;
-- spectral limits, and round-tripping a measured spectrum.
+- **Dimming:** the full table, DST and phase boundaries, the boost clamp.
+- **Fail-safe:**
+  - clockless cold boot and RTC reset;
+  - a hung controller falling to the HIN-aware failure level through the driver watchdog;
+  - one hello leaving SAFE, and loop handling by mode;
+  - storm darkness rejected while learning and in SAFE mode.
+- **Adaptive:** presence on arterials, the light carpet.
+- **Security:**
+  - forged, tampered, unsafe, wrongly typed, expired and rolled-back bundles;
+  - misaddressed, malformed, replayed, reordered and stale events, and CMS failover;
+  - store eviction, cancellations, override priority, and the audit trail.
+- **Tunable white:** the full mix.
+- **Hardware:**
+  - photocell 15/40 lx with 60 s debounce, and the 0–10 V path;
+  - tilt, driver-fault, day-burner, cycling and stuck-photocell alarms;
+  - metering that survives a dead link and a reboot;
+  - hour meter and tilt baseline kept in flash.
+- **Spectral:** limits, and round-tripping a measured spectrum.
 
 CI runs the suite on Python 3.10–3.13 (`.github/workflows/tests.yml`).
 
@@ -140,7 +152,7 @@ The skyglow waterfall goes 1.00 → −0.326 (dimming) → −0.135 (U0 optics) 
 | About 6 GWh a year (16.8 MWh per night) | 5.5 GWh (15.1 MWh per night) |
 | Spectrum step "4 points" of skyglow | 5 points |
 
-The source of the remaining 2-point gap isn't identified. The boost clamp accounts for less than half a point of it: the version before the fixes gave 0.665 / 0.667. The run that produced the printed table isn't available to compare against.
+The boost clamp explains 0.8 of a point: with it removed, the dimming row is 0.661 / 0.663. The rest of the gap isn't identified, and the run that produced the printed table isn't available to compare against.
 
 The cloud-dependent row now uses the same luminaires as the outage row, so it isolates the control architecture. Failing bright for seven hours costs 30 points of delivered light: 0.95 against 0.65.
 
@@ -174,19 +186,31 @@ The model comes close to the Section 4 claims for 3000 → 2700K: −11 % percei
 | vs 4000K | 4 % less | about 10 % less |
 | vs 3000K | "about the same" | 5 % less |
 
-The model's 2200K spectrum is leaner in cyan than many commercial 2200K engines. Neither set of numbers is a measurement. Load the LM-79 spectra of the engines you'll actually procure with `nocturne spectral --spd name=file.csv` and use those figures in Section 4.
+Both metrics are dominated by the 450–520 nm region, so small differences in pump and phosphor shape move them a lot. Neither set of numbers is a measurement. Load the LM-79 spectra of the engines you'll actually procure with `nocturne spectral --spd name=file.csv` and use those figures in Section 4.
+
+## Message security (Sections 2.1, 2.3, 5.4)
+
+The spec already groups nodes by street segment, with one LwM2M message per segment. The protocol follows that grouping:
+
+- **Signing.** The CMS signs every bundle and event with Ed25519. Nodes verify before storing anything. Mesh relays forward the original bytes and never re-sign.
+- **Addressing.** Every event names one segment and, for a geofence, the nodes within it. A 400 m CAD geofence spanning three segments goes out as three messages with the same event id.
+- **Sequencing.** The sequence number is the CMS's counter *for that segment*, with a failover epoch in the high 32 bits. Each node keeps a 64-wide sliding window over its own segment's counter. The window tolerates reordering among the few messages a segment gets, however much traffic the rest of the city generates. A standby CMS that lost the counters bumps the epoch.
+- **Freshness.** With a trusted clock, events expire at issue time + TTL. In SAFE mode, receipt + TTL is the only clock available.
+- **Acknowledged uplink.** Metering, alarms and audit records stay in a flash outbox until the CMS acknowledges them. A link that dies before the node notices loses nothing.
 
 ## SAFE mode without a clock (Sections 5.2, 5.3)
 
-On every clocked night the node records the local time of its photocell's dusk and dawn, and keeps the midpoint and night length in flash. In SAFE mode it estimates the night-hour as **learned midpoint + (time since photocell dusk − previous night length / 2)**, so it counts from the same kind of dusk it learned from.
+On every clocked night the node records the local time of its photocell's dusk and dawn, and keeps the midpoint and night length in flash. Transitions more than 45 min from the sun's are treated as weather and not learned. In SAFE mode it estimates the night-hour as **learned midpoint + (time since photocell dusk − previous night length / 2)**, so it counts from the same kind of dusk it learned from.
 
-If it reboots mid-night, it resumes from the 60-second flash checkpoint plus the gap the RTC counter measured. If the counter itself was lost, it holds the 22:00 level until the next dusk. Accuracy after a long outage degrades with the season, by roughly 1–2 minutes per day of outage near the equinoxes, until the next time sync.
+If it reboots mid-night, it resumes from the 60-second flash checkpoint plus the gap the RTC counter measured. If the counter itself was lost, it holds the 22:00 level until the next dusk.
+
+On the second and later clockless nights, a dusk more than 45 min off the previous one is replaced by the expected time. On the first clockless night there is nothing to compare against, so storm darkness that runs straight into night will start the count early. Accuracy after a long outage also degrades with the season, by roughly 1–2 minutes per day of outage near the equinoxes, until the next time sync.
 
 ## Porting notes
 
-- The loop keeps fixed-size state: a 64-entry event store, a 64-bit replay bitmap, a 672-slot metering ring.
+- The loop keeps fixed-size state: a 64-entry event store, a 64-bit replay bitmap, a 672-record uplink ring in flash, and 256-line log and audit rings.
 - It reads no wall clock outside `tick` and `receive`, and keeps every timer in monotonic seconds.
-- On the MCU, the replay-window top belongs in FRAM or the secure element's monotonic counter, because it is written on every accepted event.
+- On the MCU, the replay-window top belongs in FRAM or the secure element's monotonic counter, because it is written on every accepted event. The DALI failure level is written only when it changes.
 - Python allocates small lists per tick; the C port should use static buffers.
 
 ## Known limits

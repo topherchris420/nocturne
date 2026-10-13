@@ -6,14 +6,17 @@ emergency cannot hold a street at 100 % after its TTL even when the node has
 no idea what time it is.
 
 Every event also carries
-* `targets`: who it is for. The CMS turns an incident point into a 400 m
-  geofence node list and a loop volume into its segment; a node ignores an
-  event that is not addressed to it, so a validly signed emergency for one
-  street cannot light another.
-* `seq`: a CMS-wide sequence number. The node keeps a 64-wide anti-replay
-  window whose top is persisted in flash, so a captured message cannot be
-  played back later, and a duplicate arriving by both backhaul and mesh is
-  applied once.
+* `targets`: one street segment (the LwM2M group of Section 2.1) and,
+  optionally, the nodes within it. The CMS turns an incident point into a
+  400 m geofence node list and sends one message per affected segment; a node
+  ignores anything not addressed to it, so a validly signed emergency for one
+  street cannot light another. Malformed targets match nothing.
+* `seq`: the CMS's counter *for that segment*, with a CMS epoch in the high
+  32 bits that bumps on failover. The node keeps a 64-wide anti-replay window
+  over its own segment's counter, top persisted in flash, so a captured
+  message cannot be played back, a backhaul + mesh duplicate is applied once,
+  and reordering only has to be tolerated among the few messages a segment
+  receives, not among the whole fleet's.
 """
 from __future__ import annotations
 
@@ -44,16 +47,19 @@ PROTECTED = (EventKind.EMERGENCY, EventKind.OVERRIDE)   # evicted last
 
 
 # ------------------------------------------------------------------ targets
-def make_targets(nodes: Iterable[str] = (), segments: Iterable[str] = (), everyone: bool = False) -> dict:
-    return {"nodes": sorted(set(nodes)), "segments": sorted(set(segments)), "all": bool(everyone)}
+def make_targets(segment: str, nodes: Iterable[str] = ()) -> dict:
+    """The whole segment, or only `nodes` within it."""
+    return {"segment": str(segment), "nodes": sorted(set(nodes))}
 
 
-def addressed_to(targets: Optional[dict], node_id: str, segment_id: str) -> bool:
-    if not isinstance(targets, dict):
+def addressed_to(targets, node_id: str, segment_id: str) -> bool:
+    """Fail closed: anything but a well-formed target for this node is False."""
+    if not isinstance(targets, dict) or set(targets) != {"segment", "nodes"}:
         return False
-    if targets.get("all"):
-        return True
-    return node_id in targets.get("nodes", ()) or segment_id in targets.get("segments", ())
+    seg, nodes = targets["segment"], targets["nodes"]
+    if not isinstance(seg, str) or not isinstance(nodes, list) or not all(isinstance(n, str) for n in nodes):
+        return False
+    return seg == segment_id and (not nodes or node_id in nodes)
 
 
 # -------------------------------------------------------------------- event
@@ -65,7 +71,7 @@ class Event:
     priority: int = Priority.NONE
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     issued: str = ""               # CMS wall-clock stamp (ISO, UTC)
-    targets: dict = field(default_factory=lambda: make_targets(everyone=True))
+    targets: Optional[dict] = None      # None addresses nobody
     seq: int = 0
     received_mono: float = 0.0
     via: str = "backhaul"
@@ -86,9 +92,14 @@ class Event:
     @classmethod
     def from_dict(cls, d: dict) -> "Event":
         """Raises ValueError on an unknown kind or a malformed record."""
-        return cls(kind=EventKind(d["kind"]), ttl_s=float(d["ttl_s"]), payload=dict(d.get("payload", {})),
-                   priority=int(d.get("priority", 0)), id=str(d["id"]), issued=str(d.get("issued", "")),
-                   targets=d.get("targets"), seq=int(d.get("seq", 0)))
+        ttl, seq, prio = d["ttl_s"], d.get("seq", 0), d.get("priority", 0)
+        if (isinstance(ttl, bool) or not isinstance(ttl, (int, float)) or not (0 < ttl <= 86400)
+                or isinstance(seq, bool) or not isinstance(seq, int)
+                or isinstance(prio, bool) or not isinstance(prio, int) or not isinstance(d.get("payload", {}), dict)):
+            raise TypeError("bad ttl_s, seq, priority or payload")
+        return cls(kind=EventKind(d["kind"]), ttl_s=float(ttl), payload=dict(d.get("payload", {})),
+                   priority=prio, id=str(d["id"]), issued=str(d.get("issued", "")),
+                   targets=d.get("targets"), seq=seq)
 
 
 # ---------------------------------------------------------------- the store

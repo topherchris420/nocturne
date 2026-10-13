@@ -210,18 +210,18 @@ class NetworkSim:
                     n.backhaul_hello(self.mono, utc)
                     st.last_hello[i] = self.mono
                     if msg is not None:
-                        n.receive(msg, self.mono)
+                        self.rejected += 0 if n.receive(msg, self.mono) else 1
         if self._in(self._rain, utc) and backhaul_up and self.mono - self._rain_sent_mono >= CMS_PERIOD_S:
-            msg = self.cms.weather(EventKind.RAIN, ttl_s=1800, issued=utc)    # refreshed while wet
-            for st in self.streets:
+            msgs = self.cms.weather(EventKind.RAIN, [st.segment for st in self.streets], ttl_s=1800, issued=utc)
+            for st, msg in zip(self.streets, msgs):         # one message per segment, refreshed while wet
                 for n in st.nodes:
-                    n.receive(msg, self.mono)
+                    self.rejected += 0 if n.receive(msg, self.mono) else 1
             self._rain_sent_mono = self.mono
         if self._emergency_at is not None and not self._emergency_sent and utc >= self._emergency_at:
             road, k, _, minutes = self.scn.emergency
             st = next(s for s in self.streets if s.road == RoadClass(road) and s.k == k)
             fence = geofence(st.positions, st.positions[st.ids[POLES // 2]], GEOFENCE_RADIUS_M)
-            msg = self.cms.emergency(fence, ttl_s=minutes * 60, incident="F26-1183", issued=utc)
+            (msg,) = self.cms.emergency({st.segment: fence}, ttl_s=minutes * 60, incident="F26-1183", issued=utc)
             self._deliver(st, [st.index[n] for n in fence], msg, backhaul_up)
             self._emergency_sent = True
 

@@ -14,6 +14,30 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 
+def _int(x, name: str) -> int:
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or x != int(x):
+        raise TypeError(f"{name} must be an integer, got {x!r}")
+    return int(x)
+
+
+def _num(x, name: str) -> float:
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        raise TypeError(f"{name} must be a number, got {x!r}")
+    return float(x)
+
+
+def _bool(x, name: str) -> bool:
+    if not isinstance(x, bool):
+        raise TypeError(f"{name} must be true or false, got {x!r}")
+    return x
+
+
+def _str(x, name: str) -> str:
+    if not isinstance(x, str):
+        raise TypeError(f"{name} must be a string, got {x!r}")
+    return x
+
+
 class RoadClass(str, Enum):
     ARTERIAL = "arterial"
     COLLECTOR = "collector"
@@ -79,9 +103,15 @@ class ClassProfile:
 
     @classmethod
     def from_dict(cls, d: dict) -> "ClassProfile":
-        return cls(RoadClass(d["road"]), tuple(d["levels"]), d["floor"], d["boost_cap"],
-                   d["design_volume"], d["occupancy"], d["design_watts"],
-                   d["cct_today"], d["cct_target"])
+        """Strict: a signed bundle with a wrong type is refused, not coerced."""
+        levels = d["levels"]
+        if not isinstance(levels, list) or len(levels) != len(PHASE_ORDER):
+            raise TypeError("levels must be a list of five numbers")
+        vol = d["design_volume"]
+        return cls(RoadClass(d["road"]), tuple(_int(x, "level") for x in levels), _int(d["floor"], "floor"),
+                   _int(d["boost_cap"], "boost_cap"), None if vol is None else _int(vol, "design_volume"),
+                   _bool(d["occupancy"], "occupancy"), _num(d["design_watts"], "design_watts"),
+                   _int(d["cct_today"], "cct_today"), _str(d["cct_target"], "cct_target"))
 
 
 # Section 2.2 table
@@ -147,13 +177,22 @@ class ProfileBundle:
     @classmethod
     def from_dict(cls, d: dict) -> "ProfileBundle":
         """Raises KeyError/ValueError/TypeError on a malformed bundle."""
+        if not isinstance(d.get("profiles"), dict) or not isinstance(d.get("mix"), dict):
+            raise TypeError("profiles and mix must be objects")
+        mix = {}
+        for k, v in d["mix"].items():
+            if not isinstance(v, list) or len(v) != 2:
+                raise TypeError(f"mix {k} must be [white, amber]")
+            mix[Phase(k)] = (_int(v[0], "mix"), _int(v[1], "mix"))
         return cls(
-            version=int(d["version"]), issued=str(d["issued"]), valid_days=int(d.get("valid_days", 400)),
+            version=_int(d["version"], "version"), issued=_str(d["issued"], "issued"),
+            valid_days=_int(d.get("valid_days", 400), "valid_days"),
             profiles={RoadClass(k): ClassProfile.from_dict(v) for k, v in d["profiles"].items()},
-            mix={Phase(k): tuple(v) for k, v in d["mix"].items()},
-            hin_floor=int(d.get("hin_floor", HIN_FLOOR)), rain_boost=int(d.get("rain_boost", RAIN_BOOST)),
-            presence_hold_s=float(d.get("presence_hold_s", PRESENCE_HOLD_S)),
-            carpet_hold_s=float(d.get("carpet_hold_s", CARPET_HOLD_S)),
+            mix=mix,
+            hin_floor=_int(d.get("hin_floor", HIN_FLOOR), "hin_floor"),
+            rain_boost=_int(d.get("rain_boost", RAIN_BOOST), "rain_boost"),
+            presence_hold_s=_num(d.get("presence_hold_s", PRESENCE_HOLD_S), "presence_hold_s"),
+            carpet_hold_s=_num(d.get("carpet_hold_s", CARPET_HOLD_S), "carpet_hold_s"),
         )
 
 

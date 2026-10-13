@@ -2,23 +2,33 @@
 
 The node never asks the CMS what level to run; the CMS only publishes signed
 bundles and signed, addressed, sequenced events (Sections 2.1, 2.3, 5.4).
-This module is the reference for those messages, used by the bench, the
-simulation and the tests.
+
+Addressing follows the spec's group model: one LwM2M group per street
+segment, one message per segment. Every event names one segment (and,
+for a geofence, the nodes within it) and carries that segment's sequence
+number, so each node only has to order the handful of messages its own
+segment receives. A city-wide weather push is one message per segment.
+
+The sequence number is `epoch << 32 | counter`. The CMS persists both; on
+failover to a standby that may not have the latest counters it bumps the
+epoch, which every node accepts as newer.
 """
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .events import Event, EventKind, Priority, make_targets
 from .profiles import ProfileBundle
 from .security import SignedMessage, Signer, make_signer
 
-GEOFENCE_RADIUS_M = 400.0   # Section 2.3: incident point to 400 m geofence
+GEOFENCE_RADIUS_M = 400.0   # Section 2.3: incident point to 400 m geofence (read as a radius)
+EPOCH_SHIFT = 32
 
 
-def geofence(positions: Dict[str, Tuple[float, float]], center: Tuple[float, float],
+def geofence(positions: Mapping[str, Tuple[float, float]], center: Tuple[float, float],
              radius_m: float = GEOFENCE_RADIUS_M) -> List[str]:
     """Node ids whose commissioned position (metres, local grid) lies within
     `radius_m` of the incident point."""
@@ -27,59 +37,69 @@ def geofence(positions: Dict[str, Tuple[float, float]], center: Tuple[float, flo
 
 
 class Cms:
-    def __init__(self, signer: Optional[Signer] = None):
+    def __init__(self, signer: Optional[Signer] = None, epoch: int = 1):
         self.signer = signer or make_signer()
-        self.seq = 0
+        self.epoch = epoch
+        self.counters: Dict[str, int] = defaultdict(int)
         self.sent: List[dict] = []          # CMS-side audit of everything signed
 
     @property
     def verifier(self):
         return self.signer.public()
 
-    def _sign(self, ev: Event, issued: Optional[datetime]) -> SignedMessage:
-        self.seq += 1
-        ev.seq = self.seq
+    def failover(self) -> None:
+        """Standby takes over without the old counters: new epoch, fresh counters."""
+        self.epoch += 1
+        self.counters.clear()
+
+    def next_seq(self, segment: str) -> int:
+        self.counters[segment] += 1
+        return (self.epoch << EPOCH_SHIFT) | self.counters[segment]
+
+    def _sign(self, ev: Event, segment: str, issued: Optional[datetime]) -> SignedMessage:
+        ev.seq = self.next_seq(segment)
         ev.issued = (issued or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
         d = ev.to_dict()
         self.sent.append(d)
         return self.signer.sign_obj(d)
 
     # ------------------------------------------------------------- events
-    def event(self, kind: EventKind, ttl_s: float, targets: dict, payload: Optional[dict] = None,
-              priority: int = Priority.NONE, event_id: Optional[str] = None,
+    def event(self, kind: EventKind, ttl_s: float, segment: str, payload: Optional[dict] = None,
+              priority: int = Priority.NONE, event_id: Optional[str] = None, nodes: Iterable[str] = (),
               issued: Optional[datetime] = None) -> SignedMessage:
-        ev = Event(kind=kind, ttl_s=ttl_s, payload=dict(payload or {}), priority=int(priority), targets=targets)
+        ev = Event(kind=kind, ttl_s=ttl_s, payload=dict(payload or {}), priority=int(priority),
+                   targets=make_targets(segment, nodes))
         if event_id:
             ev.id = event_id
-        return self._sign(ev, issued)
+        return self._sign(ev, segment, issued)
 
-    def emergency(self, nodes: Iterable[str], ttl_s: float = 3600, incident: str = "",
-                  event_id: Optional[str] = None, issued: Optional[datetime] = None) -> SignedMessage:
-        return self.event(EventKind.EMERGENCY, ttl_s, make_targets(nodes=nodes), {"incident": incident},
-                          event_id=event_id, issued=issued)
+    def emergency(self, nodes_by_segment: Mapping[str, Iterable[str]], ttl_s: float = 3600, incident: str = "",
+                  event_id: Optional[str] = None, issued: Optional[datetime] = None) -> List[SignedMessage]:
+        """One message per segment the geofence touches, same event id."""
+        eid = event_id or f"cad-{incident or len(self.sent)}"
+        return [self.event(EventKind.EMERGENCY, ttl_s, seg, {"incident": incident}, event_id=eid,
+                           nodes=nodes, issued=issued)
+                for seg, nodes in sorted(nodes_by_segment.items())]
 
-    def override(self, level: float, ttl_s: float, priority: int, by: str, reason: str,
-                 nodes: Iterable[str] = (), segments: Iterable[str] = (), everyone: bool = False,
-                 event_id: Optional[str] = None, issued: Optional[datetime] = None) -> SignedMessage:
-        return self.event(EventKind.OVERRIDE, ttl_s, make_targets(nodes, segments, everyone),
-                          {"level": float(level), "by": by, "reason": reason}, priority=priority,
-                          event_id=event_id, issued=issued)
+    def override(self, level: float, ttl_s: float, priority: int, by: str, reason: str, segment: str,
+                 nodes: Iterable[str] = (), event_id: Optional[str] = None,
+                 issued: Optional[datetime] = None) -> SignedMessage:
+        return self.event(EventKind.OVERRIDE, ttl_s, segment, {"level": float(level), "by": by, "reason": reason},
+                          priority=priority, event_id=event_id, nodes=nodes, issued=issued)
 
-    def weather(self, kind: EventKind, ttl_s: float = 1800, segments: Iterable[str] = (),
-                everyone: bool = True, event_id: str = "wx", issued: Optional[datetime] = None) -> SignedMessage:
-        return self.event(kind, ttl_s, make_targets(segments=segments, everyone=everyone and not segments),
-                          {}, event_id=event_id, issued=issued)
+    def weather(self, kind: EventKind, segments: Iterable[str], ttl_s: float = 1800,
+                issued: Optional[datetime] = None) -> List[SignedMessage]:
+        return [self.event(kind, ttl_s, seg, {}, event_id=f"wx-{kind.value}", issued=issued) for seg in segments]
 
     def loop_volume(self, segment: str, veh15: float, ttl_s: float = 900,
                     issued: Optional[datetime] = None) -> SignedMessage:
-        return self.event(EventKind.LOOP_VOLUME, ttl_s, make_targets(segments=[segment]),
-                          {"veh15": round(float(veh15), 1)}, event_id=f"loop-{segment}", issued=issued)
+        return self.event(EventKind.LOOP_VOLUME, ttl_s, segment, {"veh15": round(float(veh15), 1)},
+                          event_id=f"loop-{segment}", issued=issued)
 
-    def cancel(self, target_id: str, nodes: Iterable[str] = (), segments: Iterable[str] = (),
-               everyone: bool = False, issued: Optional[datetime] = None) -> SignedMessage:
-        ev = Event(kind=EventKind.CANCEL, ttl_s=60, payload={"target": target_id},
-                   targets=make_targets(nodes, segments, everyone))
-        return self._sign(ev, issued)
+    def cancel(self, target_id: str, segment: str, nodes: Iterable[str] = (),
+               issued: Optional[datetime] = None) -> SignedMessage:
+        ev = Event(kind=EventKind.CANCEL, ttl_s=60, payload={"target": target_id}, targets=make_targets(segment, nodes))
+        return self._sign(ev, segment, issued)
 
     # ------------------------------------------------------------ bundles
     def bundle(self, bundle: ProfileBundle) -> SignedMessage:
