@@ -134,6 +134,11 @@ DEFAULT_MIX: Dict[Phase, Tuple[int, int]] = {
 BOOST_MIX: Tuple[int, int] = (100, 0)   # presence or emergency: full colour rendering
 
 HIN_FLOOR = 60        # Vision Zero High-Injury Network floor, every class
+# Migration nights (EventKind.MIGRATION): these classes hold their 22:00 level
+# from dusk. They are the classes with radar presence, so anyone walking still
+# gets the full boost; arterials and collectors keep their traffic-led levels.
+MIGRATION_CLASSES: Tuple[RoadClass, ...] = (RoadClass.LOCAL, RoadClass.ALLEY, RoadClass.PARK)
+MAX_ZONES = 32        # fixed-size table on the MCU
 RAIN_BOOST = 15       # points, capped at the boost cap
 PRESENCE_HOLD_S = 90
 CARPET_HOLD_S = 60
@@ -159,6 +164,19 @@ class ProfileBundle:
     rain_boost: int = RAIN_BOOST
     presence_hold_s: float = PRESENCE_HOLD_S
     carpet_hold_s: float = CARPET_HOLD_S
+    # Neighbourhood overlays: zone name -> road class -> five phase levels.
+    # A node commissioned into a zone (NodeConfig.zone) runs these instead of
+    # its class levels: darker around dark-sky parks and river corridors,
+    # brighter for longer on a nightlife strip. Floors, boosts and caps are
+    # still the class's; the levels are validated against the same floors.
+    zones: Dict[str, Dict[RoadClass, Tuple[int, int, int, int, int]]] = field(default_factory=dict)
+    migration_classes: Tuple[RoadClass, ...] = MIGRATION_CLASSES
+
+    def levels_for(self, road: RoadClass, zone: Optional[str]) -> Tuple[int, int, int, int, int]:
+        z = self.zones.get(zone) if zone else None
+        if z is not None and road in z:
+            return z[road]
+        return self.profiles[road].levels
 
     def to_dict(self) -> dict:
         return {
@@ -172,6 +190,8 @@ class ProfileBundle:
             "rain_boost": self.rain_boost,
             "presence_hold_s": self.presence_hold_s,
             "carpet_hold_s": self.carpet_hold_s,
+            "zones": {name: {r.value: list(lv) for r, lv in z.items()} for name, z in self.zones.items()},
+            "migration_classes": [r.value for r in self.migration_classes],
         }
 
     @classmethod
@@ -184,6 +204,21 @@ class ProfileBundle:
             if not isinstance(v, list) or len(v) != 2:
                 raise TypeError(f"mix {k} must be [white, amber]")
             mix[Phase(k)] = (_int(v[0], "mix"), _int(v[1], "mix"))
+        zones_raw = d.get("zones", {})
+        if not isinstance(zones_raw, dict):
+            raise TypeError("zones must be an object")
+        zones: Dict[str, Dict[RoadClass, Tuple[int, int, int, int, int]]] = {}
+        for name, z in zones_raw.items():
+            if not isinstance(z, dict):
+                raise TypeError(f"zone {name} must be an object")
+            zones[_str(name, "zone name")] = {}
+            for road, lv in z.items():
+                if not isinstance(lv, list) or len(lv) != len(PHASE_ORDER):
+                    raise TypeError(f"zone {name} {road} levels must be a list of five numbers")
+                zones[name][RoadClass(road)] = tuple(_int(x, "zone level") for x in lv)   # type: ignore[assignment]
+        mig = d.get("migration_classes", [r.value for r in MIGRATION_CLASSES])
+        if not isinstance(mig, list):
+            raise TypeError("migration_classes must be a list")
         return cls(
             version=_int(d["version"], "version"), issued=_str(d["issued"], "issued"),
             valid_days=_int(d.get("valid_days", 400), "valid_days"),
@@ -193,6 +228,8 @@ class ProfileBundle:
             rain_boost=_int(d.get("rain_boost", RAIN_BOOST), "rain_boost"),
             presence_hold_s=_num(d.get("presence_hold_s", PRESENCE_HOLD_S), "presence_hold_s"),
             carpet_hold_s=_num(d.get("carpet_hold_s", CARPET_HOLD_S), "carpet_hold_s"),
+            zones=zones,
+            migration_classes=tuple(RoadClass(_str(r, "migration class")) for r in mig),
         )
 
 
@@ -244,6 +281,24 @@ def validate_bundle(b: ProfileBundle) -> List[str]:
         v = getattr(b, name)
         if not (0 < v <= MAX_HOLD_S):
             errs.append(f"{name} {v} outside (0, {MAX_HOLD_S}]")
+    if len(b.zones) > MAX_ZONES:
+        errs.append(f"{len(b.zones)} zones, firmware holds {MAX_ZONES}")
+    for name, z in b.zones.items():
+        if not (1 <= len(name) <= 32):
+            errs.append(f"zone name {name!r} must be 1-32 characters")
+        for road, lv in z.items():
+            p = b.profiles.get(road)
+            lo = max(FIRMWARE_MIN_FLOOR[road], p.floor if p else 0)
+            if len(lv) != len(PHASE_ORDER):
+                errs.append(f"zone {name} {road.value}: {len(lv)} levels, need {len(PHASE_ORDER)}")
+                continue
+            for ph, v in zip(PHASE_ORDER, lv):
+                if v < lo:
+                    errs.append(f"zone {name} {road.value}: {ph.value} level {v} below floor {lo}")
+                elif v > 100:
+                    errs.append(f"zone {name} {road.value}: {ph.value} level {v} above 100")
+    if len(set(b.migration_classes)) != len(b.migration_classes):
+        errs.append("migration_classes repeats a class")
     if not (1 <= b.valid_days <= 400):
         errs.append(f"valid_days {b.valid_days} outside [1, 400]")
     try:

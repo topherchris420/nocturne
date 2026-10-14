@@ -1,0 +1,249 @@
+{
+  "source": "DDOT / DC GIS, Streetlights map service, layer 0 'Streetlight'",
+  "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DDOT/Streetlights/MapServer/0",
+  "retrieved": "2026-10-14",
+  "records": 72828,
+  "active": 72512,
+  "lighttype": {
+    "LED": 70595,
+    "HPS": 1423,
+    "unknown": 303,
+    "INC": 121,
+    "MH": 45,
+    "MV": 18,
+    "FL": 7
+  },
+  "excluded_static": {
+    "tunnel/underpass": 185,
+    "overhead guide sign": 131,
+    "navigation": 12,
+    "tower": 1
+  },
+  "freeway_poles_in_arterial": 1241,
+  "classes": {
+    "arterial": {
+      "poles": 18566,
+      "luminaires": 21432,
+      "share": 0.2572,
+      "rated_kw": 2334.5,
+      "trimmed_kw": 2040.5,
+      "mean_rated_w": 125.7,
+      "mean_trim": 0.874,
+      "cct": {
+        "3000K": 9726,
+        "2700K": 7356,
+        "unknown": 1241,
+        "4000K": 233,
+        "1500K": 6,
+        "4500K": 4
+      },
+      "landuse": {
+        "Residential": 7847,
+        "Commercial": 6322,
+        "Intermediate": 4335,
+        "unknown": 62
+      },
+      "not_led": 708
+    },
+    "collector": {
+      "poles": 8395,
+      "luminaires": 9013,
+      "share": 0.1163,
+      "rated_kw": 614.7,
+      "trimmed_kw": 524.3,
+      "mean_rated_w": 73.2,
+      "mean_trim": 0.853,
+      "cct": {
+        "2700K": 8037,
+        "unknown": 224,
+        "3000K": 95,
+        "4000K": 38,
+        "1500K": 1
+      },
+      "landuse": {
+        "Residential": 5582,
+        "Intermediate": 1442,
+        "Commercial": 1343,
+        "unknown": 28
+      },
+      "not_led": 184
+    },
+    "local": {
+      "poles": 29757,
+      "luminaires": 30692,
+      "share": 0.4122,
+      "rated_kw": 1406.9,
+      "trimmed_kw": 1210.1,
+      "mean_rated_w": 47.3,
+      "mean_trim": 0.86,
+      "cct": {
+        "2700K": 28272,
+        "unknown": 1241,
+        "3000K": 184,
+        "4000K": 43,
+        "1500K": 16,
+        "4500K": 1
+      },
+      "landuse": {
+        "Residential": 25935,
+        "Intermediate": 1947,
+        "Commercial": 1138,
+        "unknown": 737
+      },
+      "not_led": 769
+    },
+    "alley": {
+      "poles": 14973,
+      "luminaires": 14977,
+      "share": 0.2074,
+      "rated_kw": 323.2,
+      "trimmed_kw": 244.3,
+      "mean_rated_w": 21.6,
+      "mean_trim": 0.756,
+      "cct": {
+        "2700K": 14663,
+        "unknown": 272,
+        "5000K": 13,
+        "4000K": 12,
+        "3000K": 7,
+        "1500K": 6
+      },
+      "landuse": {
+        "Residential": 14916,
+        "unknown": 53,
+        "Commercial": 4
+      },
+      "not_led": 210
+    },
+    "park": {
+      "poles": 492,
+      "luminaires": 499,
+      "share": 0.0068,
+      "rated_kw": 33.7,
+      "trimmed_kw": 33.5,
+      "mean_rated_w": 68.4,
+      "mean_trim": 0.996,
+      "cct": {
+        "2700K": 466,
+        "3000K": 14,
+        "unknown": 12
+      },
+      "landuse": {
+        "Residential": 297,
+        "Commercial": 187,
+        "Intermediate": 8
+      },
+      "not_led": 4
+    }
+  },
+  "by_ward": {
+    "1": {
+      "local": 1568,
+      "arterial": 1506,
+      "collector": 441,
+      "alley": 1217
+    },
+    "2": {
+      "local": 1771,
+      "alley": 1217,
+      "arterial": 4694,
+      "collector": 1244,
+      "park": 6
+    },
+    "3": {
+      "local": 5110,
+      "alley": 2169,
+      "arterial": 2068,
+      "collector": 1057,
+      "park": 60
+    },
+    "4": {
+      "local": 5167,
+      "alley": 2990,
+      "collector": 1187,
+      "arterial": 1633
+    },
+    "5": {
+      "local": 4334,
+      "collector": 1176,
+      "alley": 2371,
+      "arterial": 2552,
+      "park": 92
+    },
+    "6": {
+      "local": 2650,
+      "arterial": 2481,
+      "alley": 1270,
+      "collector": 1762,
+      "park": 49
+    },
+    "7": {
+      "arterial": 2184,
+      "alley": 2500,
+      "local": 5392,
+      "collector": 692,
+      "park": 67
+    },
+    "8": {
+      "local": 3637,
+      "arterial": 1448,
+      "collector": 836,
+      "alley": 1237,
+      "park": 218
+    },
+    "unknown": {
+      "local": 128,
+      "alley": 2
+    }
+  },
+  "shield": {
+    "None": 70946,
+    "unknown": 711,
+    "LED Built in": 203,
+    "Internal 180 with hat": 89,
+    "External for Cobra": 75,
+    "Prismatic Globe Built in": 37,
+    "Internal 180": 30,
+    "Internal 360": 24,
+    "180\u00b0 External": 18,
+    "Yes": 14,
+    "Internal for LED": 13,
+    "Internal 90": 9,
+    "External for LED": 8,
+    "360\u00b0 External": 6
+  },
+  "fixture_style_code": {
+    "22": 50369,
+    "3": 12615,
+    "4": 4003,
+    "23": 1762,
+    "12": 1356,
+    "1": 816,
+    "2": 430,
+    "unknown": 369,
+    "9": 122,
+    "10": 119,
+    "17": 86,
+    "7": 62
+  },
+  "smart_node_registered": {
+    "no": 2540,
+    "yes": 69643
+  },
+  "commissioned_trim_pct_hist": {
+    "20": 51,
+    "30": 2685,
+    "40": 5885,
+    "50": 6049,
+    "60": 10795,
+    "70": 6961,
+    "80": 4208,
+    "90": 3175,
+    "100": 32374
+  },
+  "grid": {
+    "cell_deg_lat": 0.005,
+    "cell_deg_lon": 0.0064,
+    "cells": 545
+  }
+}

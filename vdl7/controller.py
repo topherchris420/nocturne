@@ -30,11 +30,11 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Deque, Dict, List, Optional, Tuple
 
-from .clock import (DC_LAT, DC_LON, NIGHT_ELEVATION_DEG, Photocell, RtcHoldover,
-                    learned_night, local_hour, night_bounds, solar_elevation_deg, to_local)
+from .clock import (DC_LAT, DC_LON, NIGHT_ELEVATION_DEG, POSIX_TZ, Photocell, RtcHoldover,
+                    learned_night, local_hour, night_bounds, parse_posix_tz, solar_elevation_deg, to_local)
 from .driver import STANDBY_W, LuminaireDriver, failure_level
 from .events import Event, EventKind, EventStore, Priority, ReplayWindow, addressed_to
-from .profiles import (BOOST_MIX, ClassProfile, Phase, ProfileBundle, RoadClass, bundle_expired,
+from .profiles import (BOOST_MIX, PHASE_ORDER, ClassProfile, Phase, ProfileBundle, RoadClass, bundle_expired,
                        clo_factor, default_bundle, phase_for_hour, validate_bundle)
 from .security import SignedMessage, Verifier
 
@@ -62,6 +62,8 @@ class NodeConfig:
     road: RoadClass
     lat: float = DC_LAT
     lon: float = DC_LON
+    tz: str = POSIX_TZ                    # the city's POSIX TZ rule (vdl7.sites has presets)
+    zone: Optional[str] = None            # neighbourhood overlay in the bundle (dark-sky buffer, nightlife...)
     hin: bool = False                     # Vision Zero High-Injury Network segment
     segment_id: str = "seg-0"
     tunable_white: bool = False           # dual-channel 2700K + PC-Amber engine
@@ -227,6 +229,7 @@ class VDL7Controller:
 
     def __init__(self, cfg: NodeConfig, flash: Flash, rtc: RtcHoldover, verifier: Verifier,
                  driver: Optional[LuminaireDriver] = None, photocell: Optional[Photocell] = None):
+        parse_posix_tz(cfg.tz)                 # a bad rule fails at commissioning, not at dusk
         self.cfg = cfg
         self.flash = flash
         self.rtc = rtc
@@ -318,14 +321,14 @@ class VDL7Controller:
             if utc is not None:                # clocked: learn only from a dusk near the sun's
                 self._pc_dusk_mono = mono
                 if self._near_sun_transition(utc, dusk=True):
-                    self._pc_dusk_local = to_local(utc)
+                    self._pc_dusk_local = to_local(utc, self.cfg.tz)
                     self._last_good_dusk_mono = mono
             else:                              # SAFE: reject weather against yesterday's dusk
                 self._pc_dusk_mono = self._plausible_dusk(mono)
         else:                                  # dark -> light: dawn observed
             if (utc is not None and self._pc_dusk_local is not None
                     and self._near_sun_transition(utc, dusk=False)):
-                self._learn_from_photocell(self._pc_dusk_local, to_local(utc))
+                self._learn_from_photocell(self._pc_dusk_local, to_local(utc, self.cfg.tz))
             self._pc_dusk_mono = None
             self._safe_anchor = None
             self._pc_dusk_local = None
@@ -421,7 +424,7 @@ class VDL7Controller:
     def _today(self, mono: float) -> Optional[date]:
         if not self.rtc.trusted(mono):
             return None
-        return to_local(self.rtc.utc_now(mono)).date()
+        return to_local(self.rtc.utc_now(mono), self.cfg.tz).date()
 
     def _stale_on_arrival(self, ev: Event, mono: float) -> Optional[str]:
         """With a trusted clock, refuse events that expired before they
@@ -473,10 +476,12 @@ class VDL7Controller:
     def _near_sun_transition(self, utc: datetime, dusk: bool) -> bool:
         """Learn only from photocell transitions within 45 min of the sun's
         own dusk or dawn: storm darkness must not become 'dusk'."""
-        loc = to_local(utc)
+        loc = to_local(utc, self.cfg.tz)
         d = loc.date() if (dusk or loc.hour >= 12) else (loc - timedelta(days=1)).date()
-        sun_dusk, sun_dawn = night_bounds(self.cfg.lat, self.cfg.lon, d)
+        sun_dusk, sun_dawn = night_bounds(self.cfg.lat, self.cfg.lon, d, tz=self.cfg.tz)
         ref = sun_dusk if dusk else sun_dawn
+        if ref is None:                        # midnight sun or polar night: nothing to learn from
+            return False
         return abs((utc - ref).total_seconds()) <= LEARN_GATE_S
 
     def _plausible_dusk(self, mono: float) -> float:
@@ -499,10 +504,11 @@ class VDL7Controller:
         cp = self.flash.checkpoint
         if cp.learned:
             return
-        loc = to_local(utc)
+        loc = to_local(utc, self.cfg.tz)
         d = loc.date() if loc.hour >= 12 else (loc - timedelta(days=1)).date()
-        mid, length = learned_night(self.cfg.lat, self.cfg.lon, d)
-        cp.learned_midpoint_h, cp.prev_night_len_h = mid, length
+        night = learned_night(self.cfg.lat, self.cfg.lon, d, tz=self.cfg.tz)
+        if night is not None:                  # none under the midnight sun or in polar night
+            cp.learned_midpoint_h, cp.prev_night_len_h = night
 
     def _learn_from_photocell(self, dusk: datetime, dawn: datetime) -> None:
         """Re-learn the midpoint and length of the night *as the photocell
@@ -623,7 +629,7 @@ class VDL7Controller:
             if not self._seeded:
                 self._seed_learning(utc)
                 self._seeded = True
-            hour: Optional[float] = local_hour(utc)
+            hour: Optional[float] = local_hour(utc, cfg.tz)
             astro_night = solar_elevation_deg(cfg.lat, cfg.lon, utc) < cfg.night_elevation_deg
             lit = astro_night or pc_dark
             self.output_reasons_early = pc_dark and not astro_night
@@ -637,9 +643,19 @@ class VDL7Controller:
             hour = self._safe_night_hour(mono) if lit else None
             reasons.append("SAFE_CLOCK" if hour is not None else "SAFE_NO_ANCHOR")
 
-        # 3. Phase -> base level (no estimate: hold the 22:00 level)
+        # 3. Phase -> base level (no estimate: hold the 22:00 level). A zone
+        #    overlay replaces the class levels; on a migration night the
+        #    presence classes hold their 22:00 level from dusk.
         phase = phase_for_hour(hour) if hour is not None else Phase.STEP
-        base = prof.base(phase)
+        levels = bundle.levels_for(cfg.road, cfg.zone)
+        if cfg.zone and cfg.zone in bundle.zones:
+            reasons.append(f"ZONE:{cfg.zone}")
+        base = levels[PHASE_ORDER.index(phase)]
+        if self.events.latest(EventKind.MIGRATION, mono) is not None and cfg.road in bundle.migration_classes:
+            step_level = levels[PHASE_ORDER.index(Phase.STEP)]
+            if base > step_level:
+                base = step_level
+            reasons.append("MIGRATION")
 
         # 4. Activity in [0, 1]. Loop volume only while ONLINE or relayed in MESH.
         activity = 0.0
@@ -716,7 +732,7 @@ class VDL7Controller:
         self.driver.set(white, amber, relay_on, mono)
         if mono - self._last_checkpoint >= cfg.checkpoint_interval_s:
             self._write_checkpoint(mono, hour, lit)
-        expired = utc is not None and bundle.version > 0 and bundle_expired(bundle, to_local(utc).date())
+        expired = utc is not None and bundle.version > 0 and bundle_expired(bundle, to_local(utc, cfg.tz).date())
         if expired:
             reasons.append("BUNDLE_EXPIRED")
         self._alarms_and_metering(mono, dt, lit, relay_on, drive, expired)
