@@ -46,13 +46,19 @@
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
   padding-inline: 16px; padding-block: 12px 32px; }
+.skip-link { position: fixed; left: 16px; top: 10px; z-index: 10; transform: translateY(-150%); background: var(--amber); color: var(--amber-ink); padding: 8px 12px; border-radius: 6px; font-weight: 600; text-decoration: none; }
+.skip-link:focus { transform: translateY(0); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.01em; }
 h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 button, select, input { font: inherit; color: inherit; }
-button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
-button:hover { border-color: var(--muted); }
+button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 11px; min-height: 34px; cursor: pointer; transition: border-color 120ms ease, background 120ms ease, transform 120ms ease; }
+button:hover { border-color: var(--muted); background: var(--panel); }
+button:active { transform: translateY(1px); }
+.rail { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); padding-top: 4px; }
+@media (max-width: 700px) { body { padding-inline: 10px; } .rail { gap: 10px; } .clock { font-size: 24px; } .transport { width: 100%; } .transport button { flex: 1; } .scrub { flex-basis: 100%; } }
 button:focus-visible, select:focus-visible, input:focus-visible, .pole:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 button.primary { background: var(--amber); color: var(--amber-ink); border-color: transparent; font-weight: 600; }
 button.on { border-color: var(--amber); color: var(--amber); }
@@ -155,7 +161,8 @@ th.n { text-align: right; }
 </style>
 </head>
 <body>
-<header class="rail">
+<a class="skip-link" href="#console-main">Skip to simulation board</a>
+<header class="rail" aria-label="Simulation controls">
   <div class="brand">
     <h1>Nocturne Operator Console</h1>
     <small>VDL-7 fleet · 5 sample streets · simulated night 13–14 Oct 2026 · reference controller logic</small>
@@ -167,7 +174,7 @@ th.n { text-align: right; }
       <button data-speed="60">60×</button><button data-speed="300" class="on">300×</button><button data-speed="1200">1200×</button>
     </div>
     <button id="toEnd" title="Run the whole night">To dawn</button>
-    <button id="reset">Reset</button>
+    <button id="reset" title="Restore the initial simulation state">Reset</button>
   </div>
   <div class="scrub">
     <input type="range" id="scrub" min="0" max="50400" step="60" value="0" aria-label="Time of night">
@@ -220,7 +227,7 @@ th.n { text-align: right; }
     </section>
   </aside>
 
-  <main class="stack">
+  <main id="console-main" class="stack" tabindex="-1">
     <section class="panel">
       <div class="kpis">
         <div class="kpi"><div class="v" id="kOut">—</div><div class="l">Network output</div><div class="s">% of design lumens</div></div>
