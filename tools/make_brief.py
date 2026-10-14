@@ -19,6 +19,7 @@ from vdl7.annual import _walk_boost, dc_fleet, expected_level, run_year  # noqa:
 from vdl7.demand import POLE_SPACING_M, WALK_SPEED_MPS  # noqa: E402
 from vdl7.pilot import load_segments, stepped_wedge  # noqa: E402
 from vdl7.profiles import DEFAULT_PROFILES, PHASE_ORDER, phase_for_hour  # noqa: E402
+from vdl7.schedule import program  # noqa: E402
 from vdl7.skyglow import (CLASSES, MOMENTS, NATURAL_CD, PLACES_DC, SKY_STRATEGIES, lighting_for, load_grid,  # noqa: E402
                           plan_retrofits, streetlight_luminance)
 
@@ -52,7 +53,8 @@ def data() -> dict:
             base = float(prof.levels[PHASE_ORDER.index(phase_for_hour(hh))])
             rows["phase0"].append(round(expected_level(prof, base, hh, "schedule", 50.0, walk), 1))
             rows["phase1"].append(round(expected_level(prof, base, hh, "adaptive", 50.0, walk), 1))
-        night[c.value] = {"levels": list(prof.levels), "floor": prof.floor, "cap": prof.boost_cap, **rows}
+        night[c.value] = {"levels": list(prof.levels), "floor": prof.floor, "cap": prof.boost_cap,
+                          "program": [s.__dict__ for s in program(prof, 50.0)], **rows}
     out["night"] = {"hours": hours, "classes": night}
     cells = load_grid()
     cct = {c: fleet.classes[c].cct_today for c in CLASSES}

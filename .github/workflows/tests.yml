@@ -36,3 +36,4 @@ jobs:
           nocturne trespass examples/ies/synthetic-roadway-6000lm-u0.ies --tunable > /dev/null
           nocturne signal --date 2026-10-14 --migration --key /tmp/k.pem --ics /tmp/c.ics --days 7 > /dev/null
           nocturne pilot --seed ci --out /tmp/plan.csv > /dev/null && nocturne pilot --power 0.0018 1.2 > /dev/null
+          nocturne schedule --plan /tmp/plan.csv --wave 1 --out /tmp/phase0 > /dev/null

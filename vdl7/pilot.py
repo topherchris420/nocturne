@@ -27,11 +27,11 @@ import hashlib
 import math
 import os
 import random
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from statistics import NormalDist
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 SEGMENTS_DC = os.path.join(os.path.dirname(__file__), "..", "data", "dc", "segments.csv")
 

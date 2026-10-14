@@ -52,6 +52,7 @@ nocturne-vdl7/
 │   ├── nightsignal.py      the signed public curfew feed, subscriber logic, iCalendar, migration alerts
 │   ├── observe.py          the Moon, sky-quality-meter logs, curfew-step difference-in-differences
 │   ├── pilot.py            stepped-wedge randomisation, exact safety brake, power
+│   ├── schedule.py         Phase 0: per-class programmes for the existing networked nodes
 │   ├── demand.py           traffic and pedestrian curves (Section 6.4)
 │   └── cli.py              the `nocturne` command
 ├── data/dc/                DC's streetlights from DDOT's asset layer: fleet, 550 m grid, 12,106 street segments
@@ -72,6 +73,7 @@ pytest -q                               # 192 passed in about a minute
 
 # the city
 nocturne business-case                  # 2027 on DC's real fleet; --price, --co2, --floor, --site, --fleet spec
+nocturne schedule --plan plan.csv --wave 1 --out phase0/   # Phase 0 programmes for the central system
 nocturne sky --retrofits 10             # the sky at six DC places; --measured rock-creek=18.4 to calibrate
 nocturne bug examples/ies/synthetic-globe-4000lm-ulr15.ies           # B2-U4-G2: fails U0
 nocturne trespass examples/ies/synthetic-roadway-6000lm-u0.ies --tunable

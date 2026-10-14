@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .clock import local_to_utc, night_bounds, to_local
+from .clock import local_to_utc, night_bounds
 from .events import EventKind
 from .observe import moon
 from .security import SignedMessage, Verifier

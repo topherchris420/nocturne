@@ -47,7 +47,7 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
 | 1 | Agree the class schedule and the unsensed floor (default 50 %) with DDOT's lighting engineers; adopt the firmware floors as policy | `vdl7/profiles.py`, `--floor` |
 | 2 | Confirm, under the streetlight programme's contract, who may change schedules and how savings are counted | contract |
 | 3 | Publish the seed text, then draw the waves | `nocturne pilot --seed "…" --out plan.csv` |
-| 4 | Load wave 1's schedules into the central system: the same phase levels, with dusk/dawn from the node's own astronomical clock | `nocturne bundle`, CMS import |
+| 4 | Load wave 1's programmes into the central system: per-class steps at dusk, fixed local times and dawn, with dusk and dawn from the node's own astronomical clock | `nocturne schedule --plan plan.csv --wave 1`, CMS import |
 | 5 | Open a 311 category ("street too dark at night") that routes to an operator override for that segment | `Priority.OPERATOR` override, audit trail |
 | 6 | At each wave: crashes by segment-night, switched vs not yet switched | `vdl7.pilot.brake` |
 | 7 | Switch the next wave; report energy from the nodes' own 15-minute metering | node metering outbox |

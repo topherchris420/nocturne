@@ -210,6 +210,7 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
       <div class="legend" id="legendNight"></div>
       <div class="chart" id="chartNight" tabindex="0" aria-label="Output through the night by strategy. Use the arrow keys to move through the night."></div>
       <p class="note" id="nightNote"></p>
+      <p class="note mono small" id="nightProg"></p>
       <details><summary>Table view</summary><div class="tablewrap"><table id="tableNight"></table></div></details>
     </div>
   </section>
@@ -448,6 +449,7 @@ function renderNight() {
   const lv = c.levels;
   $('nightNote').textContent = `${CLASS_NAMES[night.cls]} streets: base levels ${lv.join(' / ')} % across the five phases, floor ${c.floor} %, boost cap ${c.cap} %. ` +
     (night.cls === 'arterial' || night.cls === 'collector' ? 'The loop volume raises the level with traffic, so busy hours stay bright.' : 'Without presence sensing, Phase 0 holds the street at its floor setting or above; with it, Phase 1 can go deeper and come back when someone walks in.');
+  $('nightProg').textContent = 'Phase 0 programme for the central system: ' + c.program.map(s => s.at + ' ' + (s.at === 'dawn' ? 'off' : s.level + ' %')).join(' · ');
   const tb = $('tableNight'); tb.textContent = '';
   const hr = tb.insertRow(); for (const h of ['Time', 'Today', 'Phase 0', 'Phase 1']) { const th = document.createElement('th'); th.textContent = h; if (h !== 'Time') th.className = 'n'; hr.appendChild(th); }
   hs.forEach((h, i) => { if (i % 4) return; const r = tb.insertRow(); r.insertCell().textContent = hhmm(h); for (const s of series) { const cc = r.insertCell(); cc.className = 'n'; cc.textContent = s.values[i].toFixed(0) + ' %'; } });

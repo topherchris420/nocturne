@@ -43,7 +43,7 @@ from __future__ import annotations
 import csv
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Tuple
 

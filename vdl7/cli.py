@@ -8,6 +8,7 @@ The node
 
 The city
     nocturne business-case [--site dc] [--price 0.13] [--co2 0.30]     # a year, DC's real fleet
+    nocturne schedule --plan plan.csv --wave 1 --out phase0/           # Phase 0 programmes for the CMS
     nocturne sky [--share 0.15] [--measured rock-creek=18.4] [--retrofits 10]
     nocturne bug fixture.ies                               # TM-15 BUG rating and uplight
     nocturne trespass fixture.ies --height 9 --setback 10 --window 5 --road local
@@ -123,9 +124,7 @@ def cmd_bundle(a) -> int:
         signer = Ed25519Signer.from_pem(f.read())
     bundle = default_bundle(version=a.version, issued=a.issued)
     if a.zones:
-        with open(a.zones) as f:
-            raw = json.load(f)
-        bundle.zones = {name: {RoadClass(r): tuple(int(x) for x in lv) for r, lv in z.items()} for name, z in raw.items()}
+        bundle.zones = _zones_from(a.zones)
     errs = validate_bundle(bundle)
     if errs:
         print("refusing to sign an invalid bundle:\n  " + "\n  ".join(errs), file=sys.stderr)
@@ -271,6 +270,40 @@ def cmd_pilot(a) -> int:
     return 0
 
 
+def _zones_from(path):
+    with open(path) as f:
+        raw = json.load(f)
+    return {name: {RoadClass(r): tuple(int(x) for x in lv) for r, lv in z.items()} for name, z in raw.items()}
+
+
+def cmd_schedule(a) -> int:
+    import csv
+    from .schedule import export, programs
+    bundle = default_bundle(version=a.version)
+    if a.zones:
+        bundle.zones = _zones_from(a.zones)
+    errs = validate_bundle(bundle)
+    if errs:
+        print("refusing to export an invalid bundle:\n  " + "\n  ".join(errs), file=sys.stderr)
+        return 1
+    os.makedirs(a.out, exist_ok=True)
+    with open(os.path.join(a.out, "programs.json"), "w") as f:
+        f.write(export(bundle, tz=site(a.site).tz, unsensed_floor=a.floor))
+    for name, prog in programs(bundle, a.floor).items():
+        print(f"{name:28s} " + "  ".join(f"{st['at']} {st['level']}%" for st in prog["steps"]))
+    if a.plan:
+        with open(a.plan) as f:
+            rows = [r for r in csv.DictReader(f) if a.wave is None or int(r["wave"]) == a.wave]
+        out = os.path.join(a.out, f"assignments{'' if a.wave is None else '-wave' + str(a.wave)}.csv")
+        with open(out, "w") as f:
+            f.write("segment,ward,road_class,lights,program,switch_on\n")
+            for r in rows:
+                f.write(f"{r['segment']},{r['ward']},{r['road_class']},{r['lights']},{r['road_class']},{r['switch_on']}\n")
+        print(f"wrote {out}: {len(rows):,} segments")
+    print("wrote", os.path.join(a.out, "programs.json"))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="nocturne", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -324,6 +357,16 @@ def main(argv=None) -> int:
     bc.add_argument("--floor", type=float, default=50.0, help="Phase 0 floor for streets without presence sensing, %%")
     bc.add_argument("--json", action="store_true")
     bc.set_defaults(fn=cmd_business_case)
+
+    sc = sub.add_parser("schedule", help="Phase 0: programmes for the existing networked nodes, per wave")
+    sc.add_argument("--out", default="phase0", help="directory for programs.json and assignments")
+    sc.add_argument("--floor", type=float, default=50.0, help="floor for streets without presence sensing, %%")
+    sc.add_argument("--zones", help="JSON {zone: {road_class: [5 phase levels]}} neighbourhood overlays")
+    sc.add_argument("--plan", help="the pilot plan CSV from `nocturne pilot --out`")
+    sc.add_argument("--wave", type=int, help="only this wave's segments")
+    sc.add_argument("--site", default="dc", choices=sorted(SITES))
+    sc.add_argument("--version", type=int, default=1, help="bundle version the programmes come from")
+    sc.set_defaults(fn=cmd_schedule)
 
     sk = sub.add_parser("sky", help="zenith sky brightness and stars at DC's dark places")
     sk.add_argument("--share", type=float, default=0.15, help="streetlights' share of artificial light (Tucson prior)")

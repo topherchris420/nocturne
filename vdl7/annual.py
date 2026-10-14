@@ -7,10 +7,11 @@ and for each road class integrates what the lights would do under each
 strategy:
 
   today        static full output, dusk to dawn
-  phase0       a time-of-night schedule pushed to the networked nodes the
-               city already has: no new hardware. Arterials and collectors
-               follow the expected loop volume for the hour; streets with
-               no presence sensing never go below `unsensed_floor`
+  phase0       the time-of-night programmes vdl7.schedule exports for the
+               networked nodes the city already has: no new hardware.
+               Arterials and collectors step hourly at the highest level
+               the hour's expected loop volume asks for; streets with no
+               presence sensing never go below `unsensed_floor`
   phase1       VDL-7 adaptive control: radar presence, live loop volumes,
                the Section 2.2 floors; expected value of the same walker and
                traffic model the network simulation draws from
@@ -27,17 +28,18 @@ DC's fleet comes from DDOT's own asset layer (data/dc/fleet.json).
 from __future__ import annotations
 
 import json
-import math
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from functools import lru_cache
+from typing import Dict, Optional, Tuple
 
 from . import spectral
 from .clock import local_hour, solar_elevation_deg, to_local
 from .demand import POLE_SPACING_M, POLES, WALK_POLES, WALK_SPEED_MPS, ped_rate_per_h, traffic_veh15
 from .profiles import (DEFAULT_PROFILES, PHASE_ORDER, PRESENCE_HOLD_S, CARPET_HOLD_S, CARPET_HOPS, ClassProfile,
                        ProfileBundle, RoadClass, default_bundle, phase_for_hour)
+from .schedule import level_at, program
 from .sites import DEFAULT_SITE, Site
 
 UTC = timezone.utc
@@ -122,6 +124,11 @@ class Economics:
     payback_years_phase1: float = 10.0
 
 
+@lru_cache(maxsize=64)
+def _program(prof: ClassProfile, unsensed_floor: float):
+    return tuple(program(prof, unsensed_floor))
+
+
 # ------------------------------------------------------- expected activity
 def _walk_boost(step_s: float) -> Tuple[float, float]:
     """For one walker, (sum over poles of boosted seconds, poles boosted),
@@ -166,10 +173,8 @@ def expected_level(prof: ClassProfile, base: float, h: float, strategy: str, uns
     loop_target = max(base, base + (cap - base) * a_loop)
     if strategy == "static":
         return 100.0
-    if strategy == "schedule":
-        if prof.design_volume:
-            return loop_target                     # the schedule bakes in the expected volume
-        return max(base, unsensed_floor)
+    if strategy == "schedule":                     # exactly the programme vdl7.schedule exports
+        return level_at(_program(prof, unsensed_floor), h)
     # adaptive: loop target, raised while a walker's presence or carpet holds the pole
     boosted = cap if prof.occupancy else max(base, base + (cap - base) * max(a_loop, 0.5))
     delta = max(0.0, boosted - loop_target)

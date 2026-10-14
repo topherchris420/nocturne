@@ -8,12 +8,9 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-import pytest
-
 from vdl7.bench import Bench
 from vdl7.clock import night_bounds
 from vdl7.cms import Cms
-from vdl7.events import EventKind
 from vdl7.nightsignal import (CATEGORIES, decide, migration_events, migration_season, phase_at, sign, signal,
                               to_ics, verify)
 from vdl7.profiles import RoadClass
