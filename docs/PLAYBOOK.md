@@ -19,10 +19,10 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
 
    | | Today | Phase 0 |
    |---|---|---|
-   | Energy per year | 16.9 GWh | 11.6 GWh (−31 %) |
-   | Saved per year | — | ≈ $690,000 at an ASSUMED $0.13/kWh |
-   | CO₂ avoided per year | — | ≈ 1,600 t at an ASSUMED 0.30 t/MWh |
-   | Streetlight skyglow | 1.00 | 0.69 |
+   | Energy per year | 16.9 GWh | 11.75 GWh (−30 %) |
+   | Saved per year | — | ≈ $665,000 at an ASSUMED $0.13/kWh |
+   | CO₂ avoided per year | — | ≈ 1,500 t at an ASSUMED 0.30 t/MWh |
+   | Streetlight skyglow | 1.00 | 0.70 |
 
    Streets without presence sensing never go below 50 %.
 3. **Roll it out as a randomised trial with a brake.**
@@ -72,7 +72,7 @@ The VDL-7 firmware in this repository owns the curfew on the pole. It uses:
 - fail-safe modes that keep the schedule through any cellular or cloud outage.
 
 The other half of the case:
-- On energy alone, radar nodes do not pay back: a node would have to cost under about $13 to repay itself in ten years.
+- On energy alone, radar nodes do not pay back: a node would have to cost under about $18 to repay itself in ten years.
 - Their case is light where people are and darkness where they are not: deeper curfews on local streets, alleys and park edges (local streets average 52 % instead of 58 %; park edges 32 % instead of 52 %), and the safety evidence for targeted light (EVIDENCE.md §1).
 - **Start where that matters:** High-Injury Network segments, park and river edges, and residential streets that ask for it.
 

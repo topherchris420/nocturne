@@ -7,7 +7,7 @@ This version turns that firmware into a program a city can start this quarter:
 - **It runs on DC's real fleet.** The business case, the sky model and the pilot plan read DDOT's own streetlight asset layer (72,512 active lights) and the District's crash data, not assumed wattages.
 - **It starts with no new hardware.**
   - DC's lights are already 97 % LED, and 96 % carry a networked node registered with the central system.
-  - *Phase 0* pushes the Nocturne schedule to those nodes. On DC's fleet over a full year that saves **≈ 5.3 GWh and ≈ $690,000** (at an ASSUMED $0.13/kWh) and cuts streetlight skyglow by **31 %**.
+  - *Phase 0* pushes the Nocturne schedule to those nodes. On DC's fleet over a full year that saves **≈ 5.1 GWh and ≈ $665,000** (at an ASSUMED $0.13/kWh) and cuts streetlight skyglow by **30 %**.
 - **It rolls out as a randomised trial with a brake.**
   - Four waves of about 3,000 street segments each, with every ward in every wave.
   - The assignment is reproducible from a seed text published before the draw.
@@ -98,14 +98,14 @@ A full year (2027) on DDOT's fleet: 72,183 dimmable lights, 4.05 MW at their com
 | Strategy | MWh / yr | Energy | Light | Streetlight skyglow | Saved / yr (ASSUMED $0.13/kWh) | tCO₂ / yr (ASSUMED 0.30 t/MWh) |
 |---|---|---|---|---|---|---|
 | Today: full output dusk to dawn | 16,866 | 1.00 | 1.00 | 1.00 | — | — |
-| **Phase 0**: schedule on the existing nodes | 11,589 | 0.69 | 0.69 | 0.69 | $686,000 | 1,583 |
+| **Phase 0**: schedule on the existing nodes | 11,750 | 0.70 | 0.70 | 0.70 | $665,000 | 1,535 |
 | **Phase 1**: VDL-7 adaptive (radar, live loops) | 11,134 | 0.66 | 0.66 | 0.67 | $745,000 | 1,720 |
 | + top reflectors in the post-top globes (U0) | 11,134 | 0.66 | 0.66 | 0.58 | $745,000 | 1,720 |
 | **Phase 2**: + warm spectrum at replacement | 11,819 | 0.70 | 0.66 | 0.54 | $656,000 | 1,514 |
 
 **How to read the phases:**
-- **Phase 0.** Streets without presence sensing never go below 50 % (`--floor`). It pays back in three years if integration costs under about $2.1 M.
-- **Phase 1.** Radar nodes do *not* pay back on energy alone (break-even about $13 per node over ten years). Their case is light where people are and deeper darkness where they are not.
+- **Phase 0.** Streets without presence sensing never go below 50 % (`--floor`). It pays back in three years if integration costs under about $2.0 M. These are the exact programmes `nocturne schedule` exports.
+- **Phase 1.** Radar nodes do *not* pay back on energy alone (break-even about $18 per node over ten years). Their case is light where people are and deeper darkness where they are not.
 
 **After midnight**, full Nocturne removes 58–62 % of the streetlights' contribution to the zenith sky at six places. The figures below use Tucson's measured share (streetlights ≈ 15 % of artificial light) until DC calibrates with its own meters:
 
