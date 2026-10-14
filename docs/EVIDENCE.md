@@ -19,10 +19,10 @@ This page collects the research the design leans on, what each source actually f
 - Code: `vdl7/controller.py` (steps 4–9), `vdl7/profiles.py` (`FIRMWARE_MIN_FLOOR`, `FIRMWARE_MIN_HIN`).
 
 **Rather than ask DC to take this on trust, the rollout tests it.**
-- `vdl7/pilot.py` randomises DC's 12,106 lit street segments into a stepped wedge, stratified by ward and road class.
-- At each wave, an exact rate-ratio test on night-time crashes acts as a brake.
+- `vdl7/pilot.py` randomises DC's 12,096 lit street segments into a stepped wedge, stratified by ward and road class.
+- Before each wave, an exact rate-ratio test on night-time crashes acts as a brake. It compares switched with not-yet-switched segments within each period between wave starts and combines the periods exactly (the convolution of their binomials). Pooling all nights instead would mix the season into the comparison: winter nights are longer and carry more crashes, and the switched share grows as the nights shorten, so a real 15 % harm can read as no change.
 - DC's open crash layer recorded **18,173 crashes in 2025**. Between 44 % and 56 % happened with the sun below −3°, depending on whether the layer's `FROMDATE` is read as UTC or local time. That gives on the order of 0.002 night crashes per lit segment-night.
-- At that rate, detecting a 20 % change needs about 190,000–240,000 segment-nights per arm (`nocturne pilot --power 0.0018 1.2`). The wedge reaches that by its second brake check, at the end of wave 2.
+- At that rate, detecting a 20 % change needs about 190,000–240,000 segment-nights per arm (`nocturne pilot --power 0.0018 1.2`). Compared within periods, the wedge holds the equivalent of about 250,000 per arm at its first brake check and 590,000 at its second. With the error rate split over three checks, a real 20 % rise would pause the rollout at the first check with probability about 0.75–0.85, and by the second almost surely.
 
 ## 2. Streetlights are a minority of skyglow. That sets the ambition.
 
@@ -36,8 +36,8 @@ This page collects the research the design leans on, what each source actually f
 **What follows for Nocturne:**
 - `vdl7/skyglow.py` carries DC's real light grid to six places through a single-scattering atmosphere.
 - After midnight, Nocturne removes about **60 % of the streetlights' contribution** to the zenith sky at every place.
-- Using Tucson's share as the prior, that moves the whole sky by only about **0.1 mag/arcsec²**: at Rock Creek Park, about 208 → 228 stars overhead.
-- If the rest of the city's lighting halves after 23:00, the same place reaches about **421 stars**.
+- Using Tucson's share as the prior, that moves the whole sky by only about **0.1 mag/arcsec²**: at Rock Creek Park, about 225 → 246 stars overhead.
+- If the rest of the city's lighting halves after 23:00, the same place reaches about **454 stars**.
 - This is why the Night Signal (`vdl7/nightsignal.py`) exists. The model's *reductions* in the streetlight term are robust. The absolute sky values depend on the prior until DC has its own sky-quality meters (`vdl7/observe.py`).
 
 ## 3. The problem is growing, and most people already cannot see the Milky Way

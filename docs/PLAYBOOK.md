@@ -12,33 +12,33 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
 
 1. **The expensive part is already done.**
    - 97 % of DC's 72,512 active streetlights are LED, most already 2700K.
-   - 96 % carry a networked node that has registered with the central system (`CLIGHT_SCAN_SUCCESS_1`).
+   - 97 % carry a networked node that has registered with the central system (`CLIGHT_SCAN_SUCCESS_1`).
    - The LED luminaire models that make up most of the inventory specify DALI drivers.
    - DC can already dim from a desk. It just doesn't have a policy for when.
 2. **Phase 0 needs no new hardware.** Push the Nocturne time-of-night schedule to those nodes. On DC's fleet over the whole of 2027 (`nocturne business-case`):
 
    | | Today | Phase 0 |
    |---|---|---|
-   | Energy per year | 16.9 GWh | 11.75 GWh (−30 %) |
-   | Saved per year | — | ≈ $665,000 at an ASSUMED $0.13/kWh |
+   | Energy per year | 16.4 GWh | 11.5 GWh (−30 %) |
+   | Saved per year | — | ≈ $641,000 at an ASSUMED $0.13/kWh |
    | CO₂ avoided per year | — | ≈ 1,500 t at an ASSUMED 0.30 t/MWh |
    | Streetlight skyglow | 1.00 | 0.70 |
 
-   Streets without presence sensing never go below 50 %.
+   Streets without presence sensing never go below 50 %. Tunnel, underpass and under-deck lights stay static.
 3. **Roll it out as a randomised trial with a brake.**
-   - Four waves of about 3,030 street segments (about 18,000 lights each), eight weeks apart.
+   - Four waves of 3,024 street segments (about 18,000 lights each), eight weeks apart.
    - Waves are stratified so every ward moves in every wave.
    - The assignment is seeded from a string published before the draw, so anyone can re-run it.
-   - At each wave, an exact test on night-time crashes can pause the rollout.
+   - Before each wave, an exact test on night-time crashes can pause the rollout. It compares switched with not-yet-switched segments within each eight-week period, so the season (long, dangerous winter nights against short June ones) cannot hide a harm.
 4. **Measure the sky, not just the meter.** Put six sky-quality meters at the places the model reports on. The curfew-step method detects a 0.05 mag change in one season.
 5. **Fix the globes.**
-   - 26 % of DC's streetlight power, 1.07 MW, is in post-top globes. They are the streetlights' main source of uplight.
+   - 27 % of DC's streetlight power, 1.08 MW, is in post-top globes. They are the streetlights' main source of uplight.
    - Specify U0 top-reflector kits, checked with `nocturne bug`.
    - Do the cells that matter most to the parks first (`nocturne sky --retrofits 20`).
 6. **Then do what streetlights alone cannot.**
    - In the only city-scale measurement, streetlights were about 14 % of the light behind Tucson's skyglow.
    - Publish the **Night Signal** and recruit the other lighting owners: federal agencies, BIDs, sports venues, sign owners.
-   - In the model, if they halve their light after 23:00, the stars visible after midnight at Rock Creek Park roughly double (≈ 208 → 421). Streetlights alone add ≈ 20.
+   - In the model, if they halve their light after 23:00, the stars visible after midnight at Rock Creek Park roughly double (≈ 225 → 454). Streetlights alone add ≈ 20.
 
 ## Phase 0: weeks, existing nodes
 
@@ -49,7 +49,7 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
 | 3 | Publish the seed text, then draw the waves | `nocturne pilot --seed "…" --out plan.csv` |
 | 4 | Load wave 1's programmes into the central system: per-class steps at dusk, fixed local times and dawn, with dusk and dawn from the node's own astronomical clock | `nocturne schedule --plan plan.csv --wave 1`, CMS import |
 | 5 | Open a 311 category ("street too dark at night") that routes to an operator override for that segment | `Priority.OPERATOR` override, audit trail |
-| 6 | At each wave: crashes by segment-night, switched vs not yet switched | `vdl7.pilot.brake` |
+| 6 | Before each wave: night-time crashes by segment, switched vs not yet switched within each period; pause and revert on a signal | `nocturne brake --plan plan.csv --crashes … --through …` |
 | 7 | Switch the next wave; report energy from the nodes' own 15-minute metering | node metering outbox |
 
 **What would make the saving smaller:**
@@ -59,7 +59,7 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
 **Power.**
 - DC recorded 18,173 crashes in 2025. Between 44 % and 56 % happened after dark, depending on how the layer's timestamps are read.
 - That is on the order of 0.002 night crashes per lit segment-night. Detecting a 20 % change at that rate needs roughly 190,000–240,000 segment-nights per arm (`nocturne pilot --power 0.0018 1.2`).
-- The wedge has that by the end of wave 2.
+- Compared within periods, the wedge holds the equivalent of about 250,000 per arm at the first brake check and 590,000 at the second. With the error rate split over three checks, a real 20 % rise would pause the rollout at the first check with probability about 0.75–0.85, and by the second almost surely.
 - The crash layer's segment ID field is empty, so join crashes to lit segments by location.
 
 ## Phase 1: adaptive control where it earns its keep
@@ -72,14 +72,14 @@ The VDL-7 firmware in this repository owns the curfew on the pole. It uses:
 - fail-safe modes that keep the schedule through any cellular or cloud outage.
 
 The other half of the case:
-- On energy alone, radar nodes do not pay back: a node would have to cost under about $18 to repay itself in ten years.
+- On energy alone, VDL-7 nodes do not pay back: with one on every pole, a node would have to cost under about $11 to repay itself in ten years (about $14 on local streets, where the deeper curfews are).
 - Their case is light where people are and darkness where they are not: deeper curfews on local streets, alleys and park edges (local streets average 52 % instead of 58 %; park edges 32 % instead of 52 %), and the safety evidence for targeted light (EVIDENCE.md §1).
 - **Start where that matters:** High-Injury Network segments, park and river edges, and residential streets that ask for it.
 
 ## Phase 2: optics and spectrum at replacement
 
-- **Globes.** U0 top reflectors in the post-top globes remove a further 7–23 points of the streetlights' evening skyglow, depending on the place (`nocturne sky`).
-- **Spectrum.** At replacement, 2200K on collectors, local streets and alleys, and PC-Amber at park and river edges, as Section 4 of the spec says. It costs about 6 % in energy and buys the largest cut in what the dark-adapted eye and the circadian system receive.
+- **Globes.** U0 top reflectors in the post-top globes remove a further 6–24 points of the streetlights' evening skyglow, depending on the place (`nocturne sky`).
+- **Spectrum.** At replacement, 2200K on collectors, local streets and alleys, and PC-Amber at park and river edges, as Section 4 of the spec says. It costs about 5 % in energy and buys the largest cut in what the dark-adapted eye and the circadian system receive.
 - **Trespass.** Check bedroom windows with `nocturne trespass` before choosing house-side shielding. DC records almost none today.
 
 ## Phase 3: the Night Signal

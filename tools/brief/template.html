@@ -161,11 +161,11 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
   <div class="head">
     <div class="eyebrow">Nocturne · a proposal for the District of Columbia · October 2026</div>
     <h1>Nocturne for Washington</h1>
-    <p class="lede">DC already owns the hard part. Its 72,512 streetlights are 97 % LED, and 96 % sit on a network that can dim them. A night schedule pushed to those nodes saves about 5.1 GWh a year with no new hardware. Roll it out as a randomised trial with a safety brake, measure it at the sky, then bring the rest of the city's lighting onto the same curfew.</p>
+    <p class="lede">DC already owns the hard part. Its 72,512 streetlights are 97 % LED, and <span id="ledeNet">97</span> % sit on a network that can dim them. A night schedule pushed to those nodes saves about <span id="ledeGwh">4.9</span> GWh a year with no new hardware. Roll it out as a randomised trial with a safety brake, measure it at the sky, then bring the rest of the city's lighting onto the same curfew.</p>
     <div class="clockline">Curfew 23:00 local · tonight that is 03:00 UTC · every node keeps its own clock</div>
     <div class="figures" id="figures">
-      <div class="fig"><div class="v">5.1<small>GWh / yr</small></div><div class="l">saved by Phase 0: a schedule on the nodes DC already has</div></div>
-      <div class="fig"><div class="v" id="figUsd">$665K<small>/ yr</small></div><div class="l" id="figUsdL">at $0.13 per kWh; set your own rate below</div></div>
+      <div class="fig"><div class="v" id="figGwh">4.9<small>GWh / yr</small></div><div class="l">saved by Phase 0: a schedule on the nodes DC already has</div></div>
+      <div class="fig"><div class="v" id="figUsd">$641K<small>/ yr</small></div><div class="l" id="figUsdL">at $0.13 per kWh; set your own rate below</div></div>
       <div class="fig"><div class="v">30<small>%</small></div><div class="l">less streetlight and streetlight skyglow, with every street above its RP-8 floor</div></div>
       <div class="fig"><div class="v">≈2×</div><div class="l">the stars over Rock Creek Park after midnight if the rest of the city keeps the curfew too</div></div>
     </div>
@@ -238,7 +238,7 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
 
   <section>
     <header><div class="eyebrow">Rollout</div><h2>A randomised trial with a brake, every ward in every wave</h2>
-      <p class="prose muted">DC's 12,106 lit street segments are split into four waves by ward and road class. The draw is seeded from a text published in advance, so anyone can re-run it. Before each wave, night-time crashes on switched segments are compared with segments not yet switched over the same nights. A signal pauses the next wave and reverts that class.</p></header>
+      <p class="prose muted">DC's <span id="segCount">12,096</span> lit street segments are split into four waves by ward and road class. The draw is seeded from a text published in advance, so anyone can re-run it. Before each wave, night-time crashes on switched segments are compared with segments not yet switched, period by period, so long winter nights cannot hide a harm. A signal pauses the next wave and reverts that class.</p></header>
     <div class="waves" id="waves"></div>
     <div class="brake" id="brakeNote"></div>
     <p class="note">Illustrative draw; the real seed is published before the draw. DC recorded 18,173 crashes in 2025. Roughly half happened after dark, on the order of 0.002 per lit segment-night. Detecting a 20 % change takes about 190,000–240,000 segment-nights per arm. The wedge has that by the end of its second wave.</p>
@@ -389,7 +389,13 @@ function lineChart(host, opts) {
 
 // ------------------------------------------------------------ Phase 0 calculator
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const RADAR_NODES = D.fleet.classes.local.poles + D.fleet.classes.alley.poles + D.fleet.classes.park.poles;
+const NODES = D.year.poles;          // Phase 1 puts a node on every pole whose saving it counts
+{
+  const y50 = D.year.by_floor['50'], gwh = ((y50.today.mwh - y50.phase0.mwh) / 1000).toFixed(1);
+  $('ledeGwh').textContent = gwh; $('figGwh').firstChild.textContent = gwh;
+  $('segCount').textContent = D.pilot.segments.toLocaleString('en-US');
+  $('ledeNet').textContent = Math.round(100 * D.fleet.registered.yes / (D.fleet.registered.yes + D.fleet.registered.no));
+}
 const calc = { price: 0.13, co2: 0.30, floor: '50' };
 function renderCalc() {
   const y = D.year.by_floor[calc.floor];
@@ -406,7 +412,7 @@ function renderCalc() {
   }
   const usd0 = (today - p0) * 1000 * calc.price, usd1 = (today - p1) * 1000 * calc.price;
   $('breakEven').textContent = `Phase 0 pays for itself within three years if integrating the schedule costs less than ${fmtUsd(3 * usd0)}. ` +
-    `Phase 1's radar nodes do not pay back on energy alone: over ten years each could cost at most ${fmtUsd(Math.max(0, (usd1 - usd0) * 10 / RADAR_NODES))}. Their case is light where people are and darkness where they are not.`;
+    `Phase 1's VDL-7 nodes do not pay back on energy alone: with one on every pole, over ten years each could cost at most ${fmtUsd(Math.max(0, (usd1 - usd0) * 10 / NODES))}. Their case is light where people are and darkness where they are not.`;
   $('figUsd').firstChild.textContent = fmtUsd(usd0);
   $('figUsdL').textContent = `a year at $${calc.price.toFixed(3)} per kWh; set your own rate below`;
   const series = SERIES.map(s => ({ name: s.name, color: s.color, values: y[s.key].mwh_by_month }));
@@ -541,7 +547,7 @@ function renderSky() {
     const c = document.createElement('span'); c.textContent = fmtInt(w.lights) + ' lights · all ' + w.wards.length + ' wards';
     d.append(a, b, c); box.appendChild(d);
   }
-  $('brakeNote').textContent = 'Brake check before each wave: an exact test of night-time crash rates, switched against not-yet-switched segments. Its error rate is split across the looks.';
+  $('brakeNote').textContent = 'Brake check before each wave: an exact test of night-time crash rates, switched against not-yet-switched segments within each period between waves. Its error rate is split across the three checks.';
 })();
 
 renderCalc(); renderNight(); renderSky();

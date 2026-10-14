@@ -6,12 +6,12 @@ This version turns that firmware into a program a city can start this quarter:
 
 - **It runs on DC's real fleet.** The business case, the sky model and the pilot plan read DDOT's own streetlight asset layer (72,512 active lights) and the District's crash data, not assumed wattages.
 - **It starts with no new hardware.**
-  - DC's lights are already 97 % LED, and 96 % carry a networked node registered with the central system.
-  - *Phase 0* pushes the Nocturne schedule to those nodes. On DC's fleet over a full year that saves **≈ 5.1 GWh and ≈ $665,000** (at an ASSUMED $0.13/kWh) and cuts streetlight skyglow by **30 %**.
+  - DC's lights are already 97 % LED, and 97 % carry a networked node registered with the central system.
+  - *Phase 0* pushes the Nocturne schedule to those nodes. On DC's fleet over a full year that saves **≈ 4.9 GWh and ≈ $641,000** (at an ASSUMED $0.13/kWh) and cuts streetlight skyglow by **30 %**.
 - **It rolls out as a randomised trial with a brake.**
   - Four waves of about 3,000 street segments each, with every ward in every wave.
   - The assignment is reproducible from a seed text published before the draw.
-  - An exact test on night-time crashes at every wave can pause the rollout.
+  - Before each wave, an exact test on night-time crashes, compared within each period so the season cannot hide a harm, can pause the rollout (`nocturne brake`).
 - **It measures the sky, not just the meter.** The curfew-step method reads sky-quality-meter logs and detects a 0.05 mag change in a single season.
 - **It goes beyond the streetlights, because it has to.**
   - In the only city-scale measurement, streetlights were about **14 %** of the light behind Tucson's skyglow.
@@ -51,15 +51,15 @@ nocturne-vdl7/
 │   ├── photometry.py       IES LM-63 files, TM-15-11 BUG ratings, window trespass, CIE 150 and sleep limits
 │   ├── nightsignal.py      the signed public curfew feed, subscriber logic, iCalendar, migration alerts
 │   ├── observe.py          the Moon, sky-quality-meter logs, curfew-step difference-in-differences
-│   ├── pilot.py            stepped-wedge randomisation, exact safety brake, power
+│   ├── pilot.py            stepped-wedge randomisation, period-stratified exact safety brake, power
 │   ├── schedule.py         Phase 0: per-class programmes for the existing networked nodes
 │   ├── demand.py           traffic and pedestrian curves (Section 6.4)
 │   └── cli.py              the `nocturne` command
-├── data/dc/                DC's streetlights from DDOT's asset layer: fleet, 550 m grid, 12,106 street segments
+├── data/dc/                DC's streetlights from DDOT's asset layer: fleet, 550 m grid, 12,096 street segments
 ├── tools/                  fetch_dc_inventory.py (refresh data/dc), make_example_ies.py, make_brief.py
 ├── examples/ies/           synthetic photometry for trying `nocturne bug` and `nocturne trespass`
 ├── sim/run_night.py        400-node night simulation, 9 scenarios, scaled to 75,000 lights
-├── tests/                  192 tests: the Section 6.2 table, the firmware extensions and every city tool
+├── tests/                  246 tests: the Section 6.2 table, the firmware extensions and every city tool
 ├── console/index.html      the operator console as a standalone page (parity-tested against the Python)
 ├── docs/                   brief.html (the decision brief), PLAYBOOK.md (the DC plan), EVIDENCE.md (the research)
 └── out/                    simulation results: summary.json, report.md, timeseries.csv, charts
@@ -69,7 +69,7 @@ nocturne-vdl7/
 
 ```bash
 pip install -e ".[dev]"                 # Python 3.10+; cryptography is the only runtime dependency
-pytest -q                               # 192 passed in about a minute
+pytest -q                               # 246 passed in about a minute
 
 # the city
 nocturne business-case                  # 2027 on DC's real fleet; --price, --co2, --floor, --site, --fleet spec
@@ -80,6 +80,7 @@ nocturne trespass examples/ies/synthetic-roadway-6000lm-u0.ies --tunable
 nocturne signal --date 2026-10-14 --migration --ics curfew.ics --days 30
 nocturne pilot --seed "text published before the draw" --out plan.csv
 nocturne pilot --power 0.0018 1.2       # segment-nights to detect a 20 % change in night crashes
+nocturne brake --plan plan.csv --crashes night_crashes.csv --through 2027-02-28   # before each wave
 nocturne verify station.dat --go-live 2026-11-01
 
 # the node
@@ -93,30 +94,31 @@ nocturne bundle --key cms_key.pem --version 2 [--zones zones.json] --out bundle.
 
 ## What DC gets (`nocturne business-case`, `nocturne sky`)
 
-A full year (2027) on DDOT's fleet: 72,183 dimmable lights, 4.05 MW at their commissioned output, and 4,162 hours with the sun below −3°.
+A full year (2027) on DDOT's fleet: 72,068 dimmable lights, 3.95 MW at their commissioned output, and 4,162 hours with the sun below −3°. Tunnel, underpass and under-deck lights stay static.
 
 | Strategy | MWh / yr | Energy | Light | Streetlight skyglow | Saved / yr (ASSUMED $0.13/kWh) | tCO₂ / yr (ASSUMED 0.30 t/MWh) |
 |---|---|---|---|---|---|---|
-| Today: full output dusk to dawn | 16,866 | 1.00 | 1.00 | 1.00 | — | — |
-| **Phase 0**: schedule on the existing nodes | 11,750 | 0.70 | 0.70 | 0.70 | $665,000 | 1,535 |
-| **Phase 1**: VDL-7 adaptive (radar, live loops) | 11,134 | 0.66 | 0.66 | 0.67 | $745,000 | 1,720 |
-| + top reflectors in the post-top globes (U0) | 11,134 | 0.66 | 0.66 | 0.58 | $745,000 | 1,720 |
-| **Phase 2**: + warm spectrum at replacement | 11,819 | 0.70 | 0.66 | 0.54 | $656,000 | 1,514 |
+| Today: full output dusk to dawn | 16,431 | 1.00 | 1.00 | 1.00 | — | — |
+| **Phase 0**: schedule on the existing nodes | 11,502 | 0.70 | 0.70 | 0.70 | $641,000 | 1,479 |
+| **Phase 1**: VDL-7 adaptive (radar, live loops) | 10,890 | 0.66 | 0.66 | 0.67 | $720,000 | 1,662 |
+| + top reflectors in the post-top globes (U0) | 10,890 | 0.66 | 0.66 | 0.58 | $720,000 | 1,662 |
+| **Phase 2**: + warm spectrum at replacement | 11,472 | 0.70 | 0.66 | 0.55 | $645,000 | 1,488 |
 
 **How to read the phases:**
-- **Phase 0.** Streets without presence sensing never go below 50 % (`--floor`). It pays back in three years if integration costs under about $2.0 M. These are the exact programmes `nocturne schedule` exports.
-- **Phase 1.** Radar nodes do *not* pay back on energy alone (break-even about $18 per node over ten years). Their case is light where people are and deeper darkness where they are not.
+- **Phase 0.** Streets without presence sensing never go below 50 % (`--floor`). It pays back in three years if integration costs under about $1.9 M. These are the exact programmes `nocturne schedule` exports.
+- **Phase 1.** VDL-7 nodes do *not* pay back on energy alone: over ten years a node on every pole would have to cost under about $11 (about $14 on local streets, $7 on arterials). Their case is light where people are and deeper darkness where they are not.
+- **Spectra.** Each class keeps its real mix of colour temperatures (DC's arterials are 56 % 3000K and 42 % 2700K), so the warm retrofit's energy cost and the sky's starting point are not taken from one dominant CCT.
 
-**After midnight**, full Nocturne removes 58–62 % of the streetlights' contribution to the zenith sky at six places. The figures below use Tucson's measured share (streetlights ≈ 15 % of artificial light) until DC calibrates with its own meters:
+**After midnight**, full Nocturne removes 59–62 % of the streetlights' contribution to the zenith sky at six places. The figures below use Tucson's measured share (streetlights ≈ 15 % of artificial light) until DC calibrates with its own meters:
 
 | Place, after midnight | Sky today (mag/arcsec²) | Nocturne | Nocturne + Night Signal | Stars overhead: today → Nocturne → + Signal |
 |---|---|---|---|---|
-| Rock Creek Park | 17.81 | 17.91 | 18.57 | 208 → 228 → 421 |
-| U.S. National Arboretum | 17.59 | 17.69 | 18.36 | 169 → 186 → 346 |
-| Kenilworth Aquatic Gardens | 17.62 | 17.72 | 18.38 | 173 → 190 → 355 |
-| Anacostia Park | 16.91 | 17.01 | 17.69 | 88 → 97 → 185 |
-| Theodore Roosevelt Island | 17.18 | 17.29 | 17.96 | 114 → 127 → 239 |
-| National Mall | 16.84 | 16.94 | 17.62 | 81 → 90 → 174 |
+| Rock Creek Park | 17.90 | 17.99 | 18.65 | 225 → 246 → 454 |
+| U.S. National Arboretum | 17.58 | 17.68 | 18.34 | 167 → 183 → 341 |
+| Kenilworth Aquatic Gardens | 17.57 | 17.67 | 18.34 | 166 → 183 → 341 |
+| Anacostia Park | 16.96 | 17.06 | 17.73 | 92 → 101 → 193 |
+| Theodore Roosevelt Island | 17.45 | 17.55 | 18.22 | 148 → 163 → 306 |
+| National Mall | 16.88 | 16.98 | 17.66 | 85 → 94 → 181 |
 
 In the "+ Night Signal" column, the rest of the city's lighting halves its output after 23:00 (`--cut`). The model and its limits are in `vdl7/skyglow.py`.
 
@@ -209,13 +211,15 @@ CI runs the suite on Python 3.10–3.13 (`.github/workflows/tests.yml`).
 
 | File | Tests | What they hold the code to |
 |---|---|---|
-| `tests/test_anycity.py` | 61 | **The POSIX rule engine against the IANA database.** For every zone on Earth, 2027–2030, mid-month and one second either side of every transition. Each of the 17 presets is checked every 6 h, 2024–2030. **Rule forms:** Jn/n, quoted names, `/24` and negative-DST. **Curfew at 23:00 local:** Sydney, Adelaide, Paris, Tucson. **Polar latitudes:** polar night and the midnight sun. **SAFE mode:** in the southern hemisphere. **Zones:** overlays, refused unsafe overlays, and the HIN floor inside a dark zone. **Migration nights.** |
-| `tests/test_photometry.py` | 9 | Zonal lumens against closed forms; LM-63 corners; symmetry expansion; front/back split; TM-15 thresholds; inverse-square and cosine laws; window trespass; globes vs reflector retrofits |
-| `tests/test_annual.py` | 7 | One night against the 400-node simulation; the year's shape; the order of the strategies; the unsensed floor; any city, including polar ones |
-| `tests/test_skyglow.py` | 8 | Kernel against the closed-form near field (0.5 %); near and far slopes; the DC grid against the fleet; every lever in the right direction; calibration; the streetlights-alone vs shared-curfew claim; retrofit ranking |
-| `tests/test_observe.py` | 11 | The Moon against PyEphem at the 2026 eclipses; log formats; twilight, Moon and cloud filters; a planted 0.12 mag curfew effect recovered from a season of synthetic readings with clouds and moonlight; a null effect |
-| `tests/test_pilot.py` | 6 | DC's 12,106 segments randomised reproducibly and in balance; the exact test's size and power; the brake; the power formula |
-| `tests/test_nightsignal.py` | 7 | Phase times through the fall-back night and in Sydney; signature; what each kind of light is told; iCalendar; migration alerts reaching the streetlights |
+| `tests/test_anycity.py` | 72 | **The POSIX rule engine against the IANA database.** For every zone on Earth, 2027–2030, mid-month and one second either side of every transition. Each of the 17 presets is checked every 6 h, 2024–2030. **Rule forms:** Jn/n, quoted names, `/24` and negative-DST. **Curfew at 23:00 local:** Sydney, Adelaide, Paris, Tucson. **Polar latitudes:** polar night and the midnight sun. **SAFE mode:** in the southern hemisphere. **Zones:** overlays, refused unsafe overlays (including non-finite numbers and names that do not fit the MCU), and the HIN floor inside a dark zone. **Migration nights**, which never dim storm darkness. **Fold-0 local time** for negative DST, and dusk at the edge of polar night. |
+| `tests/test_photometry.py` | 13 | Zonal lumens against closed forms; LM-63 corners ([MORE], spacing, bad numbers); symmetry expansion, including a 90–270 file without 180; front/back split and trespass on either street side; Type V only for light that repeats every 90°; TM-15 thresholds; inverse-square and cosine laws; window trespass; globes vs reflector retrofits |
+| `tests/test_annual.py` | 10 | One night against the 400-node simulation; the year's shape; the order of the strategies; the unsensed floor; any city, including polar ones; break-even over every pole; no payback for part of a year; each class's CCT mix; Phase 0 equal to the exported programmes sample for sample |
+| `tests/test_schedule.py` | 14 | Phase 0 programmes keep every floor and the signed levels, step with traffic to the latest dawns, read across midnight, export with zones, and are exactly what the business case integrates |
+| `tests/test_skyglow.py` | 12 | Kernel against the closed-form near field (0.5 %); near and far slopes, and beyond the table; aerosol-free air; no step at a cell's edge; the DC grid against the fleet; every lever in the right direction; calibration; the streetlights-alone vs shared-curfew claim; retrofit ranking; input checks; the stored LED spectra |
+| `tests/test_observe.py` | 13 | The Moon against PyEphem at the 2026 eclipses; log formats, including comment lines, extra fields and headerless files; twilight, Moon and cloud filters; a planted 0.12 mag curfew effect recovered from a season of synthetic readings with clouds and moonlight; a null effect; one estimate kept when the other lacks nights |
+| `tests/test_pilot.py` | 10 | DC's 12,096 segments randomised reproducibly and in balance; the exact test's size and power; the brake; **a seasonal 15 % harm that pooling hides and the period-stratified brake catches**; the stratified p-value against enumeration; its size with a season; tallies from a plan and a crash list; the power formula |
+| `tests/test_nightsignal.py` | 8 | Phase times through the fall-back night and in Sydney; signature; what each kind of light is told; iCalendar (escaped, folded, never empty); migration alerts reaching the streetlights only when they cover the night; polar night and the midnight sun |
+| `tests/test_inventory.py` | 11 | The DC inventory reduction: static lights left out, missing wattages filled from their peers, CCT labels, and the committed aggregates against each other |
 | `tests/test_console_parity.py` | 1 | The console's JavaScript controller against the Python one, level for level: nine scenarios, twenty checkpoints. Skipped without Node.js |
 
 ## Simulation results (Section 6.3)
@@ -308,6 +312,8 @@ On the second and later clockless nights, a dusk more than 45 min off the previo
 
 ## Known limits
 
+Three independent reviews (firmware and time, physics and optics, statistics and data) re-derived the code's results with their own scripts. Every finding they confirmed is fixed and has a test; the most serious was a safety brake that pooled the wedge's periods and could miss a real harm. What remains is below.
+
 **Firmware**
 - Carpet events between neighbouring nodes are not signed here. The spec's device keys would sign them, but that is out of scope for this model.
 - The CMS side (TALQ, LwM2M, DTLS) is modelled only by the messages it signs. Phase 0 still needs the schedule translated into the import format of DC's central management system.
@@ -315,6 +321,7 @@ On the second and later clockless nights, a dusk more than 45 min off the previo
 **Business case**
 - The baseline assumes DC's lights run at their commissioned maximum all night. A dimming schedule already in place would shrink the Phase 0 saving by its own amount.
 - Price and grid factor are ASSUMED inputs. Activity uplift is the expected value of the Section 6.4 traffic and pedestrian curves, not DDOT counts.
+- 635 poles have no wattage in the asset layer; each is given the median of its class and fixture style (`wattage_imputed_poles` in `data/dc/fleet.json`).
 
 **Sky model**
 - Single scattering only: no Earth curvature, terrain or buildings. That is adequate inside a city and optimistic beyond about 30 km.
@@ -328,6 +335,7 @@ On the second and later clockless nights, a dusk more than 45 min off the previo
 **The rest**
 - **Night Signal.** A protocol proposal: no owner is bound by it until the District says so.
 - **Crash data.** The pilot's power figure uses the District's 2025 crash count. The layer's timestamps are ambiguous between UTC and local time, so the night-time share is given as a range.
+- **The brake's input.** `nocturne brake` takes one row per night-time crash with its street segment. The rule that assigns a crash to a segment (the layer's own segment id, or the nearest lit segment) should be fixed and published with the seed, before the draw.
 - **Places.** The coordinates of the six places are approximate centroids.
 
 ## License
