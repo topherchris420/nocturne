@@ -37,6 +37,14 @@ PHASE_START = {Phase.STEP: 22, Phase.CURFEW: 23, Phase.DEEP: 1, Phase.DAWN: 5}
 NIGHT_HOURS = [22, 23] + list(range(12))            # hourly steps for traffic classes, to the latest dawns (Paris 08:28, Tromso 11:30)
 
 
+def check_floor(unsensed_floor: float) -> float:
+    """The unsensed floor is a share of full output: finite, 0-100 %."""
+    if not (isinstance(unsensed_floor, (int, float)) and math.isfinite(unsensed_floor)
+            and 0.0 <= unsensed_floor <= 100.0):
+        raise ValueError(f"unsensed floor {unsensed_floor!r} must be a percentage from 0 to 100")
+    return float(unsensed_floor)
+
+
 @dataclass(frozen=True)
 class Step:
     at: str                   # "dusk", "dawn" or local "HH:MM"
@@ -58,6 +66,7 @@ def _traffic_level(prof: ClassProfile, base: float, h0: float, h1: float) -> flo
 def program(prof: ClassProfile, unsensed_floor: float = UNSENSED_FLOOR,
             levels: Optional[Tuple[int, ...]] = None) -> List[Step]:
     """The night's steps for one road class (or a zone's levels for it)."""
+    check_floor(unsensed_floor)
     lv = levels or prof.levels
     base = {ph: float(v) for ph, v in zip(PHASE_ORDER, lv)}
     if prof.design_volume:

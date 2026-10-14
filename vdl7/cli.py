@@ -274,9 +274,23 @@ def cmd_pilot(a) -> int:
 
 
 def _zones_from(path):
+    """Zone overlays from JSON, read by the bundle's own strict parser: a
+    level of 80.9 or 100.9 is refused, never rounded into a valid one."""
+    from .profiles import ProfileBundle
     with open(path) as f:
         raw = json.load(f)
-    return {name: {RoadClass(r): tuple(int(x) for x in lv) for r, lv in z.items()} for name, z in raw.items()}
+    try:
+        return ProfileBundle.from_dict(dict(default_bundle().to_dict(), zones=raw)).zones
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
+        raise SystemExit(f"--zones {path}: {e}") from None
+
+
+def _pct(text: str) -> float:
+    from .schedule import check_floor
+    try:
+        return check_floor(float(text))
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
 
 
 def cmd_brake(a) -> int:
@@ -381,13 +395,13 @@ def main(argv=None) -> int:
     bc.add_argument("--year", type=int, default=2027)
     bc.add_argument("--price", type=float, default=0.13, help="USD per kWh (ASSUMED)")
     bc.add_argument("--co2", type=float, default=0.30, help="tCO2 per MWh (ASSUMED)")
-    bc.add_argument("--floor", type=float, default=50.0, help="Phase 0 floor for streets without presence sensing, %%")
+    bc.add_argument("--floor", type=_pct, default=50.0, help="Phase 0 floor for streets without presence sensing, %%")
     bc.add_argument("--json", action="store_true")
     bc.set_defaults(fn=cmd_business_case)
 
     sc = sub.add_parser("schedule", help="Phase 0: programmes for the existing networked nodes, per wave")
     sc.add_argument("--out", default="phase0", help="directory for programs.json and assignments")
-    sc.add_argument("--floor", type=float, default=50.0, help="floor for streets without presence sensing, %%")
+    sc.add_argument("--floor", type=_pct, default=50.0, help="floor for streets without presence sensing, %%")
     sc.add_argument("--zones", help="JSON {zone: {road_class: [5 phase levels]}} neighbourhood overlays")
     sc.add_argument("--plan", help="the pilot plan CSV from `nocturne pilot --out`")
     sc.add_argument("--wave", type=int, help="only this wave's segments")

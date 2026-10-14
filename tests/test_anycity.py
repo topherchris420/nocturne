@@ -120,6 +120,29 @@ def test_EXT_CLK_5c_local_to_utc_is_fold_0_even_for_negative_dst():
     assert dc.to_utc(datetime(2026, 3, 8, 2, 30)) == datetime(2026, 3, 8, 7, 30, tzinfo=UTC)      # 03:30 EDT
 
 
+def test_EXT_CLK_5d_a_rule_that_misses_the_zones_own_transitions_is_refused():
+    """A TZif footer only governs after the file's last explicit transition.
+    Gaza's and Hebron's list Ramadan-related changes the recurring rule
+    misses, so commissioning from the rule is refused; zones whose explicit
+    transitions the rule reproduces (New York, to 2037) pass."""
+    zoneinfo, zones = _all_zones()
+    since = datetime(2027, 1, 1, tzinfo=UTC)
+    assert posix_tz_from_iana("America/New_York", since) == "EST5EDT,M3.2.0,M11.1.0"
+    for name in ("Asia/Gaza", "Asia/Hebron", "Africa/Casablanca"):
+        if name not in zones:
+            continue
+        try:
+            rule = posix_tz_from_iana(name, since)
+        except LookupError as e:
+            assert "disagrees" in str(e) or "footer" in str(e)
+            continue
+        tz, zi = parse_posix_tz(rule), zoneinfo.ZoneInfo(name)       # accepted: then it must be right
+        t = since
+        while t.year < 2031:
+            assert tz.utcoffset_s(t) == int(t.astimezone(zi).utcoffset().total_seconds()), (name, t)
+            t += timedelta(hours=6)
+
+
 def test_EXT_CLK_6_dc_rule_is_what_iana_compiles():
     try:
         assert posix_tz_from_iana("America/New_York") == SITES["dc"].tz

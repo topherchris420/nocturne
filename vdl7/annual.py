@@ -41,7 +41,7 @@ from .clock import local_hour, solar_elevation_deg, to_local
 from .demand import POLE_SPACING_M, POLES, WALK_POLES, WALK_SPEED_MPS, ped_rate_per_h, traffic_veh15
 from .profiles import (DEFAULT_PROFILES, PHASE_ORDER, PRESENCE_HOLD_S, CARPET_HOLD_S, CARPET_HOPS, ClassProfile,
                        ProfileBundle, RoadClass, default_bundle, phase_for_hour)
-from .schedule import level_at, program
+from .schedule import check_floor, level_at, program
 from .sites import DEFAULT_SITE, Site
 
 UTC = timezone.utc
@@ -234,6 +234,7 @@ def run_year(fleet: Fleet, site: Site = DEFAULT_SITE, year: int = 2027, bundle: 
     ISO dates, inclusive) at `site`. Returns a JSON-ready dict. Levels are
     taken at the middle of each 5-minute bucket of local time, which never
     straddles a programme step (they fall on the hour)."""
+    check_floor(unsensed_floor)
     bundle = bundle or default_bundle()
     econ = econ or Economics()
     walk = _walk_boost(walk_step_s or POLE_SPACING_M / WALK_SPEED_MPS)

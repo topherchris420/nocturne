@@ -14,10 +14,11 @@ import calendar
 import math
 import os
 import re
+import struct
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 DC_LAT = 38.8977
 DC_LON = -77.0365
@@ -190,9 +191,11 @@ def parse_posix_tz(text: str) -> PosixTZ:
         raise ValueError(f"not a POSIX TZ rule: {text!r} ({e})") from None
 
 
-def posix_tz_from_iana(name: str) -> str:
+def posix_tz_from_iana(name: str, valid_from: Optional[datetime] = None) -> str:
     """The POSIX rule the IANA database itself compiles for a zone (the TZif
-    footer), for commissioning: `posix_tz_from_iana('Europe/Paris')`."""
+    footer), for commissioning: `posix_tz_from_iana('Europe/Paris')`. Refused
+    (LookupError) where the zone's explicit transitions after `valid_from`
+    (default: now) disagree with that rule."""
     import zoneinfo
     blob = None
     for base in zoneinfo.TZPATH:
@@ -211,7 +214,37 @@ def posix_tz_from_iana(name: str) -> str:
         raise LookupError(f"zone {name!r}: TZif version 1 has no POSIX footer")
     footer = blob.rstrip(b"\n").rsplit(b"\n", 1)[-1].decode("ascii")
     parse_posix_tz(footer)
+    # The footer only governs after the file's last explicit transition. Where
+    # explicit transitions run on past `valid_from` (zic writes them to 2037,
+    # and Morocco's Ramadan switches never fit one rule), the footer must agree
+    # with them at every instant either side could change the offset.
+    times = _transitions(blob)
+    since = valid_from or datetime.now(UTC)
+    ahead = [t for t in times if t > since]
+    if ahead:
+        import zoneinfo as _zi
+        zi, tz = _zi.ZoneInfo(name), parse_posix_tz(footer)
+        checks = list(ahead)
+        if tz.has_dst:
+            for y in range(since.year, ahead[-1].year + 1):
+                checks += [t for t in _dst_bounds(tz, y) if since < t <= ahead[-1]]
+        for t in checks:
+            for u in (t - timedelta(seconds=1), t):
+                if tz.utcoffset_s(u) != int(u.astimezone(zi).utcoffset().total_seconds()):
+                    raise LookupError(f"zone {name!r}: its POSIX rule {footer!r} disagrees with the zone's own "
+                                      f"transitions at {u:%Y-%m-%d %H:%M} UTC; one recurring rule cannot run it")
     return footer
+
+
+def _transitions(blob: bytes) -> List[datetime]:
+    """The explicit transitions in a TZif v2+ file (its 64-bit block)."""
+    def counts(off: int) -> Tuple[int, ...]:
+        return struct.unpack(">6l", blob[off + 20:off + 44])
+    isut, isstd, leap, timecnt, typecnt, charcnt = counts(0)
+    v2 = 44 + timecnt * 5 + typecnt * 6 + charcnt + leap * 8 + isstd + isut
+    timecnt = counts(v2)[3]
+    raw = struct.unpack(f">{timecnt}q", blob[v2 + 44:v2 + 44 + timecnt * 8])
+    return [datetime(1970, 1, 1, tzinfo=UTC) + timedelta(seconds=t) for t in raw]
 
 
 def _tz(tz) -> PosixTZ:

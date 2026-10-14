@@ -71,3 +71,24 @@ def test_EXT_P0_5_the_business_case_integrates_exactly_these_programmes(road):
     for h in HOURS:
         base = float(prof.levels[PHASE_ORDER.index(phase_for_hour(h))])
         assert expected_level(prof, base, h, "schedule", 50.0, w) == level_at(steps, h)
+
+
+def test_EXT_P0_6_floors_and_zone_files_are_checked(tmp_path):
+    """A floor outside 0-100 % or a fractional zone level is refused, never
+    turned into a programme or rounded into a valid-looking bundle."""
+    from vdl7.annual import dc_fleet, run_year
+    from vdl7.cli import main
+    for bad in (150.0, -1.0, float("nan")):
+        with pytest.raises(ValueError, match="floor"):
+            program(DEFAULT_PROFILES[RoadClass.LOCAL], bad)
+        with pytest.raises(ValueError, match="floor"):
+            run_year(dc_fleet(), unsensed_floor=bad, days=("2027-01-10", "2027-01-10"))
+    with pytest.raises(SystemExit):
+        main(["schedule", "--floor", "150", "--out", str(tmp_path / "p")])
+    for levels in ([80.9, 60.9, 40.9, 30.9, 50.9], [100.9, 60, 40, 30, 50]):
+        z = tmp_path / "zones.json"
+        z.write_text(json.dumps({"rock-creek-buffer": {"local": levels}}))
+        with pytest.raises(SystemExit, match="zones"):
+            main(["schedule", "--zones", str(z), "--out", str(tmp_path / "p")])
+    z.write_text(json.dumps({"rock-creek-buffer": {"local": [60, 40, 30, 30, 30]}}))
+    assert main(["schedule", "--zones", str(z), "--out", str(tmp_path / "p")]) == 0
