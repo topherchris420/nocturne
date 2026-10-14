@@ -48,10 +48,30 @@ class Segment:
     kw: float = 0.0
 
 
+SEGMENT_COLUMNS = ("segment", "ward", "road_class", "lights", "kw")
+PLAN_COLUMNS = ("segment", "ward", "road_class", "lights", "wave", "switch_on")
+
+
 def load_segments(path: str = SEGMENTS_DC) -> List[Segment]:
-    with open(path) as f:
-        return [Segment(r["segment"], r["ward"], r["road_class"], int(r["lights"]), float(r["kw"]))
-                for r in csv.DictReader(f)]
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        missing = [c for c in SEGMENT_COLUMNS if c not in (reader.fieldnames or [])]
+        if missing:
+            raise ValueError(f"{path}: needs the columns {','.join(SEGMENT_COLUMNS)}; missing {', '.join(missing)}")
+        out = []
+        for r in reader:
+            try:
+                out.append(Segment(r["segment"], r["ward"], r["road_class"], int(r["lights"]), float(r["kw"])))
+            except (TypeError, ValueError):
+                raise ValueError(f"{path}, line {reader.line_num}: lights must be a whole number and kw a "
+                                 f"number, got {r.get('lights')!r} and {r.get('kw')!r}") from None
+        return out
+
+
+def _writer(f):
+    """CSV rows quoted where a field needs it (a ward named 'Ward 1, North'),
+    with the same plain '\\n' line ends as before."""
+    return csv.writer(f, lineterminator="\n")
 
 
 def public_seed(text: str) -> int:
@@ -82,11 +102,33 @@ class Plan:
         return dict(table)
 
     def to_csv(self, path: str, segments: Sequence[Segment]) -> None:
-        with open(path, "w") as f:
-            f.write("segment,ward,road_class,lights,wave,switch_on\n")
+        with open(path, "w", newline="") as f:
+            out = _writer(f)
+            out.writerow(PLAN_COLUMNS)
             for s in sorted(segments, key=lambda s: (self.assignment[s.id], s.ward, s.road_class, s.id)):
                 w = self.assignment[s.id]
-                f.write(f"{s.id},{s.ward},{s.road_class},{s.lights},{w},{self.wave_start(w).isoformat()}\n")
+                out.writerow([s.id, s.ward, s.road_class, s.lights, w, self.wave_start(w).isoformat()])
+
+
+def load_plan(path: str) -> List[Dict[str, str]]:
+    """The rows of a plan CSV that `Plan.to_csv` wrote, checked: every
+    column present, every wave a whole number and every switch-on an ISO
+    date."""
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        missing = [c for c in PLAN_COLUMNS if c not in (reader.fieldnames or [])]
+        if missing:
+            raise ValueError(f"{path}: not a plan from `nocturne pilot --out` (missing {', '.join(missing)})")
+        rows = list(reader)
+    for n, r in enumerate(rows, start=2):
+        try:
+            if int(r["wave"]) < 1:
+                raise ValueError
+            date.fromisoformat(r["switch_on"])
+        except (TypeError, ValueError):
+            raise ValueError(f"{path}, row {n}: wave {r['wave']!r} and switch_on {r['switch_on']!r} must be a "
+                             f"wave number and a YYYY-MM-DD date") from None
+    return rows
 
 
 def stepped_wedge(segments: Sequence[Segment], seed_text: str, waves: int = 4, start: date = date(2027, 1, 4),
@@ -94,6 +136,10 @@ def stepped_wedge(segments: Sequence[Segment], seed_text: str, waves: int = 4, s
     """Shuffle each stratum with the public seed and deal it round-robin into
     waves, starting each stratum where the last left off so wave sizes stay
     within one of each other overall."""
+    if waves < 1:
+        raise ValueError(f"waves must be at least 1, got {waves}")
+    if wave_days < 1:
+        raise ValueError(f"wave_days must be at least 1, got {wave_days}")
     ids = [s.id for s in segments]
     if len(set(ids)) != len(ids):
         dup = sorted({i for i in ids if ids.count(i) > 1})[:5]
@@ -360,5 +406,11 @@ def exposure_needed(rate: float, rate_ratio: float, alpha: float = 0.05, power: 
     """Segment-nights per arm to detect `rate_ratio` against a baseline
     `rate` (events per segment-night), two-sided, by the normal
     approximation to the log rate ratio."""
+    if not (math.isfinite(rate) and rate > 0):
+        raise ValueError(f"baseline rate must be a positive number of events per segment-night, got {rate:g}")
+    if not (math.isfinite(rate_ratio) and rate_ratio > 0) or rate_ratio == 1:
+        raise ValueError(f"rate ratio must be positive and not 1 (1 is no change to detect), got {rate_ratio:g}")
+    if not (0 < alpha < 1 and 0 < power < 1):
+        raise ValueError("alpha and power must be between 0 and 1")
     z = NormalDist().inv_cdf(1 - alpha / 2) + NormalDist().inv_cdf(power)
     return z * z * (1 / rate + 1 / (rate * rate_ratio)) / math.log(rate_ratio) ** 2

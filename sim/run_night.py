@@ -141,6 +141,7 @@ class NetworkSim:
         self._emergency_sent = False
         self._migration_sent = False
         self._rain_sent_mono = -math.inf
+        self._hello_sent_mono = -math.inf
         self.rejected = 0
         # outputs
         self.series: Dict[RoadClass, List[Tuple[float, float]]] = {r: [] for r in CLASS_ORDER}
@@ -178,7 +179,8 @@ class NetworkSim:
     def _cms_step(self, utc: datetime):
         backhaul_up = not self._in(self._outage, utc)
         h = local_hour(utc)
-        if backhaul_up and int(self.mono) % CMS_PERIOD_S == 0:
+        if backhaul_up and self.mono - self._hello_sent_mono >= CMS_PERIOD_S:
+            self._hello_sent_mono = self.mono
             for st in self.streets:
                 msg = None
                 if st.prof.design_volume:

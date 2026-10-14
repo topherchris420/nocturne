@@ -121,14 +121,18 @@ class Bench:
              priority: int = Priority.NONE, via: Optional[str] = None, event_id: Optional[str] = None,
              segment: Optional[str] = None, nodes=()) -> SignedMessage:
         """Sign an event addressed to this node's segment and deliver it; the
-        delivery must be accepted."""
+        delivery must be accepted (ValueError, with the node's reason, if
+        it is refused)."""
         payload = dict(payload or {})
         if kind == EventKind.OVERRIDE:
             payload.setdefault("by", "bench-operator")
             payload.setdefault("reason", "acceptance test")
         msg = self.cms.event(kind, ttl_s, segment or self.cfg.segment_id, payload, priority, event_id,
                              nodes=nodes, issued=self.utc)
-        assert self.deliver(msg, via), list(self.node.log)[-3:]
+        if not self.deliver(msg, via):
+            log = list(self.node.log)
+            why = next((ln for ln in reversed(log[-3:]) if "REJECT" in ln), "; ".join(log[-3:]))
+            raise ValueError(f"the node refused the {kind.value} event: {why}")
         return msg
 
     def hang(self) -> None:

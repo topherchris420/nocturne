@@ -867,3 +867,116 @@ def test_EXT_HW_8_hour_meter_and_tilt_baseline_live_in_flash():
     assert b.cfg.burn_hours == pytest.approx(hours, abs=0.05)
     b.node.tilt_sample(3.0, b.mono)
     assert "TILT" in b.advance(2).alarms                 # baseline 0.7 came back from flash
+
+
+# ============================================ EXT: REVIEW ROUND 3
+def test_R_SAF_4b_morning_storm_darkness_lights_at_evening_level():
+    """Storm darkness before noon is still storm darkness: the evening level,
+    not the dimmer dawn level."""
+    b = Bench(RoadClass.LOCAL, start="2026-10-14 09:00")
+    b.run_until("2026-10-14 10:00", dt=5)
+    b.lx_override = 3.0
+    out = b.advance(90, dt=5)
+    assert out.lit and out.phase == Phase.EVENING and out.level == 80
+
+
+def test_EXT_SEC_16_cancel_that_overtakes_its_event_still_cancels():
+    """Backhaul delivers the cancel before the mesh copy of the emergency: the
+    late emergency is refused instead of running its full TTL. A later event
+    that reuses the id (as loop volumes do) is not affected."""
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 01:30", dt=5)
+    em = b.cms.emergency({b.cfg.segment_id: []}, ttl_s=3600, event_id="cad-X1", issued=b.utc)[0]
+    cancel = b.cms.cancel("cad-X1", b.cfg.segment_id, issued=b.utc)
+    assert b.node.receive(cancel, b.mono, via="backhaul")
+    assert not b.node.receive(em, b.mono, via="mesh")
+    assert b.advance(30, dt=5).level == 30
+    again = b.cms.emergency({b.cfg.segment_id: []}, ttl_s=3600, event_id="cad-X1", issued=b.utc)[0]
+    assert b.deliver(again)                              # issued after the cancel
+    assert b.advance(10).level == 100
+
+
+def test_EXT_SEC_17_late_loop_volume_expires_from_issue():
+    """A volume issued 14 min ago boosts for its last minute only, not for
+    another 15 min counted from arrival."""
+    b = Bench(RoadClass.ARTERIAL)
+    b.run_until("2026-10-14 02:00", dt=5)
+    assert b.deliver(b.cms.loop_volume(b.cfg.segment_id, 300, issued=b.utc - timedelta(minutes=14)))
+    assert b.advance(5).level == 100
+    out = b.advance(3 * 60, dt=5)
+    assert "LOOP" not in out.reasons and out.activity == 0
+
+
+@pytest.mark.parametrize("mutate, why", [
+    (lambda bd: setattr(bd, "hin_floor", 250), "hin_floor"),
+    (lambda bd: bd.profiles.__setitem__(RoadClass.LOCAL, replace(bd.profiles[RoadClass.LOCAL], design_watts=-40)),
+     "design watts"),
+])
+def test_EXT_SEC_18_bundle_bounds_above_and_below(mutate, why):
+    b = Bench(RoadClass.LOCAL)
+    bad = default_bundle(version=2)
+    mutate(bad)
+    assert not b.deliver(b.cms.bundle(bad))
+    assert why in b.flash.install_log[-1] and b.flash.version == 1
+
+
+def test_EXT_SEC_19_future_dated_bundle_is_not_valid():
+    """A bundle dated years ahead would never reach its 400-day limit."""
+    b = Bench(RoadClass.LOCAL)
+    b.advance(5)                                         # clock synced
+    assert not b.deliver(b.cms.bundle(default_bundle(version=2, issued="2099-01-01")))
+    assert "not yet valid" in b.flash.install_log[-1]
+    f = Flash()                                          # installed with no clock
+    assert f.install(b.cms.bundle(default_bundle(version=3, issued="2099-01-01")), b.cms.verifier)
+    out = Bench(RoadClass.LOCAL, cms=b.cms, flash=f).run_until("2026-10-14 02:00", dt=10)
+    assert "BUNDLE_EXPIRED" in out.alarms
+
+
+def test_EXT_SEC_20_seq_beyond_64_bits_is_malformed():
+    b = Bench(RoadClass.LOCAL)
+    b.run_until("2026-10-14 02:00", dt=10)
+    msg = b.cms.signer.sign_obj({"kind": "emergency", "id": "e", "ttl_s": 600, "payload": {}, "seq": 1 << 64,
+                                 "targets": make_targets(b.cfg.segment_id), "issued": b.utc.isoformat()})
+    assert not b.deliver(msg)
+    assert "malformed" in b.node.log[-1]
+
+
+def test_EXT_FS_11_naive_time_sync_is_refused_not_fatal():
+    b = Bench(RoadClass.LOCAL, online=False)
+    b.node.backhaul_hello(b.mono, datetime(2026, 10, 14, 5, 0))
+    assert "REJECT backhaul time sync" in b.node.log[-1]
+    assert b.advance(5).mode == Mode.SAFE                # still ticking, still clockless
+
+
+def test_EXT_FS_12_storm_into_first_clockless_night_does_not_lock_in():
+    """Storm darkness from 14:00 straight into the first clockless night
+    starts that night's count early (nothing to check it against), but the
+    next dusk agrees with the dawn and the learned night, so every later
+    curfew lands on time."""
+    learner = Bench(RoadClass.LOCAL, start="2026-10-12 17:00")
+    learner.run_until("2026-10-13 08:00", dt=10)
+    rtc = learner.rtc
+    rtc.reset()
+    b = Bench(RoadClass.LOCAL, start="2026-10-13 12:00", flash=learner.flash, rtc=rtc, online=False,
+              cms=learner.cms)
+    start = b.utc
+    b.run_until("2026-10-13 14:00", dt=10)
+    b.lx_override = 3.0
+    b.run_until("2026-10-13 20:00", dt=10)
+    b.lx_override = None
+    b.run_until("2026-10-14 08:00", dt=10)
+    b.keep_history = True
+    for night in ("2026-10-14", "2026-10-15"):
+        b.outputs = []
+        b.run_until(f"{night} 23:30", dt=10)
+        first = next(o for o in b.outputs if o.phase == Phase.CURFEW)
+        assert abs(hm(to_local(start + timedelta(seconds=first.mono))) - 23 * 60) <= 10
+        b.run_until(f"{date.fromisoformat(night) + timedelta(days=1)} 08:00", dt=10)
+    assert any("re-anchoring" in line for line in b.node.log)
+
+
+def test_EXT_SPEC_3_spd_outside_the_visible_range_is_refused(tmp_path):
+    p = tmp_path / "micrometres.csv"
+    p.write_text("um,W\n" + "\n".join(f"{l / 1000:.3f},1" for l in range(380, 781, 10)))
+    with pytest.raises(ValueError, match="wavelengths must be in nm"):
+        spectral.load_spd_csv(str(p))

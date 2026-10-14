@@ -297,6 +297,9 @@ def load_spd_csv(path: str) -> List[float]:
         (l0, v0), (l1, v1) = pts[j], pts[j + 1]
         f = 0.0 if l1 == l0 else (lam - l0) / (l1 - l0)
         out.append(max(0.0, v0 + (v1 - v0) * f))
+    if not any(out):
+        raise ValueError(f"{path}: no power between {LAMBDA[0]} and {LAMBDA[-1]} nm "
+                         f"(read {pts[0][0]:g}-{pts[-1][0]:g}); wavelengths must be in nm")
     return out
 
 

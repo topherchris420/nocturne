@@ -62,8 +62,9 @@ PHASE_ORDER = (Phase.EVENING, Phase.STEP, Phase.CURFEW, Phase.DEEP, Phase.DAWN)
 
 def phase_for_hour(h: float) -> Phase:
     """Local civil hour (0-24, fractional) to dimming phase. Boundaries are
-    local time, so the curfew follows DST. Hours outside the night map to the
-    evening phase so storm darkness at 14:00 lights at the evening level."""
+    local time, so the curfew follows DST. Hours from noon to 22:00 map to
+    the evening phase; the controller also uses the evening phase for any
+    storm darkness with the sun up, morning included (R-SAF-4)."""
     h = h % 24.0
     if 22.0 <= h < 23.0:
         return Phase.STEP
@@ -273,12 +274,14 @@ def validate_bundle(b: ProfileBundle) -> List[str]:
                 errs.append(f"{road.value}: {ph.value} level {lv} outside [floor {p.floor}, 100]")
         if p.design_volume is not None and p.design_volume <= 0:
             errs.append(f"{road.value}: design volume must be positive")
+        if not p.design_watts > 0:
+            errs.append(f"{road.value}: design watts must be positive")
     for ph in PHASE_ORDER:
         mix = b.mix.get(ph)
         if mix is None or len(mix) != 2 or min(mix) < 0 or sum(mix) != 100:
             errs.append(f"mix {ph.value}: {mix} must be two non-negative parts summing to 100")
-    if b.hin_floor < FIRMWARE_MIN_HIN:
-        errs.append(f"hin_floor {b.hin_floor} below {FIRMWARE_MIN_HIN}")
+    if not (FIRMWARE_MIN_HIN <= b.hin_floor <= 100):
+        errs.append(f"hin_floor {b.hin_floor} outside [{FIRMWARE_MIN_HIN}, 100]")
     if not (0 <= b.rain_boost <= MAX_RAIN_BOOST):
         errs.append(f"rain_boost {b.rain_boost} outside [0, {MAX_RAIN_BOOST}]")
     for name in ("presence_hold_s", "carpet_hold_s"):
@@ -313,7 +316,11 @@ def validate_bundle(b: ProfileBundle) -> List[str]:
 
 
 def bundle_expired(b: ProfileBundle, today: date) -> bool:
+    """Outside its validity window: past `valid_days`, or issued more than a
+    day after `today` (allowing for time zones), which no honest CMS does and
+    which would otherwise put the 400-day limit out of reach."""
     try:
-        return today > date.fromisoformat(b.issued) + timedelta(days=b.valid_days)
+        issued = date.fromisoformat(b.issued)
+        return today > issued + timedelta(days=b.valid_days) or issued > today + timedelta(days=1)
     except (ValueError, OverflowError):
         return True                    # unreadable expiry: treat as expired (validation refuses these)

@@ -88,6 +88,7 @@ class Photometry:
     keywords: Dict[str, str] = field(default_factory=dict)
     street_side_h: float = 90.0
     tilt_ignored: bool = False
+    file_generation_type: Optional[float] = None  # LM-63-2019 only: how the file was made, never a multiplier
 
     def __post_init__(self):
         self._zcache: Dict[Tuple[float, float, float], Dict[str, float]] = {}
@@ -286,12 +287,31 @@ def _expand(h: List[float], cd: List[List[float]], sym: str) -> Tuple[List[float
 
 
 # ------------------------------------------------------------------ LM-63
+def _lm63_year(first_line: str) -> Optional[int]:
+    """The LM-63 edition a file's first line names ('IESNA:LM-63-2002',
+    'IES:LM-63-2019', 'IESNA91'), or None for the 1986 format, which has no
+    such line."""
+    s = first_line.lstrip("﻿ï»¿").strip().upper()     # a UTF-8 BOM, read as UTF-8 or latin-1
+    m = re.match(r"IES(?:NA)?\s*:\s*LM-63-(\d{4})", s)
+    if m:
+        return int(m.group(1))
+    m = re.match(r"IESNA\s*(\d{2})\b", s)
+    return 1900 + int(m.group(1)) if m else None
+
+
 def parse_ies(text: str, street_side_h: float = 90.0) -> Photometry:
-    """Parse an IES LM-63 (1991, 1995, 2002 or 2019) photometric file.
+    """Parse an IES LM-63 (1986, 1991, 1995, 2002 or 2019) photometric file.
     Only Type C photometry, the roadway and area-lighting norm, is accepted.
     Anything after the candela table (an end-of-file marker, a note) is
-    ignored."""
+    ignored.
+
+    The second value after the photometric line depends on the edition: the
+    ballast-lamp photometric factor up to LM-63-1995 (applied to the
+    candela values), 'future use' in LM-63-2002 (ignored), and the file
+    generation type in LM-63-2019 (1.10000 means 'accredited laboratory',
+    not 10 % more light: recorded in `file_generation_type`, never applied)."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    year = _lm63_year(lines[0])
     keywords: Dict[str, str] = {}
     last_key: Optional[str] = None
     i = 0
@@ -343,10 +363,12 @@ def parse_ies(text: str, street_side_h: float = 90.0) -> Photometry:
         raise ValueError("angles must be ascending")
     if not (v[0] in (0.0, 90.0) and v[-1] in (90.0, 180.0)):
         raise ValueError(f"vertical angles {v[0]}..{v[-1]} are not a Type C range")
-    scale = mult * (ballast if ballast > 0 else 1.0) * (bl_factor if 0 < bl_factor <= 2 else 1.0)
+    blpf_edition = year is None or year < 2002                   # a multiplier only up to LM-63-1995
+    scale = mult * (ballast if ballast > 0 else 1.0) * (bl_factor if blpf_edition and 0 < bl_factor <= 2 else 1.0)
     cd = [[raw[k * n_v + j] * scale for j in range(n_v)] for k in range(n_h)]
     rated = None if lm_per_lamp < 0 else n_lamps * lm_per_lamp
-    return Photometry(v, h, cd, rated, watts if watts > 0 else None, keywords, street_side_h, tilt_ignored)
+    return Photometry(v, h, cd, rated, watts if watts > 0 else None, keywords, street_side_h, tilt_ignored,
+                      bl_factor if year is not None and year >= 2019 else None)
 
 
 def load_ies(path: str, street_side_h: float = 90.0) -> Photometry:

@@ -135,7 +135,7 @@ def signal(night_of: date, site: Site = DEFAULT_SITE, migration: Optional[Dict[s
     return {
         "kind": "night_signal", "schema": SCHEMA, "issuer": issuer,
         "issued": _iso(issued or datetime.now(UTC)),
-        "site": {"name": site.name, "lat": site.lat, "lon": site.lon, "tz": site.tz},
+        "site": {"key": site.key, "name": site.name, "lat": site.lat, "lon": site.lon, "tz": site.tz},
         "night_of": night_of.isoformat(),
         "sun": {"dusk": _iso(dusk), "dawn": _iso(dawn), "astronomical_dusk": _iso(adusk),
                 "astronomical_dawn": _iso(adawn)},
@@ -231,6 +231,15 @@ def _ics_time(iso: str) -> str:
     return iso.replace("-", "").replace(":", "")
 
 
+def _site_tag(doc: dict) -> str:
+    """The site in an event's UID, so two cities' feeds never share one
+    (RFC 5545 3.8.4.7: a UID is globally unique): the preset key, or the
+    coordinates for a document without one."""
+    s = doc.get("site") or {}
+    tag = s.get("key") or (f"{s['lat']:.4f}_{s['lon']:.4f}" if "lat" in s and "lon" in s else "site")
+    return "".join(c if c.isalnum() or c in "-_." else "-" for c in str(tag))
+
+
 def to_ics(docs: Iterable[dict], name: str = "Night Signal") -> str:
     """An iCalendar feed: one event per night from curfew until the dark
     ends, and a whole-night 'Lights Out' event on migration nights. Under
@@ -251,7 +260,7 @@ def to_ics(docs: Iterable[dict], name: str = "Night Signal") -> str:
         for kind, start, end, summary in events:
             if not (start and end) or _t(end) <= _t(start):
                 continue
-            for line in ("BEGIN:VEVENT", f"UID:{d['night_of']}-{kind}@nocturne", f"DTSTAMP:{stamp}",
+            for line in ("BEGIN:VEVENT", f"UID:{d['night_of']}-{kind}@nocturne-{_site_tag(d)}", f"DTSTAMP:{stamp}",
                          f"DTSTART:{_ics_time(start)}", f"DTEND:{_ics_time(end)}", f"SUMMARY:{_ics_text(summary)}",
                          "END:VEVENT"):
                 lines += _ics_fold(line)

@@ -128,7 +128,7 @@ The documented 2027 model compares these options:
 
 *Dollar savings assume $0.13/kWh and exclude implementation costs. Warmer lights use more electricity in this model for a given amount of useful light, so the final row has a different tradeoff.*
 
-The first option is called **Phase 0**: prepare schedules for existing compatible controllers before buying new equipment. Its default minimum brightness is 50% on streets without presence sensing, with higher applicable safety floors retained. Exported schedules still need translation into the city's actual management system.
+The first option is called **Phase 0**: prepare schedules for existing compatible controllers before buying new equipment. Its default minimum brightness is 50% on streets without presence sensing, with higher applicable safety floors retained. Streets on the High-Injury Network get separate programmes that never drop below 60%; the city assigns those from its own list. Exported schedules still need translation into the city's actual management system.
 
 **These estimates depend on the baseline.** If the city already dims its lights overnight, the additional savings would be smaller. New adaptive controllers also do not pay for themselves through energy savings alone at ordinary hardware costs; the [playbook](docs/PLAYBOOK.md) explains that tradeoff.
 

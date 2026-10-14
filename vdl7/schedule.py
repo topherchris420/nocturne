@@ -18,6 +18,12 @@ sensors or live data:
   level their expected loop volume would ask for in that hour (Section
   6.4 traffic curve), because no live volume arrives to raise them.
 
+Segments on the Vision Zero High-Injury Network get their own programmes
+(`hin/<class>`, and `<zone>/hin/<class>` for zone overlays) that never go
+below the bundle's HIN floor, as the firmware would hold them. The
+inventory does not say which segments those are, so the integrator assigns
+these programmes from the city's HIN list.
+
 The business case (vdl7.annual) integrates exactly these programmes, so the
 Phase 0 saving it reports is the saving of the files written here.
 """
@@ -64,8 +70,9 @@ def _traffic_level(prof: ClassProfile, base: float, h0: float, h1: float) -> flo
 
 
 def program(prof: ClassProfile, unsensed_floor: float = UNSENSED_FLOOR,
-            levels: Optional[Tuple[int, ...]] = None) -> List[Step]:
-    """The night's steps for one road class (or a zone's levels for it)."""
+            levels: Optional[Tuple[int, ...]] = None, hin_floor: Optional[float] = None) -> List[Step]:
+    """The night's steps for one road class (or a zone's levels for it); with
+    `hin_floor`, for a segment on the High-Injury Network."""
     check_floor(unsensed_floor)
     lv = levels or prof.levels
     base = {ph: float(v) for ph, v in zip(PHASE_ORDER, lv)}
@@ -79,6 +86,8 @@ def program(prof: ClassProfile, unsensed_floor: float = UNSENSED_FLOOR,
         steps = [Step("dusk", math.ceil(max(base[Phase.EVENING], floor)))]
         for ph, h in PHASE_START.items():
             steps.append(Step(f"{h:02d}:00", math.ceil(max(base[ph], floor))))
+    if hin_floor is not None:
+        steps = [Step(s.at, max(s.level, math.ceil(hin_floor))) for s in steps]
     steps = [s for i, s in enumerate(steps) if i == 0 or s.level != steps[i - 1].level]   # drop no-op steps
     steps.append(Step("dawn", 0))
     return steps
@@ -99,17 +108,26 @@ def level_at(steps: Sequence[Step], local_hour: float) -> float:
 
 
 def programs(bundle: Optional[ProfileBundle] = None, unsensed_floor: float = UNSENSED_FLOOR) -> Dict[str, dict]:
-    """One programme per road class, plus one per zone overlay and class."""
+    """One programme per road class, plus one per zone overlay and class,
+    each with a High-Injury Network variant wherever the HIN floor changes it."""
     bundle = bundle or default_bundle()
     out: Dict[str, dict] = {}
-    for road in RoadClass:
+
+    def add(name: str, road: RoadClass, levels: Optional[Tuple[int, ...]], **extra) -> None:
         prof = bundle.profiles[road]
-        out[road.value] = {"road_class": road.value, "steps": [s.__dict__ for s in program(prof, unsensed_floor)]}
+        steps = program(prof, unsensed_floor, levels)
+        out[name] = {"road_class": road.value, **extra, "steps": [s.__dict__ for s in steps]}
+        hin = program(prof, unsensed_floor, levels, hin_floor=bundle.hin_floor)
+        if hin != steps:
+            prefix, _, cls = name.rpartition("/")
+            out[f"{prefix + '/' if prefix else ''}hin/{cls}"] = {"road_class": road.value, **extra, "hin": True,
+                                                                  "steps": [s.__dict__ for s in hin]}
+
+    for road in RoadClass:
+        add(road.value, road, None)
     for zone, z in bundle.zones.items():
         for road, lv in z.items():
-            prof = bundle.profiles[road]
-            out[f"{zone}/{road.value}"] = {"road_class": road.value, "zone": zone,
-                                           "steps": [s.__dict__ for s in program(prof, unsensed_floor, lv)]}
+            add(f"{zone}/{road.value}", road, lv, zone=zone)
     return out
 
 
@@ -121,6 +139,8 @@ def export(bundle: Optional[ProfileBundle] = None, tz: str = "", unsensed_floor:
                      "the node's photocell may switch on earlier, never hold the light off",
         "level": "percent of each luminaire's commissioned full output",
         "unsensed_floor_pct": unsensed_floor,
+        "hin_floor_pct": bundle.hin_floor,
+        "hin": "programmes marked hin are for segments on the High-Injury Network; assign them from the city's list",
         "programs": programs(bundle, unsensed_floor),
     }
     return json.dumps(doc, indent=2) + "\n"

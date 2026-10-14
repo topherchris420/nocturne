@@ -1,6 +1,8 @@
 <title>Nocturne for Washington</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- Web fonts are optional: a non-matching media sheet never holds up the page when the font host is slow or
+     blocked (opened from a ZIP, offline, behind a filter); the system stacks in the variables take over. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Layout: a decision brief read top to bottom in the order the decision is made:
    what DC has, what it saves, what a street does, what the sky does, how it rolls out,
@@ -155,7 +157,10 @@ ol.decide b { font-weight: 600; }
 footer { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--muted); max-width: 80ch; }
 footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.tablewrap:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
 </style>
+<!-- end head: tools/make_brief.py puts everything above this line in <head> -->
 
 <div class="wrap">
   <div class="head">
@@ -166,7 +171,7 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
     <div class="figures" id="figures">
       <div class="fig"><div class="v" id="figGwh">4.9<small>GWh / yr</small></div><div class="l">saved by Phase 0: a schedule on the nodes DC already has</div></div>
       <div class="fig"><div class="v" id="figUsd">$641K<small>/ yr</small></div><div class="l" id="figUsdL">at $0.13 per kWh; set your own rate below</div></div>
-      <div class="fig"><div class="v">30<small>%</small></div><div class="l">less streetlight and streetlight skyglow, with every street above its RP-8 floor</div></div>
+      <div class="fig"><div class="v" id="figPct">30<small>%</small></div><div class="l">less streetlight and streetlight skyglow, with every street above its RP-8 floor</div></div>
       <div class="fig"><div class="v">≈2×</div><div class="l">the stars over Rock Creek Park after midnight if the rest of the city keeps the curfew too</div></div>
     </div>
   </div>
@@ -195,8 +200,8 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
       <div>
         <h3>Energy by month, 2027</h3>
         <div class="legend" id="legendMonth"></div>
-        <div class="chart" id="chartMonth" tabindex="0" aria-label="Energy by month in 2027 for today, Phase 0 and Phase 1. Use the arrow keys to read each month."></div>
-        <details><summary>Table view</summary><div class="tablewrap"><table id="tableMonth"></table></div></details>
+        <div class="chart" id="chartMonth" tabindex="0" role="group" aria-label="Energy by month in 2027 for today, Phase 0 and Phase 1. Use the arrow keys to read each month."></div>
+        <details><summary>Table view</summary><div class="tablewrap" tabindex="0" role="region" aria-label="Energy by month, table"><table id="tableMonth"></table></div></details>
       </div>
     </div>
   </section>
@@ -208,10 +213,10 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
       <div class="controls"><div class="control"><span class="lab" id="clsLab">Road class</span>
         <div class="seg" role="group" aria-labelledby="clsLab" id="clsSeg"></div></div></div>
       <div class="legend" id="legendNight"></div>
-      <div class="chart" id="chartNight" tabindex="0" aria-label="Output through the night by strategy. Use the arrow keys to move through the night."></div>
+      <div class="chart" id="chartNight" tabindex="0" role="group" aria-label="Output through the night by strategy. Use the arrow keys to move through the night."></div>
       <p class="note" id="nightNote"></p>
       <p class="note mono small" id="nightProg"></p>
-      <details><summary>Table view</summary><div class="tablewrap"><table id="tableNight"></table></div></details>
+      <details><summary>Table view</summary><div class="tablewrap" tabindex="0" role="region" aria-label="Output through the night, table"><table id="tableNight"></table></div></details>
     </div>
   </section>
 
@@ -227,12 +232,12 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
         <div class="control"><label for="cut">Other lighting cut after 23:00</label><input type="range" id="cut" min="0" max="0.8" step="0.05" value="0.5"><output id="cutOut" for="cut">50 %</output></div>
       </div>
       <div class="skies">
-        <figure class="sky" style="margin:0"><canvas id="sky0" aria-label="Simulated sky today"></canvas><figcaption class="cap"><b>Today</b><span id="cap0"></span><span class="stars" id="st0"></span></figcaption></figure>
-        <figure class="sky" style="margin:0"><canvas id="sky1" aria-label="Simulated sky with Nocturne"></canvas><figcaption class="cap"><b>With Nocturne</b><span id="cap1"></span><span class="stars" id="st1"></span></figcaption></figure>
-        <figure class="sky" style="margin:0"><canvas id="sky2" aria-label="Simulated sky with Nocturne and the Night Signal"></canvas><figcaption class="cap"><b>Nocturne + Night Signal</b><span id="cap2"></span><span class="stars" id="st2"></span></figcaption></figure>
+        <figure class="sky" style="margin:0"><canvas id="sky0" role="img" aria-label="Simulated sky today"></canvas><figcaption class="cap"><b>Today</b><span id="cap0"></span><span class="stars" id="st0"></span></figcaption></figure>
+        <figure class="sky" style="margin:0"><canvas id="sky1" role="img" aria-label="Simulated sky with Nocturne"></canvas><figcaption class="cap"><b>With Nocturne</b><span id="cap1"></span><span class="stars" id="st1"></span></figcaption></figure>
+        <figure class="sky" style="margin:0"><canvas id="sky2" role="img" aria-label="Simulated sky with Nocturne and the Night Signal"></canvas><figcaption class="cap"><b>Nocturne + Night Signal</b><span id="cap2"></span><span class="stars" id="st2"></span></figcaption></figure>
       </div>
       <p class="note" id="skyNote"></p>
-      <details open><summary>All six places</summary><div class="tablewrap"><table id="tableSky"></table></div></details>
+      <details open><summary>All six places</summary><div class="tablewrap" tabindex="0" role="region" aria-label="Sky at all six places, table"><table id="tableSky"></table></div></details>
     </div>
   </section>
 
@@ -270,7 +275,7 @@ footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); 
   <footer>
     <p><b>How these numbers were made.</b> The fleet is DDOT's streetlight asset layer. Crashes come from the District's crash layer. Energy is a year of nights on each node's own astronomical clock and DST rule. The sky is a single-scattering model, molecules plus aerosol, over DC's 550 m light grid. It is calibrated to Tucson's measured streetlight share until DC has its own meters.</p>
     <p><b>Assumed:</b> the energy price and grid factor (both set above), aerosol load, ground reflectance, luminaire efficacy and the post-top globes' uplight. The baseline assumes lights run at their commissioned maximum all night. A dimming schedule already in place would shrink the Phase 0 saving.</p>
-    <p>Everything here reproduces from the open-source Nocturne repository: <code>nocturne business-case</code>, <code>nocturne sky</code> and <code>nocturne pilot</code>. The firmware, the 192 tests and the playbook are at <a href="https://github.com/topherchris420/nocturne">github.com/topherchris420/nocturne</a>.</p>
+    <p>Everything here reproduces from the open-source Nocturne repository: <code>nocturne business-case</code>, <code>nocturne sky</code> and <code>nocturne pilot</code>. The firmware, its test suite and the playbook are at <a href="https://github.com/topherchris420/nocturne">github.com/topherchris420/nocturne</a>.</p>
   </footer>
 </div>
 
@@ -318,24 +323,36 @@ function legend(node, series) {
 
 // ------------------------------------------------------------ line chart
 function lineChart(host, opts) {
-  const W = 760, H = opts.height || 300, m = { l: 46, r: 96, t: opts.bands ? 26 : 12, b: 30 };
-  const pw = W - m.l - m.r, ph = H - m.t - m.b;
-  const xs = opts.xs, n = xs.length;
+  // The viewBox follows the host's width (between 340 and 760 units), so on a phone the text is drawn
+  // close to its CSS size instead of being shrunk with a desktop-width drawing.
+  const W = Math.max(340, Math.min(760, Math.round(host.clientWidth || 760))), H = opts.height || 300, xs = opts.xs, n = xs.length;
+  const glyph = 6.6;                                   // average glyph width at 12 px, for layout estimates
+  const narrow = W < 560, endText = (s, v) => narrow ? s.name : s.name + ' ' + opts.endFmt(v);
+  const m = { l: 46, r: Math.max(narrow ? 0 : 96, Math.ceil(Math.max(...opts.series.map(s => endText(s, s.values[n - 1]).length)) * glyph) + 24), t: 12, b: 30 };
+  const pw = W - m.l - m.r;
   const x = i => m.l + pw * (opts.xPos ? opts.xPos(i) : i / (n - 1));
+  // band labels: one that would touch the label before it goes on a second row
+  const rowEnd = [-Infinity, -Infinity];
+  const bandRow = (opts.bands || []).map(b => { const x0 = m.l + pw * b.from + 4, r = x0 >= rowEnd[0] + 6 ? 0 : 1; rowEnd[r] = x0 + b.label.length * glyph * 0.96; return r; });
+  const rows = bandRow.includes(1) ? 2 : 1;
+  if (opts.bands) m.t = rows === 2 ? 38 : 26;
+  const ph = H - m.t - m.b;
   const y = v => m.t + ph * (1 - v / opts.yMax);
   host.textContent = '';
   const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-hidden': 'true' }, host);
-  if (opts.bands) for (const b of opts.bands) {
+  if (opts.bands) opts.bands.forEach((b, k) => {
     const x0 = m.l + pw * b.from, x1 = m.l + pw * b.to;
     el('rect', { x: x0, y: m.t, width: Math.max(0, x1 - x0), height: ph, fill: b.shade ? 'var(--panel-2)' : 'transparent' }, svg);
     if (b.from > 0) el('line', { x1: x0, x2: x0, y1: m.t, y2: m.t + ph, stroke: 'var(--grid)', 'stroke-width': 1 }, svg);
-    text(svg, x0 + 4, m.t - 9, b.label, { 'font-size': 11.5 });
-  }
+    text(svg, x0 + 4, m.t - 9 - (rows === 2 && bandRow[k] === 0 ? 12 : 0), b.label, { 'font-size': 11.5 });
+  });
   for (const v of opts.yTicks) {
     el('line', { x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }, svg);
     text(svg, m.l - 8, y(v) + 4, opts.yFmt(v), { 'text-anchor': 'end' });
   }
-  for (const i of opts.xTickIdx) text(svg, x(i), H - 8, opts.xFmt(i), { 'text-anchor': 'middle' });
+  // x ticks, thinned so neighbouring labels never touch
+  let lastX = -Infinity;
+  for (const i of opts.xTickIdx) { const lab = opts.xFmt(i), w = lab.length * glyph; if (x(i) - lastX < w + 10) continue; text(svg, x(i), H - 8, lab, { 'text-anchor': 'middle' }); lastX = x(i); }
   const ends = [];
   for (const s of opts.series) {
     const d = s.values.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1)).join('');
@@ -350,14 +367,16 @@ function lineChart(host, opts) {
     const x0 = x(n - 1);
     el('circle', { cx: x0, cy: e.yy, r: 4, fill: e.s.color, stroke: 'var(--panel)', 'stroke-width': 2 }, svg);
     if (Math.abs(e.ly - e.yy) > 2) el('line', { x1: x0 + 6, x2: x0 + 14, y1: e.yy, y2: e.ly, stroke: 'var(--faint)', 'stroke-width': 1 }, svg);
-    text(svg, x0 + 16, e.ly + 4, e.s.name + ' ' + opts.endFmt(e.v), { class: 'endlab' });
+    text(svg, x0 + 16, e.ly + 4, endText(e.s, e.v), { class: 'endlab' });
   }
   // hover layer: crosshair snaps to the nearest x; one tooltip lists every series
   const cross = el('line', { x1: 0, x2: 0, y1: m.t, y2: m.t + ph, stroke: 'var(--faint)', 'stroke-width': 1, visibility: 'hidden' }, svg);
   const dots = opts.series.map(s => el('circle', { r: 4, fill: s.color, stroke: 'var(--panel)', 'stroke-width': 2, visibility: 'hidden' }, svg));
   const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; host.appendChild(tip);
+  // what a screen reader hears as the arrow keys move through the chart
+  const live = document.createElement('div'); live.className = 'sr-only'; live.setAttribute('aria-live', 'polite'); live.setAttribute('aria-atomic', 'true'); host.appendChild(live);
   let cur = null;
-  function show(i) {
+  function show(i, announce) {
     cur = i; const cx = x(i);
     cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
     opts.series.forEach((s, k) => { dots[k].setAttribute('cx', cx); dots[k].setAttribute('cy', y(s.values[i])); dots[k].setAttribute('visibility', 'visible'); });
@@ -365,6 +384,7 @@ function lineChart(host, opts) {
     const t = document.createElement('div'); t.className = 't'; t.textContent = opts.tipTitle(i); tip.appendChild(t);
     for (const s of opts.series) { const r = document.createElement('div'); r.className = 'row'; const k = document.createElement('i'); k.className = 'key'; k.style.background = s.color; const b = document.createElement('b'); b.textContent = opts.tipFmt(s.values[i]); const nm = document.createElement('span'); nm.textContent = s.name; r.append(k, b, nm); tip.appendChild(r); }
     tip.hidden = false;
+    if (announce) live.textContent = opts.tipTitle(i) + ': ' + opts.series.map(s => s.name + ' ' + opts.tipFmt(s.values[i])).join(', ') + '.';
     const box = host.getBoundingClientRect(), scale = box.width / W;
     let left = cx * scale + 14; if (left + 170 > box.width) left = cx * scale - 184;
     tip.style.left = Math.max(0, left) + 'px'; tip.style.top = (m.t * scale) + 'px';
@@ -374,7 +394,7 @@ function lineChart(host, opts) {
   hit.addEventListener('pointermove', ev => {
     const box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) * W / box.width;
     let best = 0, bd = Infinity; for (let i = 0; i < n; i++) { const d = Math.abs(x(i) - px); if (d < bd) { bd = d; best = i; } }
-    show(best);
+    show(best, false);
   });
   hit.addEventListener('pointerleave', hide);
   host.onkeydown = ev => {
@@ -382,7 +402,7 @@ function lineChart(host, opts) {
     ev.preventDefault();
     const step = opts.keyStep || 1;
     const i = cur === null ? 0 : Math.max(0, Math.min(n - 1, cur + (ev.key === 'ArrowRight' ? step : -step)));
-    show(i);
+    show(i, true);
   };
   host.onblur = hide;
 }
@@ -391,8 +411,6 @@ function lineChart(host, opts) {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const NODES = D.year.poles;          // Phase 1 puts a node on every pole whose saving it counts
 {
-  const y50 = D.year.by_floor['50'], gwh = ((y50.today.mwh - y50.phase0.mwh) / 1000).toFixed(1);
-  $('ledeGwh').textContent = gwh; $('figGwh').firstChild.textContent = gwh;
   $('segCount').textContent = D.pilot.segments.toLocaleString('en-US');
   $('ledeNet').textContent = Math.round(100 * D.fleet.registered.yes / (D.fleet.registered.yes + D.fleet.registered.no));
 }
@@ -413,6 +431,10 @@ function renderCalc() {
   const usd0 = (today - p0) * 1000 * calc.price, usd1 = (today - p1) * 1000 * calc.price;
   $('breakEven').textContent = `Phase 0 pays for itself within three years if integrating the schedule costs less than ${fmtUsd(3 * usd0)}. ` +
     `Phase 1's VDL-7 nodes do not pay back on energy alone: with one on every pole, over ten years each could cost at most ${fmtUsd(Math.max(0, (usd1 - usd0) * 10 / NODES))}. Their case is light where people are and darkness where they are not.`;
+  // the headline figures follow the floor chosen here
+  const gwh = ((today - p0) / 1000).toFixed(1);
+  $('ledeGwh').textContent = gwh; $('figGwh').firstChild.textContent = gwh;
+  $('figPct').firstChild.textContent = Math.round(100 * (1 - y.phase0.light_vs_today));
   $('figUsd').firstChild.textContent = fmtUsd(usd0);
   $('figUsdL').textContent = `a year at $${calc.price.toFixed(3)} per kWh; set your own rate below`;
   const series = SERIES.map(s => ({ name: s.name, color: s.color, values: y[s.key].mwh_by_month }));
@@ -534,7 +556,8 @@ function renderSky() {
   for (const b of $('momSeg').querySelectorAll('button')) b.addEventListener('click', () => { sky.moment = b.dataset.m; for (const o of $('momSeg').querySelectorAll('button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); renderSky(); });
   $('share').addEventListener('input', e => { sky.share = +e.target.value; $('shareOut').textContent = Math.round(sky.share * 100) + ' %'; renderSky(); });
   $('cut').addEventListener('input', e => { sky.cut = +e.target.value; $('cutOut').textContent = Math.round(sky.cut * 100) + ' %'; renderSky(); });
-  let t = null; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(renderSky, 120); });
+  let t = null, lastW = $('chartMonth').clientWidth;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { renderSky(); const w = $('chartMonth').clientWidth; if (w !== lastW) { lastW = w; renderCalc(); renderNight(); } }, 120); });
 })();
 
 // ------------------------------------------------------------ rollout

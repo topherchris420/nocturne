@@ -25,10 +25,11 @@ from vdl7.skyglow import (CLASSES, MOMENTS, NATURAL_CD, PLACES_DC, SKY_STRATEGIE
 
 TEMPLATE = os.path.join(os.path.dirname(__file__), "brief", "template.html")
 OUT = os.path.join(ROOT, "docs", "brief.html")
+HEAD_END = "<!-- end head"     # the template's title, meta, font link and styles sit above this marker
 SKELETON = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
             '<style>:root{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}'
-            '[hidden]{display:none!important}</style></head><body>{page}</body></html>\n')
+            '[hidden]{display:none!important}</style>\n{head}</head><body>\n{page}</body></html>\n')
 SEED = "ILLUSTRATIVE DRAW - the real seed is published before the draw"
 
 
@@ -81,12 +82,24 @@ def data() -> dict:
     return out
 
 
+def render(template: str, payload: dict) -> str:
+    """The template's head part (above the HEAD_END marker line) goes in <head>, the rest in <body>."""
+    k = template.find(HEAD_END)
+    if k < 0:
+        raise ValueError(f"template has no {HEAD_END!r} marker")
+    nl = template.find("\n", k)
+    head, body = template[:k], template[nl + 1:] if nl >= 0 else ""
+    body = body.replace("__DATA__", json.dumps(payload, separators=(",", ":")))
+    return SKELETON.replace("{head}", head).replace("{page}", body)
+
+
 def main() -> int:
     with open(TEMPLATE) as f:
-        page = f.read().replace("__DATA__", json.dumps(data(), separators=(",", ":")))
+        template = f.read()
+    page = render(template, data())
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:
-        f.write(SKELETON.replace("{page}", page))
+        f.write(page)
     print("wrote", os.path.relpath(OUT, ROOT))
     return 0
 

@@ -140,7 +140,7 @@ class Flash:
             self.install_log.append(f"REJECT version {new.version} <= {floor}")
             return False
         if today is not None and bundle_expired(new, today):
-            self.install_log.append(f"REJECT expired bundle v{new.version} issued {new.issued}")
+            self.install_log.append(f"REJECT bundle v{new.version} issued {new.issued}: expired or not yet valid")
             return False
         inactive = 1 - self.active
         self.banks[inactive] = (msg.payload, msg.signature)
@@ -251,7 +251,6 @@ class VDL7Controller:
         self._last_gateway = -math.inf
         self._presence_until = -math.inf
         self._carpet_until = -math.inf
-        self._loop: Optional[Tuple[float, float]] = None     # (veh/15 min, received mono)
         self._last_checkpoint = -math.inf
         # photocell learning (on clocked nights)
         self._pc_dusk_local: Optional[datetime] = None
@@ -259,6 +258,9 @@ class VDL7Controller:
         # SAFE-mode anchors
         self._pc_dusk_mono: Optional[float] = None
         self._last_good_dusk_mono: Optional[float] = None
+        self._last_raw_dusk_mono: Optional[float] = None    # as observed, weather or not
+        self._dark_since: Optional[float] = None
+        self._last_dawn_mono: Optional[float] = None        # end of the last full-length night
         self._safe_anchor: Optional[Tuple[float, float]] = None   # (hour, mono)
         # alarms and metering
         self.alarms: Dict[str, float] = {}          # name -> raised at mono
@@ -281,10 +283,16 @@ class VDL7Controller:
         One hello returns the node to ONLINE; one time sync leaves SAFE."""
         self._last_backhaul = mono
         if utc is not None:
-            self.rtc.sync(mono, utc)
+            self._sync(mono, utc, "backhaul")
 
     def gnss_fix(self, mono: float, utc: datetime) -> None:
-        self.rtc.sync(mono, utc)
+        self._sync(mono, utc, "GNSS")
+
+    def _sync(self, mono: float, utc: datetime, source: str) -> None:
+        try:
+            self.rtc.sync(mono, utc)
+        except ValueError as e:                # keep the clock we have rather than a time we can't place
+            self.log.append(f"{mono:.0f} REJECT {source} time sync: {e}")
 
     def mesh_gateway_seen(self, mono: float) -> None:
         """Mesh layer reports a path to a node with live backhaul."""
@@ -325,7 +333,12 @@ class VDL7Controller:
                     self._last_good_dusk_mono = mono
             else:                              # SAFE: reject weather against yesterday's dusk
                 self._pc_dusk_mono = self._plausible_dusk(mono)
+            self._last_raw_dusk_mono = self._dark_since = mono
         else:                                  # dark -> light: dawn observed
+            night_s = self.flash.checkpoint.prev_night_len_h * 3600.0
+            if self._dark_since is not None and mono - self._dark_since >= night_s / 2:
+                self._last_dawn_mono = mono    # a night, not a passing storm
+            self._dark_since = None
             if (utc is not None and self._pc_dusk_local is not None
                     and self._near_sun_transition(utc, dusk=False)):
                 self._learn_from_photocell(self._pc_dusk_local, to_local(utc, self.cfg.tz))
@@ -387,17 +400,21 @@ class VDL7Controller:
         self.replay.accept(ev.seq)
         self.flash.replay_hi = self.replay.hi              # FRAM write in hardware
         ev.via = via
-        ev.ttl_s = self._remaining_ttl(ev, mono)
+        remaining = self._remaining_ttl(ev, mono)
+        ev.age_s, ev.ttl_s = max(0.0, ev.ttl_s - remaining), remaining
         if ev.kind == EventKind.CANCEL:
             target = str(ev.payload.get("target", ""))
-            ok = self.events.cancel(target)
-            if ok and any(a.event_id == target for a in self.audit):
-                self._audit(self._audit_last(target), mono, "cancelled")
-            return ok
+            if self.events.cancel(target, mono, ev.seq):
+                if any(a.event_id == target for a in self.audit):
+                    self._audit(self._audit_last(target), mono, "cancelled")
+            else:
+                self.log.append(f"{mono:.0f} CANCEL {target} before it arrived: held")
+            return True
+        if self.events.cancelled_before(ev, mono):
+            self.log.append(f"{mono:.0f} REJECT {ev.kind.value} {ev.id}: already cancelled")
+            return False
         if record is not None:
             self._audit(record, mono, "applied")
-        if ev.kind == EventKind.LOOP_VOLUME:
-            self._loop = (float(ev.payload["veh15"]), mono)
         self.events.put(ev, mono)
         return True
 
@@ -490,16 +507,35 @@ class VDL7Controller:
     def _plausible_dusk(self, mono: float) -> float:
         """SAFE-mode anchor. If a dusk was seen yesterday in this boot, a
         dusk more than 45 min off 24 h later is weather: anchor on the
-        expected time instead."""
+        expected time instead. The exception is a dusk that agrees with the
+        dusk actually seen the evening before, or with the last dawn plus
+        the learned length of the day: then the reference itself was weather
+        (storm darkness running into the first clockless night, which had
+        nothing to be checked against), and this dusk replaces it."""
         last = self._last_good_dusk_mono
         if last is not None:
             expected = last + 86400.0 * round((mono - last) / 86400.0)
             if expected > last and abs(mono - expected) > LEARN_GATE_S:
-                self.log.append(f"{mono:.0f} SAFE dusk {(mono - expected) / 60:+.0f} min off schedule: using expected")
-                self._last_good_dusk_mono = expected
-                return expected
+                off = (mono - expected) / 60
+                if self._dusk_confirmed(mono):
+                    self.log.append(f"{mono:.0f} SAFE dusk {off:+.0f} min off schedule: confirmed, re-anchoring")
+                else:
+                    self.log.append(f"{mono:.0f} SAFE dusk {off:+.0f} min off schedule: using expected")
+                    self._last_good_dusk_mono = expected
+                    return expected
         self._last_good_dusk_mono = mono
         return mono
+
+    def _dusk_confirmed(self, mono: float) -> bool:
+        """Does a second, independent observation put dusk here?"""
+        def near(ref: Optional[float], min_days: int) -> bool:
+            if ref is None:
+                return False
+            days = round((mono - ref) / 86400.0)
+            return days >= min_days and abs(mono - ref - 86400.0 * days) <= LEARN_GATE_S
+        day_s = 86400.0 - self.flash.checkpoint.prev_night_len_h * 3600.0
+        dawn = self._last_dawn_mono
+        return near(self._last_raw_dusk_mono, 1) or near(dawn + day_s if dawn is not None else None, 0)
 
     def _seed_learning(self, utc: datetime) -> None:
         """First trusted tick: seed tonight's dark midpoint from the astro
@@ -653,7 +689,10 @@ class VDL7Controller:
         #    overlay replaces the class levels; on a migration night the
         #    presence classes hold their 22:00 level from dusk. Storm darkness
         #    with the sun up (R-SAF-4) keeps the evening level whatever the alert.
-        phase = phase_for_hour(hour) if hour is not None else Phase.STEP
+        if storm_dark:
+            phase = Phase.EVENING
+        else:
+            phase = phase_for_hour(hour) if hour is not None else Phase.STEP
         levels = bundle.levels_for(cfg.road, cfg.zone)
         if cfg.zone and cfg.road in bundle.zones.get(cfg.zone, {}):
             reasons.append(f"ZONE:{cfg.zone}")
@@ -665,11 +704,14 @@ class VDL7Controller:
                 base = step_level
             reasons.append("MIGRATION")
 
-        # 4. Activity in [0, 1]. Loop volume only while ONLINE or relayed in MESH.
+        # 4. Activity in [0, 1]. Loop volume only while ONLINE or relayed in MESH,
+        #    and only while its event is live and the count is under
+        #    loop_max_age_s old, counted from issue rather than arrival.
         activity = 0.0
-        if (mode in LOOP_MODES and self._loop is not None and prof.design_volume
-                and (mono - self._loop[1]) <= cfg.loop_max_age_s):
-            activity = min(1.0, max(0.0, self._loop[0] / prof.design_volume))
+        loop = self.events.latest(EventKind.LOOP_VOLUME, mono) if mode in LOOP_MODES else None
+        if (loop is not None and prof.design_volume
+                and (mono - loop.received_mono + loop.age_s) <= cfg.loop_max_age_s):
+            activity = min(1.0, max(0.0, float(loop.payload["veh15"]) / prof.design_volume))
             if activity > 0:
                 reasons.append("LOOP")
         presence = mono < self._presence_until
