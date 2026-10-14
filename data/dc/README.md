@@ -25,7 +25,7 @@ registration, and a ~550 m grid of lights and watts by class.
 | *Interstate*, *Other Freeway and Expressway* | arterial (counted in `freeway_poles_in_arterial`) |
 | *Collector* | collector |
 | *Local*, or no classification | local |
-| *Tunnel/Underpass*, *OHGS* (sign lighting), *Navigation*, *Tower* | kept static, not dimmed |
+| *Tunnel/Underpass*, *Under deck* (wallpacks under bridge decks), *OHGS* (sign lighting), *Navigation*, *Tower* | kept static, not dimmed |
 
 Only records with asset status *Active* are counted.
 

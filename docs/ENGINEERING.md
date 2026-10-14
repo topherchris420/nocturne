@@ -120,7 +120,7 @@ The tests can be run locally with `python -m pytest -q`. This repository current
 | Full Nocturne, rain 23:00–02:00 | 0.77 | — | 0.71 | — | 0.51 |
 | Full Nocturne, heavy-migration night (Night Signal at 18:00) | 0.71 | — | 0.65 | — | 0.48 |
 
-The skyglow waterfall goes 1.00 → −0.326 (dimming) → −0.135 (U0 optics) → −0.052 (warm spectrum) → **0.49**. The saving is 15.1 MWh per night, about **5.5 GWh a year** if every night were an October night on the spec's assumed fleet. `vdl7/annual.py` replaces both assumptions: on DC's real fleet (4.05 MW, against the spec's 4.44 MW) over every night of a real year, the adaptive saving is 5.7 GWh.
+The skyglow waterfall goes 1.00 → −0.326 (dimming) → −0.135 (U0 optics) → −0.052 (warm spectrum) → **0.49**. The saving is 15.1 MWh per night, about **5.5 GWh a year** if every night were an October night on the spec's assumed fleet. `vdl7/annual.py` replaces both assumptions: on DC's real fleet (3.95 MW at commissioned full output, against the spec's 4.44 MW) over every night of a real year, the adaptive saving is 5.5 GWh (16.4 → 10.9 GWh).
 
 **How these compare with the spec.** Every row is within 2–3 points of the printed Table 6.3, but they don't match exactly, and the spec's prose figures should be updated to these or to a re-run on real DDOT data:
 

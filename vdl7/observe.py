@@ -100,15 +100,13 @@ def read_sqm(path: str) -> List[Reading]:
                 if "MSAS" in names:
                     msas_col = names.index("MSAS")
         rows = [[p.strip() for p in ln.split(";")] for ln in data]
-        if msas_col is None:                 # no header: one column for the whole file, the one most rows suggest
-            votes: Dict[int, int] = {}
-            for parts in rows:
-                g = _guess_msas(parts)
-                if g is not None:
-                    votes[g] = votes.get(g, 0) + 1
-            if not votes:
-                return []
-            msas_col = max(votes, key=lambda k: (votes[k], k))
+        if msas_col is None and "MSAS" in [p.upper() for p in rows[0]]:     # a header row without the '#'
+            msas_col = [p.upper() for p in rows[0]].index("MSAS")
+            rows = rows[1:]
+        if not rows:
+            return []
+        if msas_col is None:                 # no header: one column for the whole file
+            msas_col = _msas_column(rows, path)
         out = []
         for parts in rows:
             try:
@@ -133,15 +131,42 @@ def read_sqm(path: str) -> List[Reading]:
     return out
 
 
-def _guess_msas(parts: Sequence[str]) -> Optional[int]:
-    for i in range(len(parts) - 1, 0, -1):
-        try:
-            v = float(parts[i])
-        except ValueError:
-            continue
-        if 10.0 <= v <= 25.0:
-            return i
-    return None
+_IDA_HEADER_HINT = ("add the IDA column header line, e.g. "
+                    "'# UTC Date & Time, Local Date & Time, Temperature, Counts, Frequency, MSAS'")
+
+
+def _msas_column(rows: Sequence[Sequence[str]], path: str) -> int:
+    """The sky-brightness column of a log without its IDA header, decided
+    once for the whole file. A candidate holds 10-25 mag/arcsec^2 in at
+    least half the rows. Columns that never change (a TESS-W's zero point,
+    a constant temperature or record type) are set aside when one that does
+    change exists, since the sky always drifts; of the rest the rightmost
+    wins, as MSAS comes after the temperatures and frequency in the
+    SQM-LU-DL and TESS-W layouts. When nothing tells the candidates apart,
+    the file needs its header."""
+    width = max((len(p) for p in rows), default=0)
+    cands: Dict[int, List[float]] = {}
+    for i in range(1, width):
+        vals = []
+        for parts in rows:
+            try:
+                v = float(parts[i])
+            except (ValueError, IndexError):
+                continue
+            if 10.0 <= v <= 25.0:
+                vals.append(v)
+        if vals and 2 * len(vals) >= len(rows):
+            cands[i] = vals
+    if not cands:
+        raise ValueError(f"{path}: no header names the MSAS column and no column holds sky brightness "
+                         f"(10-25 mag/arcsec^2); {_IDA_HEADER_HINT}")
+    varying = [i for i, vals in cands.items() if max(vals) > min(vals)]
+    if varying:
+        return max(varying)
+    if len(cands) == 1:
+        return next(iter(cands))
+    raise ValueError(f"{path}: no header names the MSAS column, and fields {', '.join(str(i + 1) for i in cands)} "
+                     f"could each be it (none changes from reading to reading); {_IDA_HEADER_HINT}")
 
 
 def _utc(text: str) -> datetime:
