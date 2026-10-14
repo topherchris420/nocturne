@@ -116,7 +116,7 @@ The other half of the case:
 
 ## Other cities
 
-- **Any city's clock.** The node runs on any city's POSIX TZ rule. It matches the IANA database for all 498 zones, and polar day and night are handled.
+- **Any city's clock.** The node runs on any city's POSIX TZ rule. It reproduces the IANA database for every zone one recurring rule can express, all but a handful of 498; zones it cannot (Gaza's and Hebron's Ramadan-linked switches) are refused at commissioning. Polar day and night are handled.
 - **Presets.** 17 site presets (`nocturne trace --site sydney`).
 - **Without an inventory.** `nocturne business-case --site X --fleet spec --lights N` sizes a fleet from the spec's assumptions.
 - **With an inventory.** `tools/fetch_dc_inventory.py` is the template for turning a city's asset layer into `fleet.json` and `grid.csv`.

@@ -18,7 +18,7 @@ This version turns that firmware into a program a city can start this quarter:
   - The **Night Signal** is a signed public feed and calendar that lets every facade, sign, office floor, stadium and federal building keep the same curfew, and dims for bird-migration nights.
   - In the model for Rock Creek Park, streetlights alone add about 20 stars overhead after midnight. A shared curfew roughly **doubles** them.
 - **It works in any city.**
-  - The node's clock matches the IANA database for all 498 time zones.
+  - The node's clock reproduces the IANA database for every zone one recurring rule can express, which is all but a handful of its 498. A zone whose own listed changes the rule would miss, such as Gaza's and Hebron's Ramadan-linked switches, is refused at commissioning rather than run an hour off.
   - Polar day and night are handled.
   - 17 city presets are built in.
 
@@ -59,7 +59,7 @@ nocturne-vdl7/
 ├── tools/                  fetch_dc_inventory.py (refresh data/dc), make_example_ies.py, make_brief.py
 ├── examples/ies/           synthetic photometry for trying `nocturne bug` and `nocturne trespass`
 ├── sim/run_night.py        400-node night simulation, 9 scenarios, scaled to 75,000 lights
-├── tests/                  246 tests: the Section 6.2 table, the firmware extensions and every city tool
+├── tests/                  248 tests: the Section 6.2 table, the firmware extensions and every city tool
 ├── console/index.html      the operator console as a standalone page (parity-tested against the Python)
 ├── docs/                   brief.html (the decision brief), PLAYBOOK.md (the DC plan), EVIDENCE.md (the research)
 └── out/                    simulation results: summary.json, report.md, timeseries.csv, charts
@@ -69,7 +69,7 @@ nocturne-vdl7/
 
 ```bash
 pip install -e ".[dev]"                 # Python 3.10+; cryptography is the only runtime dependency
-pytest -q                               # 246 passed in about a minute
+pytest -q                               # 248 passed in about a minute
 
 # the city
 nocturne business-case                  # 2027 on DC's real fleet; --price, --co2, --floor, --site, --fleet spec
@@ -211,10 +211,10 @@ CI runs the suite on Python 3.10–3.13 (`.github/workflows/tests.yml`).
 
 | File | Tests | What they hold the code to |
 |---|---|---|
-| `tests/test_anycity.py` | 72 | **The POSIX rule engine against the IANA database.** For every zone on Earth, 2027–2030, mid-month and one second either side of every transition. Each of the 17 presets is checked every 6 h, 2024–2030. **Rule forms:** Jn/n, quoted names, `/24` and negative-DST. **Curfew at 23:00 local:** Sydney, Adelaide, Paris, Tucson. **Polar latitudes:** polar night and the midnight sun. **SAFE mode:** in the southern hemisphere. **Zones:** overlays, refused unsafe overlays (including non-finite numbers and names that do not fit the MCU), and the HIN floor inside a dark zone. **Migration nights**, which never dim storm darkness. **Fold-0 local time** for negative DST, and dusk at the edge of polar night. |
+| `tests/test_anycity.py` | 73 | **The POSIX rule engine against the IANA database.** For every zone one recurring rule can run, 2027–2030, mid-month and one second either side of every transition. Each of the 17 presets is checked every 6 h, 2024–2030. **Rule forms:** Jn/n, quoted names, `/24` and negative-DST. **Curfew at 23:00 local:** Sydney, Adelaide, Paris, Tucson. **Polar latitudes:** polar night and the midnight sun. **SAFE mode:** in the southern hemisphere. **Zones:** overlays, refused unsafe overlays (including non-finite numbers and names that do not fit the MCU), and the HIN floor inside a dark zone. **Migration nights**, which never dim storm darkness. **Fold-0 local time** for negative DST, and dusk at the edge of polar night. **Commissioning** refuses a zone whose rule misses the zone's own listed changes. |
 | `tests/test_photometry.py` | 13 | Zonal lumens against closed forms; LM-63 corners ([MORE], spacing, bad numbers); symmetry expansion, including a 90–270 file without 180; front/back split and trespass on either street side; Type V only for light that repeats every 90°; TM-15 thresholds; inverse-square and cosine laws; window trespass; globes vs reflector retrofits |
 | `tests/test_annual.py` | 10 | One night against the 400-node simulation; the year's shape; the order of the strategies; the unsensed floor; any city, including polar ones; break-even over every pole; no payback for part of a year; each class's CCT mix; Phase 0 equal to the exported programmes sample for sample |
-| `tests/test_schedule.py` | 14 | Phase 0 programmes keep every floor and the signed levels, step with traffic to the latest dawns, read across midnight, export with zones, and are exactly what the business case integrates |
+| `tests/test_schedule.py` | 15 | Phase 0 programmes keep every floor and the signed levels, step with traffic to the latest dawns, read across midnight, export with zones, and are exactly what the business case integrates; floors outside 0–100 % and fractional zone levels are refused |
 | `tests/test_skyglow.py` | 12 | Kernel against the closed-form near field (0.5 %); near and far slopes, and beyond the table; aerosol-free air; no step at a cell's edge; the DC grid against the fleet; every lever in the right direction; calibration; the streetlights-alone vs shared-curfew claim; retrofit ranking; input checks; the stored LED spectra |
 | `tests/test_observe.py` | 13 | The Moon against PyEphem at the 2026 eclipses; log formats, including comment lines, extra fields and headerless files; twilight, Moon and cloud filters; a planted 0.12 mag curfew effect recovered from a season of synthetic readings with clouds and moonlight; a null effect; one estimate kept when the other lacks nights |
 | `tests/test_pilot.py` | 10 | DC's 12,096 segments randomised reproducibly and in balance; the exact test's size and power; the brake; **a seasonal 15 % harm that pooling hides and the period-stratified brake catches**; the stratified p-value against enumeration; its size with a season; tallies from a plan and a crash list; the power formula |

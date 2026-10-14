@@ -90,7 +90,7 @@ These values are as reproduced in UK ILP GN01 and local-authority guidance. Chec
 | IES LM-63 | photometric files | `vdl7/photometry.py` |
 | IES TM-15-11 Addendum A | BUG ratings; Tables A-1 to A-3 thresholds, checked against their reproduction in California's 2016 Title 24 and CALGreen | `vdl7/photometry.py` |
 | IES RP-8 | road and pedestrian-conflict classes behind the floors | `vdl7/profiles.py` |
-| IEEE 1003.1 POSIX TZ, RFC 8536 | the node's civil clock; matches the IANA database for all 498 zones, 2027–2030 | `vdl7/clock.py`, `tests/test_anycity.py` |
+| IEEE 1003.1 POSIX TZ, RFC 8536 | the node's civil clock; matches the IANA database, 2027–2030, for every zone one recurring rule can express, and refuses the rest at commissioning | `vdl7/clock.py`, `tests/test_anycity.py` |
 | NOAA solar position | dusk and dawn | `vdl7/clock.py` |
 | Astronomical Almanac low-precision Moon | the Moon, checked against PyEphem at the 2026 eclipses | `vdl7/observe.py` |
 | CIE S 026 | melanopic DER | `vdl7/spectral.py` |
