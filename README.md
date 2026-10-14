@@ -205,6 +205,7 @@ The [evidence review](docs/EVIDENCE.md) and [engineering reference](docs/ENGINEE
 |---|---|
 | [DC playbook](docs/PLAYBOOK.md) | The proposed rollout, costs, measurement plan, and governance. |
 | [Evidence review](docs/EVIDENCE.md) | Research behind the approach, including contrary evidence. |
+| [Technology proposal](docs/TECHNOLOGY.md) | Hardware, software, sensors and materials that cut light pollution, from single fixtures to satellites: readiness, costs, impact, trade-offs, and a prioritised roadmap. |
 | [Engineering reference](docs/ENGINEERING.md) | Control logic, specification corrections, security, test coverage, and detailed simulation results. |
 | [DC inventory notes](data/dc/README.md) | Where the included data comes from and how it is processed. |
 | [Recorded simulation report](out/report.md) | Results from the committed example run. |
