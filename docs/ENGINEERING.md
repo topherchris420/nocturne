@@ -34,11 +34,12 @@ An independent review of the first version against the spec found places where f
 5. **Signed messages need more than a signature (§2.3, §5.4).** See *Message security* below for the design.
    - Every event is addressed to one street segment, optionally narrowed to the geofence nodes within it, and nodes ignore anything else. Malformed targets match nothing (`EXT-SEC-5`, `EXT-SEC-10`).
    - Events carry the segment's sequence number, checked against an anti-replay window kept in flash (`EXT-SEC-6`, `6b`, `6c`).
-   - With a trusted clock, an event expires at issue time + TTL, not receipt + TTL. Nodes refuse events that expired before they arrived or claim a future issue time (`EXT-SEC-7`, `EXT-SEC-11`).
-   - Bundles are type-checked and bounds-checked against firmware-minimum floors, completeness, mix sums and the 400-day validity before they are stored. The anti-rollback version survives even a fall back to the factory profile (`EXT-SEC-3`, `4`, `12`, `13`).
+   - With a trusted clock, an event expires at issue time + TTL, not receipt + TTL. Nodes refuse events that expired before they arrived or claim a future issue time (`EXT-SEC-7`, `EXT-SEC-11`). A loop count also counts its age from issue, so a late delivery cannot extend its boost (`EXT-SEC-17`).
+   - A cancel that overtakes its event (the backhaul copy beating the mesh copy) is remembered for a day, and the late event is refused rather than running its full TTL. Only copies issued before the cancel are refused, so an id the CMS reuses later still works (`EXT-SEC-16`).
+   - Bundles are type-checked and bounds-checked against firmware-minimum floors, completeness, mix sums and the 400-day validity before they are stored. The HIN floor must lie between 60 and 100 %, design watts must be positive, and a bundle dated more than a day ahead is not valid, so its 400 days cannot be pushed out of reach. The anti-rollback version survives even a fall back to the factory profile (`EXT-SEC-3`, `4`, `12`, `13`, `18`, `19`).
    - When the store is full, emergencies and overrides are evicted last, and unknown event kinds are ignored (`EXT-SEC-8`).
    - Override audit records (who, when, why, cancelled) go to the CMS (`EXT-SEC-9`).
-6. **Weather must not teach the node a false dusk (§5.3).** A photocell dusk or dawn more than 45 min from the sun's is treated as weather and not learned. In SAFE mode, a dusk more than 45 min off yesterday's is replaced by the expected time (`EXT-FS-9`, `EXT-FS-10`).
+6. **Weather must not teach the node a false dusk (§5.3).** A photocell dusk or dawn more than 45 min from the sun's is treated as weather and not learned. In SAFE mode, a dusk more than 45 min off yesterday's is replaced by the expected time, unless a second observation confirms it (`EXT-FS-9`, `EXT-FS-10`, `EXT-FS-12`; see *SAFE mode without a clock*).
 7. **Number corrections.** §6.2 says "24 acceptance tests"; the firmware suite (`tests/test_controller.py`) has 82, and the city tools add 110 more. The table's 18 rows become 19 tests, because R-MESH-1/2 is split in two; the rest are extensions. The Section 6.3 and Section 4 figures are reconciled below.
 8. **The clock is hard-wired to one city (§2.4, R-CLK-1).** The spec compiles in `EST5EDT`. The node now carries any POSIX TZ rule (`NodeConfig.tz`). Where the sun never crosses −3° (Tromsø in December, Reykjavik in June), the learning code used to crash; now the lights follow the sun and nothing is learned from a night with no dusk (`EXT-CLK-4` to `10`). **Spec change:** make the rule a commissioning parameter.
 
@@ -61,7 +62,7 @@ An independent review of the first version against the spec found places where f
 | R-SAF-1 | HIN floor wins over the rain boost |
 | R-SAF-2 | Fog and snow: no boost |
 | R-SAF-3 | A blocked photocell cannot keep the lights off at night |
-| R-SAF-4 | Storm darkness at 14:00 under 3 lx: lights on at the evening level |
+| R-SAF-4 | Storm darkness at 14:00 under 3 lx: lights on at the evening level (and at 10:00, `R-SAF-4b`) |
 | R-EM-1 | Emergency in SAFE mode expires on monotonic time |
 | R-EM-2 | A planned override cannot lower an emergency; incident command can; cancelling restores it |
 | R-CLO-1 | Drive 86 % new, 100 % at 100,000 h |
@@ -175,6 +176,7 @@ The spec already groups nodes by street segment, with one LwM2M message per segm
 - **Addressing.** Every event names one segment and, for a geofence, the nodes within it. A 400 m CAD geofence spanning three segments goes out as three messages with the same event id.
 - **Sequencing.** The sequence number is the CMS's counter *for that segment*, with a failover epoch in the high 32 bits. Each node keeps a 64-wide sliding window over its own segment's counter. The window tolerates reordering among the few messages a segment gets, however much traffic the rest of the city generates. A standby CMS that lost the counters bumps the epoch.
 - **Freshness.** With a trusted clock, events expire at issue time + TTL. In SAFE mode, receipt + TTL is the only clock available.
+- **Cancels.** A cancel is remembered for the longest TTL an event may carry (24 h), so a copy of its event that arrives late is refused. Copies issued after the cancel (a higher sequence number) are not affected.
 - **Acknowledged uplink.** Metering, alarms and audit records stay in a flash outbox until the CMS acknowledges them. A link that dies before the node notices loses nothing.
 
 ## SAFE mode without a clock (Sections 5.2, 5.3)
@@ -183,7 +185,7 @@ On every clocked night the node records the local time of its photocell's dusk a
 
 If it reboots mid-night, it resumes from the 60-second flash checkpoint plus the gap the RTC counter measured. If the counter itself was lost, it holds the 22:00 level until the next dusk.
 
-On the second and later clockless nights, a dusk more than 45 min off the previous one is replaced by the expected time. On the first clockless night there is nothing to compare against, so storm darkness that runs straight into night will start the count early. Accuracy after a long outage also degrades with the season, by roughly 1–2 minutes per day of outage near the equinoxes, until the next time sync.
+On the second and later clockless nights, a dusk more than 45 min off the previous one is replaced by the expected time, unless a second observation puts dusk there too: the dusk actually seen the evening before, or the last dawn plus the learned length of the day. Then the reference itself was weather, and this dusk replaces it. On the first clockless night there is nothing to compare against, so storm darkness that runs straight into night will start that night's count early; the next dusk agrees with that night's dawn, so later nights are not affected (`EXT-FS-12`). Accuracy after a long outage also degrades with the season, by roughly 1–2 minutes per day of outage near the equinoxes, until the next time sync.
 
 ## Porting notes
 
