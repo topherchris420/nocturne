@@ -7,13 +7,14 @@ import math
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from .clock import DC_LAT, DC_LON, RtcHoldover, parse_local, solar_elevation_deg, to_local
+from .clock import RtcHoldover, parse_local, solar_elevation_deg, to_local
 from .cms import Cms
 from .controller import Flash, NodeConfig, Output, VDL7Controller
 from .driver import LuminaireDriver
 from .events import EventKind, Priority
 from .profiles import RoadClass, default_bundle
 from .security import SignedMessage
+from .sites import DEFAULT_SITE, Site
 
 
 def sky_lux(elev_deg: float) -> float:
@@ -31,7 +32,9 @@ class Bench:
                  cms: Optional[Cms] = None, burn_hours: float = 0.0,
                  hello_every_s: float = 600.0, flash: Optional[Flash] = None,
                  rtc: Optional[RtcHoldover] = None, bundle_version: int = 1,
-                 interface: str = "dali2", node_id: Optional[str] = None, segment_id: str = "seg-bench"):
+                 interface: str = "dali2", node_id: Optional[str] = None, segment_id: str = "seg-bench",
+                 site: Optional[Site] = None, zone: Optional[str] = None):
+        self.site = site or DEFAULT_SITE
         self.cms = cms or Cms()
         self.verifier = self.cms.verifier
         self.flash = flash or Flash()
@@ -39,11 +42,12 @@ class Bench:
             assert self.flash.install(self.cms.bundle(default_bundle(bundle_version)), self.verifier)
         self.rtc = rtc or RtcHoldover()
         self.cfg = NodeConfig(node_id=node_id or f"bench-{road.value}", road=road, hin=hin,
-                              tunable_white=tunable, burn_hours=burn_hours, segment_id=segment_id)
+                              tunable_white=tunable, burn_hours=burn_hours, segment_id=segment_id,
+                              lat=self.site.lat, lon=self.site.lon, tz=self.site.tz, zone=zone)
         self.driver = LuminaireDriver.commissioned_for(self.flash.bundle.profiles[road], hin, interface)
         self.node = VDL7Controller(self.cfg, self.flash, self.rtc, self.verifier, self.driver)
         self.mono = 0.0
-        self.utc = parse_local(start)
+        self.utc = parse_local(start, self.site.tz)
         self.online = online
         self.mesh_gateway = False
         self.lx_override: Optional[float] = None
@@ -62,12 +66,12 @@ class Bench:
     # ------------------------------------------------------------- the world
     @property
     def local(self) -> datetime:
-        return to_local(self.utc)
+        return to_local(self.utc, self.site.tz)
 
     def lx_now(self) -> float:
         if self.lx_override is not None:
             return self.lx_override
-        return sky_lux(solar_elevation_deg(DC_LAT, DC_LON, self.utc))
+        return sky_lux(solar_elevation_deg(self.site.lat, self.site.lon, self.utc))
 
     def step(self, dt: float = 1.0) -> Output:
         if self.online and self.mono - self._last_hello >= self.hello_every_s:
@@ -103,7 +107,7 @@ class Bench:
         return out
 
     def run_until(self, local_str: str, dt: float = 1.0) -> Output:
-        target = parse_local(local_str)
+        target = parse_local(local_str, self.site.tz)
         out = self.node.output
         while self.utc < target:
             out = self.step(min(dt, (target - self.utc).total_seconds()))

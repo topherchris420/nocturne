@@ -35,6 +35,7 @@ from vdl7.bench import sky_lux
 from vdl7.clock import DC_LAT, DC_LON, RtcHoldover, local_hour, parse_local, solar_elevation_deg, to_local
 from vdl7.cms import GEOFENCE_RADIUS_M, Cms, geofence
 from vdl7.controller import Flash, NodeConfig, VDL7Controller
+from vdl7.demand import POLE_SPACING_M, POLES, WALK_POLES, WALK_SPEED_MPS, ped_rate_per_h, traffic_veh15
 from vdl7.driver import LuminaireDriver
 from vdl7.events import EventKind
 from vdl7.mesh import MeshNetwork
@@ -45,9 +46,6 @@ CLASS_MIX = {RoadClass.ARTERIAL: 0.18, RoadClass.COLLECTOR: 0.17, RoadClass.LOCA
              RoadClass.ALLEY: 0.15, RoadClass.PARK: 0.05}
 N_LIGHTS = 75_000
 STREETS_PER_CLASS = 4
-POLES = 20
-POLE_SPACING_M = 30.0
-WALK_SPEED_MPS = 1.4
 UPLIGHT_TODAY = 0.03          # direct uplight, network average (globes, tilt)
 UPLIGHT_U0 = 0.0
 REFLECTED = 0.12              # ground and facade reflectance
@@ -64,29 +62,6 @@ SPEC_TABLE_6_3 = {"today": (1.00, 1.00), "dimming": (0.65, 0.65), "dimming_u0": 
                   "nocturne": (0.70, 0.65), "outage": (0.68, 0.63), "legacy_outage": (1.00, 0.92)}
 
 
-def _pw(points: List[Tuple[float, float]], h: float) -> float:
-    """Piecewise-linear curve over a 24 h clock given as (hour, value) with
-    hours after midnight written as 24+."""
-    hh = h if h >= 12 else h + 24
-    for (h0, v0), (h1, v1) in zip(points, points[1:]):
-        if h0 <= hh <= h1:
-            return v0 + (v1 - v0) * (hh - h0) / (h1 - h0)
-    return points[-1][1] if hh > points[-1][0] else points[0][1]
-
-
-TRAFFIC = [(18, 290), (20, 210), (22, 130), (24, 60), (27, 25), (29, 60), (31, 250), (32, 290)]
-PEDS = [(18, 30), (21, 15), (23, 6), (25, 2), (27, 1), (29, 2), (31, 15), (32, 20)]
-
-
-def traffic_veh15(h: float, road: RoadClass) -> float:
-    base = _pw(TRAFFIC, h)
-    return base if road == RoadClass.ARTERIAL else base * 0.42
-
-
-def ped_rate_per_h(h: float) -> float:
-    return _pw(PEDS, h)
-
-
 @dataclass
 class Scenario:
     name: str
@@ -98,6 +73,7 @@ class Scenario:
     legacy: bool = False            # cloud-dependent node: fails bright 15 min after losing the CMS
     emergency: Optional[Tuple[str, int, str, int]] = None   # (class, street, start HH:MM, minutes); centred on pole 10
     rain: Optional[Tuple[str, str]] = None
+    migration: bool = False         # Night Signal heavy-migration alert signed to every segment at 18:00
     seed: int = 7
 
 
@@ -112,6 +88,7 @@ SCENARIOS: Dict[str, Scenario] = {
     "emergency": Scenario("emergency", "Full Nocturne with a CAD incident on one local street 00:40-01:40",
                           emergency=("local", 0, "00:40", 60)),
     "rain": Scenario("rain", "Full Nocturne with rain 23:00-02:00", rain=("23:00", "02:00")),
+    "migration": Scenario("migration", "Full Nocturne on a forecast heavy-migration night", migration=True),
 }
 
 
@@ -162,6 +139,7 @@ class NetworkSim:
         self._rain = self._window(scn.rain)
         self._emergency_at = self._window((scn.emergency[2], scn.emergency[2]))[0] if scn.emergency else None
         self._emergency_sent = False
+        self._migration_sent = False
         self._rain_sent_mono = -math.inf
         self.rejected = 0
         # outputs
@@ -217,6 +195,13 @@ class NetworkSim:
                 for n in st.nodes:
                     self.rejected += 0 if n.receive(msg, self.mono) else 1
             self._rain_sent_mono = self.mono
+        if self.scn.migration and not self._migration_sent and backhaul_up:
+            for st in self.streets:                          # one signed event per segment, valid to dawn
+                msg = self.cms.event(EventKind.MIGRATION, 14 * 3600, st.segment, {"source": "BirdCast"},
+                                     event_id="mig-2026-10-13", issued=utc)
+                for n in st.nodes:
+                    self.rejected += 0 if n.receive(msg, self.mono) else 1
+            self._migration_sent = True
         if self._emergency_at is not None and not self._emergency_sent and utc >= self._emergency_at:
             road, k, _, minutes = self.scn.emergency
             st = next(s for s in self.streets if s.road == RoadClass(road) and s.k == k)
@@ -230,7 +215,7 @@ class NetworkSim:
         rng = st.ped_rng
         if rng.random() < ped_rate_per_h(h) / 3600.0 * self.dt:
             start = 0 if rng.random() < 0.5 else POLES - 1
-            st.walkers.append(Walker(start, 1 if start == 0 else -1, rng.randint(4, 14), self.mono))
+            st.walkers.append(Walker(start, 1 if start == 0 else -1, rng.randint(*WALK_POLES), self.mono))
         step_s = POLE_SPACING_M / WALK_SPEED_MPS
         alive = []
         for w in st.walkers:

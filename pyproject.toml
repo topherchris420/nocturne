@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nocturne-vdl7"
-version = "0.2.0"
-description = "VDL-7 reference firmware, acceptance suite and night simulation for the Nocturne dark-sky lighting layer (VD-DSL-SPEC-001)"
+version = "1.0.0"
+description = "Nocturne: VDL-7 dark-sky streetlight firmware and the city tools around it (business case, sky model, photometry, Night Signal, M&V, pilot) for VD-DSL-SPEC-001"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

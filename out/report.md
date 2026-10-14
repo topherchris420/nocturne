@@ -12,6 +12,7 @@ Night of 2026-10-13 18:00 to 2026-10-14 08:00 local; 4 streets x 20 poles per cl
 | Same hardware, cloud-dependent control, same outage | 1.022 | 1.0 | 0.95 | 0.92 | 0.695 | 56.84 |
 | Full Nocturne with a CAD incident on one local street 00:40-01:40 | 0.733 |  | 0.675 |  | 0.49 | 40.73 |
 | Full Nocturne with rain 23:00-02:00 | 0.771 |  | 0.709 |  | 0.513 | 42.88 |
+| Full Nocturne on a forecast heavy-migration night | 0.71 |  | 0.654 |  | 0.475 | 39.48 |
 
 ## Skyglow waterfall (upward flux x Rayleigh, today = 1.00)
 
@@ -43,3 +44,4 @@ Saving vs the static baseline: 15.09 MWh per night, about 5.51 GWh a year (Octob
 - legacy_outage: arterial {'LOST_COMMS_100%': 0.5, 'ONLINE': 0.5}; collector {'LOST_COMMS_100%': 0.5, 'ONLINE': 0.5}; local {'LOST_COMMS_100%': 0.5, 'ONLINE': 0.5}; alley {'LOST_COMMS_100%': 0.5, 'ONLINE': 0.5}; park {'LOST_COMMS_100%': 0.5, 'ONLINE': 0.5}
 - emergency: arterial {'ONLINE': 1.0}; collector {'ONLINE': 1.0}; local {'ONLINE': 1.0}; alley {'ONLINE': 1.0}; park {'ONLINE': 1.0}
 - rain: arterial {'ONLINE': 1.0}; collector {'ONLINE': 1.0}; local {'ONLINE': 1.0}; alley {'ONLINE': 1.0}; park {'ONLINE': 1.0}
+- migration: arterial {'ONLINE': 1.0}; collector {'ONLINE': 1.0}; local {'ONLINE': 1.0}; alley {'ONLINE': 1.0}; park {'ONLINE': 1.0}

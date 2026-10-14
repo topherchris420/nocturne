@@ -1,17 +1,24 @@
-"""Astronomical clock, US daylight-saving rule, RTC holdover and photocell.
+"""Astronomical clock, daylight-saving rules, RTC holdover and photocell.
 
 The node never asks the host operating system for the time. Civil time comes
-from a POSIX rule compiled into firmware (R-CLK-1 checks it against the IANA
-database), dusk and dawn from the NOAA solar-position algorithm (R-CLK-2), and
-whether the real-time clock may be believed from a drift budget (R-CLK-3).
+from a POSIX TZ rule compiled into firmware (R-CLK-1 checks DC's against the
+IANA database; EXT-CLK-4 checks a dozen other cities'), dusk and dawn from the
+NOAA solar-position algorithm (R-CLK-2), and whether the real-time clock may
+be believed from a drift budget (R-CLK-3). Nothing here is specific to DC
+except the defaults: a node anywhere carries its own latitude, longitude and
+rule, and above the Arctic Circle the lights simply follow the sun.
 """
 from __future__ import annotations
 
+import calendar
 import math
+import os
+import re
+import struct
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 DC_LAT = 38.8977
 DC_LON = -77.0365
@@ -19,67 +26,258 @@ DC_LON = -77.0365
 NIGHT_ELEVATION_DEG = -3.0       # lights-on threshold used by the profile clock
 SUNRISE_ELEVATION_DEG = -0.833   # geometric sunrise/sunset incl. refraction
 
-# POSIX TZ string compiled into firmware. Second Sunday in March 02:00 to
-# first Sunday in November 02:00.
+# POSIX TZ rule compiled into firmware: DC's by default, any city's by
+# `NodeConfig.tz`. Second Sunday in March 02:00 to first Sunday in November 02:00.
 POSIX_TZ = "EST5EDT,M3.2.0,M11.1.0"
-STD_OFFSET_H = -5
-DST_OFFSET_H = -4
 UTC = timezone.utc
 
 
 # --------------------------------------------------------------------------
-# Civil time
+# Civil time: POSIX TZ rules (IEEE Std 1003.1, with the RFC 8536 extensions
+# that the IANA database emits in its TZif footers: quoted names like <-04>,
+# transition hours outside 0-24 and half-hour offsets)
 # --------------------------------------------------------------------------
-def _nth_weekday(year: int, month: int, weekday: int, n: int) -> datetime:
-    """n-th weekday (0=Mon .. 6=Sun) of a month as a naive local midnight."""
-    first = datetime(year, month, 1)
-    delta = (weekday - first.weekday()) % 7
-    return first + timedelta(days=delta + 7 * (n - 1))
+_NAME = re.compile(r"<[A-Za-z0-9+\-]+>|[A-Za-z]{3,}")
+_OFFSET = re.compile(r"[+-]?\d{1,3}(?::\d{1,2}(?::\d{1,2})?)?")
 
 
-@lru_cache(maxsize=128)
-def dst_window_utc(year: int) -> Tuple[datetime, datetime]:
-    """[start, end) of daylight time for a year, in UTC."""
-    start_local = _nth_weekday(year, 3, 6, 2).replace(hour=2)   # 02:00 EST
-    end_local = _nth_weekday(year, 11, 6, 1).replace(hour=2)    # 02:00 EDT
-    start_utc = (start_local - timedelta(hours=STD_OFFSET_H)).replace(tzinfo=UTC)
-    end_utc = (end_local - timedelta(hours=DST_OFFSET_H)).replace(tzinfo=UTC)
-    return start_utc, end_utc
+_HMS = re.compile(r"[+-]?\d{1,3}(?::\d{1,2}){0,2}")
 
 
-def is_dst(utc: datetime) -> bool:
-    start, end = dst_window_utc(utc.year)
-    return start <= utc < end
+def _hms(text: str, max_h: int = 167) -> int:
+    """'5', '-3:30', '+167:00:00' -> seconds. Transition times may run to
+    167 h (RFC 8536); UTC offsets are capped at 24 h by the caller."""
+    if not _HMS.fullmatch(text):
+        raise ValueError(f"time {text!r} is not [+-]h[:mm[:ss]]")
+    sign = -1 if text.startswith("-") else 1
+    parts = [int(p) for p in text.lstrip("+-").split(":")]
+    parts += [0] * (3 - len(parts))
+    if parts[0] > max_h or parts[1] > 59 or parts[2] > 59:
+        raise ValueError(f"time {text!r} out of range")
+    return sign * (parts[0] * 3600 + parts[1] * 60 + parts[2])
 
 
-def utc_offset_hours(utc: datetime) -> int:
-    return DST_OFFSET_H if is_dst(utc) else STD_OFFSET_H
+@dataclass(frozen=True)
+class TransitionRule:
+    """One end of daylight time: `Mm.w.d`, `Jn` or `n`, with a local time."""
+    kind: str                # "M" month/week/day, "J" Julian 1-365 without Feb 29, "N" zero-based day
+    a: int = 0               # M: month       J/N: day number
+    b: int = 0               # M: week 1-5 (5 = last)
+    c: int = 0               # M: weekday 0-6, Sunday = 0
+    secs: int = 7200         # local time of day; RFC 8536 allows -167 h to +167 h
+
+    def local(self, year: int) -> datetime:
+        """The transition as a naive local wall time in `year`."""
+        if self.kind == "M":
+            first = datetime(year, self.a, 1)
+            sunday_based = (first.weekday() + 1) % 7
+            day = 1 + (self.c - sunday_based) % 7 + 7 * (self.b - 1)
+            last = calendar.monthrange(year, self.a)[1]
+            while day > last:                        # week 5 means the last such weekday
+                day -= 7
+            base = datetime(year, self.a, day)
+        elif self.kind == "J":
+            base = datetime(year, 1, 1) + timedelta(days=self.a - 1)
+            if calendar.isleap(year) and self.a >= 60:   # Feb 29 is never counted
+                base += timedelta(days=1)
+        else:
+            base = datetime(year, 1, 1) + timedelta(days=self.a)
+        return base + timedelta(seconds=self.secs)
 
 
-def to_local(utc: datetime) -> datetime:
+@dataclass(frozen=True)
+class PosixTZ:
+    """A parsed POSIX TZ rule. Offsets are seconds *east* of UTC (the POSIX
+    text counts west, so EST5 is -18000 here)."""
+    text: str
+    std_name: str
+    std_off: int
+    dst_name: Optional[str] = None
+    dst_off: Optional[int] = None
+    start: Optional[TransitionRule] = None
+    end: Optional[TransitionRule] = None
+
+    @property
+    def has_dst(self) -> bool:
+        return self.dst_name is not None
+
+    def is_dst(self, utc: datetime) -> bool:
+        if not self.has_dst:
+            return False
+        y = utc.year
+        for year in (y - 1, y, y + 1):
+            start, end = _dst_bounds(self, year)
+            if end <= start:                         # southern hemisphere: spans the new year
+                end = _dst_bounds(self, year + 1)[1]
+            if start <= utc < end:
+                return True
+        return False
+
+    def utcoffset_s(self, utc: datetime) -> int:
+        return self.dst_off if self.is_dst(utc) else self.std_off    # type: ignore[return-value]
+
+    def to_local(self, utc: datetime) -> datetime:
+        return (utc + timedelta(seconds=self.utcoffset_s(utc))).replace(tzinfo=None)
+
+    def to_utc(self, local: datetime) -> datetime:
+        """Inverse of `to_local`, as zoneinfo's fold=0: a repeated hour
+        resolves to its first occurrence, and a skipped hour is read with
+        the offset in force before the jump, so it lands after the gap.
+        Holds for negative DST (Dublin's winter 'daylight') too."""
+        local = local.replace(tzinfo=None)
+        offsets = {self.std_off, self.dst_off} if self.has_dst else {self.std_off}
+        cands = sorted((local - timedelta(seconds=o)).replace(tzinfo=UTC) for o in offsets)   # type: ignore[operator]
+        for cand in cands:
+            if self.to_local(cand) == local:
+                return cand
+        return (local - timedelta(seconds=self.utcoffset_s(cands[0]))).replace(tzinfo=UTC)
+
+
+@lru_cache(maxsize=1024)
+def _dst_bounds(tz: PosixTZ, year: int) -> Tuple[datetime, datetime]:
+    """[start, end) of daylight time that begins in `year`, in UTC. The start
+    is stated in standard time and the end in daylight time."""
+    start = (tz.start.local(year) - timedelta(seconds=tz.std_off)).replace(tzinfo=UTC)     # type: ignore[union-attr]
+    end = (tz.end.local(year) - timedelta(seconds=tz.dst_off)).replace(tzinfo=UTC)         # type: ignore[union-attr,arg-type]
+    return start, end
+
+
+def _rule(text: str) -> TransitionRule:
+    date_part, slash, time_part = text.partition("/")
+    secs = _hms(time_part) if slash else 7200
+    if date_part.startswith("M"):
+        m, w, d = (int(x) for x in date_part[1:].split("."))
+        if not (1 <= m <= 12 and 1 <= w <= 5 and 0 <= d <= 6):
+            raise ValueError(f"bad rule {text!r}")
+        return TransitionRule("M", m, w, d, secs)
+    if date_part.startswith("J"):
+        n = int(date_part[1:])
+        if not 1 <= n <= 365:
+            raise ValueError(f"bad rule {text!r}")
+        return TransitionRule("J", n, secs=secs)
+    n = int(date_part)
+    if not 0 <= n <= 365:
+        raise ValueError(f"bad rule {text!r}")
+    return TransitionRule("N", n, secs=secs)
+
+
+@lru_cache(maxsize=256)
+def parse_posix_tz(text: str) -> PosixTZ:
+    """Parse a POSIX TZ string such as 'EST5EDT,M3.2.0,M11.1.0',
+    'ACST-9:30ACDT,M10.1.0,M4.1.0/3' or '<-04>4<-03>,M9.1.6/24,M4.1.6/24'.
+    A daylight name without rules gets the US rules, as glibc does."""
+    s = text.strip()
+    try:
+        m = _NAME.match(s)
+        std_name, pos = m.group(0), m.end()                       # type: ignore[union-attr]
+        m = _OFFSET.match(s, pos)
+        std_off, pos = -_hms(m.group(0), 24), m.end()             # type: ignore[union-attr]
+        if pos == len(s):
+            return PosixTZ(text, std_name, std_off)
+        m = _NAME.match(s, pos)
+        dst_name, pos = m.group(0), m.end()                       # type: ignore[union-attr]
+        dst_off = std_off + 3600
+        m = _OFFSET.match(s, pos)
+        if m and m.end() > pos:
+            dst_off, pos = -_hms(m.group(0), 24), m.end()
+        rules = s[pos:]
+        if not rules:
+            rules = ",M3.2.0,M11.1.0"
+        if not rules.startswith(","):
+            raise ValueError("expected ',' before the rules")
+        start_txt, end_txt = rules[1:].split(",")
+        return PosixTZ(text, std_name, std_off, dst_name, dst_off, _rule(start_txt), _rule(end_txt))
+    except (AttributeError, ValueError, TypeError) as e:
+        raise ValueError(f"not a POSIX TZ rule: {text!r} ({e})") from None
+
+
+def posix_tz_from_iana(name: str, valid_from: Optional[datetime] = None) -> str:
+    """The POSIX rule the IANA database itself compiles for a zone (the TZif
+    footer), for commissioning: `posix_tz_from_iana('Europe/Paris')`. Refused
+    (LookupError) where the zone's explicit transitions after `valid_from`
+    (default: now) disagree with that rule."""
+    import zoneinfo
+    blob = None
+    for base in zoneinfo.TZPATH:
+        path = os.path.join(base, name)
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                blob = f.read()
+            break
+    if blob is None:                                  # Windows: the `tzdata` package
+        try:
+            from importlib import resources
+            blob = resources.files("tzdata.zoneinfo").joinpath(*name.split("/")).read_bytes()
+        except Exception:
+            raise LookupError(f"zone {name!r} not found in {zoneinfo.TZPATH} or the tzdata package") from None
+    if not blob.startswith(b"TZif") or blob[4:5] < b"2":
+        raise LookupError(f"zone {name!r}: TZif version 1 has no POSIX footer")
+    footer = blob.rstrip(b"\n").rsplit(b"\n", 1)[-1].decode("ascii")
+    parse_posix_tz(footer)
+    # The footer only governs after the file's last explicit transition. Where
+    # explicit transitions run on past `valid_from` (zic writes them to 2037,
+    # and Morocco's Ramadan switches never fit one rule), the footer must agree
+    # with them at every instant either side could change the offset.
+    times = _transitions(blob)
+    since = valid_from or datetime.now(UTC)
+    ahead = [t for t in times if t > since]
+    if ahead:
+        import zoneinfo as _zi
+        zi, tz = _zi.ZoneInfo(name), parse_posix_tz(footer)
+        checks = list(ahead)
+        if tz.has_dst:
+            for y in range(since.year, ahead[-1].year + 1):
+                checks += [t for t in _dst_bounds(tz, y) if since < t <= ahead[-1]]
+        for t in checks:
+            for u in (t - timedelta(seconds=1), t):
+                if tz.utcoffset_s(u) != int(u.astimezone(zi).utcoffset().total_seconds()):
+                    raise LookupError(f"zone {name!r}: its POSIX rule {footer!r} disagrees with the zone's own "
+                                      f"transitions at {u:%Y-%m-%d %H:%M} UTC; one recurring rule cannot run it")
+    return footer
+
+
+def _transitions(blob: bytes) -> List[datetime]:
+    """The explicit transitions in a TZif v2+ file (its 64-bit block)."""
+    def counts(off: int) -> Tuple[int, ...]:
+        return struct.unpack(">6l", blob[off + 20:off + 44])
+    isut, isstd, leap, timecnt, typecnt, charcnt = counts(0)
+    v2 = 44 + timecnt * 5 + typecnt * 6 + charcnt + leap * 8 + isstd + isut
+    timecnt = counts(v2)[3]
+    raw = struct.unpack(f">{timecnt}q", blob[v2 + 44:v2 + 44 + timecnt * 8])
+    return [datetime(1970, 1, 1, tzinfo=UTC) + timedelta(seconds=t) for t in raw]
+
+
+def _tz(tz) -> PosixTZ:
+    return tz if isinstance(tz, PosixTZ) else parse_posix_tz(tz)
+
+
+def is_dst(utc: datetime, tz=POSIX_TZ) -> bool:
+    return _tz(tz).is_dst(utc)
+
+
+def utc_offset_hours(utc: datetime, tz=POSIX_TZ) -> float:
+    return _tz(tz).utcoffset_s(utc) / 3600.0
+
+
+def to_local(utc: datetime, tz=POSIX_TZ) -> datetime:
     """Local civil time as a naive datetime."""
-    return (utc + timedelta(hours=utc_offset_hours(utc))).replace(tzinfo=None)
+    return _tz(tz).to_local(utc)
 
 
-def local_hour(utc: datetime) -> float:
-    loc = to_local(utc)
+def local_hour(utc: datetime, tz=POSIX_TZ) -> float:
+    loc = to_local(utc, tz)
     return loc.hour + loc.minute / 60.0 + loc.second / 3600.0
 
 
-def local_to_utc(local: datetime) -> datetime:
+def local_to_utc(local: datetime, tz=POSIX_TZ) -> datetime:
     """Inverse of to_local. The ambiguous fall-back hour resolves to daylight
     time; the spring-forward gap resolves to standard time."""
-    local = local.replace(tzinfo=None)
-    for off in (DST_OFFSET_H, STD_OFFSET_H):
-        cand = (local - timedelta(hours=off)).replace(tzinfo=UTC)
-        if to_local(cand) == local:
-            return cand
-    return (local - timedelta(hours=STD_OFFSET_H)).replace(tzinfo=UTC)
+    return _tz(tz).to_utc(local)
 
 
-def parse_local(s: str) -> datetime:
+def parse_local(s: str, tz=POSIX_TZ) -> datetime:
     """'2026-10-13 23:30' or ISO 'T' form, local civil time -> aware UTC."""
-    return local_to_utc(datetime.fromisoformat(s))
+    return local_to_utc(datetime.fromisoformat(s), tz)
 
 
 # --------------------------------------------------------------------------
@@ -94,6 +292,18 @@ def julian_day(utc: datetime) -> float:
     a = y // 100
     b = 2 - a + a // 4
     return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + b - 1524.5 + frac
+
+
+def sun_apparent_longitude_deg(utc: datetime) -> float:
+    """The Sun's apparent ecliptic longitude (NOAA series), for the Moon's
+    phase in vdl7.observe."""
+    jc = (julian_day(utc) - 2451545.0) / 36525.0
+    l0 = (280.46646 + jc * (36000.76983 + jc * 0.0003032)) % 360.0
+    m = math.radians(357.52911 + jc * (35999.05029 - 0.0001537 * jc))
+    c = (math.sin(m) * (1.914602 - jc * (0.004817 + 0.000014 * jc)) + math.sin(2 * m) * (0.019993 - 0.000101 * jc)
+         + math.sin(3 * m) * 0.000289)
+    omega = 125.04 - 1934.136 * jc
+    return (l0 + c - 0.00569 - 0.00478 * math.sin(math.radians(omega))) % 360.0
 
 
 def _solar_elevation(lat: float, lon: float, jd: float, minutes_utc: float) -> float:
@@ -172,29 +382,47 @@ def next_crossing(lat: float, lon: float, start: datetime, threshold: float,
 
 
 @lru_cache(maxsize=4096)
-def night_bounds(lat: float, lon: float, local_date: date,
-                 threshold: float = NIGHT_ELEVATION_DEG) -> Tuple[datetime, datetime]:
-    """(dusk, dawn) in UTC for the night that starts on `local_date`."""
-    noon = local_to_utc(datetime(local_date.year, local_date.month, local_date.day, 12))
-    dusk = next_crossing(lat, lon, noon, threshold, descending=True)
-    dawn = next_crossing(lat, lon, dusk, threshold, descending=False)
-    return dusk, dawn
+def night_bounds(lat: float, lon: float, local_date: date, threshold: float = NIGHT_ELEVATION_DEG,
+                 tz: str = POSIX_TZ) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """(dusk, dawn) in UTC for the night that starts on `local_date`: the
+    first time the sun sinks below `threshold` within 24 h of that date's
+    solar noon, and the time it next rises above it. Either is None where
+    the sun does not cross: no dusk under the midnight sun or in polar
+    night, no dawn when polar night begins. Starting at solar rather than
+    clock noon finds the brief midday dusk of the days just before polar
+    night (Tromso in early December: 11:50)."""
+    noon = local_to_utc(datetime(local_date.year, local_date.month, local_date.day, 12), tz)
+    transit = 720.0 - 4.0 * lon                                  # mean solar noon, minutes after 00:00 UTC
+    delta = (transit - (noon.hour * 60 + noon.minute) + 720.0) % 1440.0 - 720.0
+    start = noon + timedelta(minutes=delta - 20.0)              # less the equation of time's +-17 min
+    dusk = next_crossing(lat, lon, start, threshold, descending=True, max_hours=24.0)
+    if dusk is None:
+        return None, None
+    return dusk, next_crossing(lat, lon, dusk, threshold, descending=False)
 
 
-def sun_times(lat: float, lon: float, local_date: date) -> Tuple[datetime, datetime]:
-    """(sunrise, sunset) as naive local datetimes for a civil date."""
-    midnight = local_to_utc(datetime(local_date.year, local_date.month, local_date.day, 0))
-    rise = next_crossing(lat, lon, midnight, SUNRISE_ELEVATION_DEG, descending=False)
+def sun_times(lat: float, lon: float, local_date: date, tz: str = POSIX_TZ
+              ) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """(sunrise, sunset) as naive local datetimes for a civil date; None
+    where the sun does not rise or set."""
+    midnight = local_to_utc(datetime(local_date.year, local_date.month, local_date.day, 0), tz)
+    rise = next_crossing(lat, lon, midnight, SUNRISE_ELEVATION_DEG, descending=False, max_hours=24.0)
+    if rise is None:
+        return None, None
     sset = next_crossing(lat, lon, rise, SUNRISE_ELEVATION_DEG, descending=True)
-    return to_local(rise), to_local(sset)
+    return to_local(rise, tz), (to_local(sset, tz) if sset is not None else None)
 
 
-def learned_night(lat: float, lon: float, local_date: date) -> Tuple[float, float]:
+def learned_night(lat: float, lon: float, local_date: date, tz: str = POSIX_TZ
+                  ) -> Optional[Tuple[float, float]]:
     """(dark-midpoint local hour, night length h) for the night of local_date —
-    the values the node writes to flash after each clocked night."""
-    dusk, dawn = night_bounds(lat, lon, local_date)
+    the values the node writes to flash after each clocked night. None when
+    the sun makes no ordinary night that date (polar day or polar night)."""
+    dusk, dawn = night_bounds(lat, lon, local_date, tz=tz)
+    if dusk is None or dawn is None:
+        return None
     length_h = (dawn - dusk).total_seconds() / 3600.0
-    mid = (local_hour(dusk) + length_h / 2.0) % 24.0
+    mid = (local_hour(dusk, tz) + length_h / 2.0) % 24.0
     return mid, length_h
 
 

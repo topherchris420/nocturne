@@ -34,6 +34,7 @@ class EventKind(str, Enum):
     LOOP_VOLUME = "loop_volume"    # ATSPM 15-min volume for the segment
     OVERRIDE = "override"          # operator or planned-event level
     CANCEL = "cancel"              # cancels an event by id
+    MIGRATION = "migration"        # forecast heavy bird migration tonight (BirdCast-style alert)
 
 
 class Priority(IntEnum):
