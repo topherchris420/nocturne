@@ -1137,7 +1137,7 @@ outage,arterial,3.75,21:45,100.0
 outage,arterial,4.0,22:00,100.0
 outage,arterial,4.25,22:15,89.18
 outage,arterial,4.5,22:30,88.57
-outage,arterial,4.75,22:45,82.33
+outage,arterial,4.75,22:45,82.25
 outage,arterial,5.0,23:00,82.95
 outage,arterial,5.25,23:15,61.63
 outage,arterial,5.5,23:30,62.99
@@ -1193,7 +1193,7 @@ outage,collector,3.75,21:45,100.0
 outage,collector,4.0,22:00,100.0
 outage,collector,4.25,22:15,79.51
 outage,collector,4.5,22:30,79.14
-outage,collector,4.75,22:45,71.87
+outage,collector,4.75,22:45,71.8
 outage,collector,5.0,23:00,72.42
 outage,collector,5.25,23:15,52.95
 outage,collector,5.5,23:30,50.99
@@ -1417,7 +1417,7 @@ legacy_outage,arterial,3.75,21:45,100.0
 legacy_outage,arterial,4.0,22:00,100.0
 legacy_outage,arterial,4.25,22:15,89.18
 legacy_outage,arterial,4.5,22:30,88.57
-legacy_outage,arterial,4.75,22:45,99.87
+legacy_outage,arterial,4.75,22:45,99.78
 legacy_outage,arterial,5.0,23:00,100.0
 legacy_outage,arterial,5.25,23:15,100.0
 legacy_outage,arterial,5.5,23:30,100.0
@@ -1473,7 +1473,7 @@ legacy_outage,collector,3.75,21:45,100.0
 legacy_outage,collector,4.0,22:00,100.0
 legacy_outage,collector,4.25,22:15,79.51
 legacy_outage,collector,4.5,22:30,79.14
-legacy_outage,collector,4.75,22:45,99.77
+legacy_outage,collector,4.75,22:45,99.69
 legacy_outage,collector,5.0,23:00,100.0
 legacy_outage,collector,5.25,23:15,100.0
 legacy_outage,collector,5.5,23:30,100.0
