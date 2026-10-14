@@ -121,3 +121,30 @@ def test_EXT_OBS_7_curfew_steps_pair_readings_from_the_same_evening():
     rs = [(t0 + timedelta(minutes=5 * i), 18.0 if i < 12 else 18.2) for i in range(24)]
     steps = curfew_steps(rs)
     assert list(steps) == [date(2026, 11, 9)] and steps[date(2026, 11, 9)] == pytest.approx(0.2)
+
+
+def test_EXT_OBS_8_logs_with_comments_extra_fields_and_no_header(tmp_path):
+    """A CSV may open with '#' notes and carry a stray extra field; an IDA
+    file may lack its header, and then the MSAS column is decided once for
+    the whole file, so a bright 9.8 msas reading is not swapped for the
+    temperature."""
+    t0 = datetime(2026, 11, 3, 4, 0, tzinfo=UTC)
+    c = tmp_path / "notes.csv"
+    c.write_text("# station rock-creek, SQM-LU\nutc,msas\n2026-11-03T04:00:00Z,18.5\n2026-11-03T04:05:00Z,18.6,extra\n")
+    assert read_sqm(str(c)) == [(t0, 18.5), (t0 + timedelta(minutes=5), 18.6)]
+    rows = [f"2026-11-03T04:{5 * i:02d}:00.000;2026-11-02T23:{5 * i:02d}:00.000;12.0;0.50;{m:.2f}"
+            for i, m in enumerate([18.4, 18.5, 9.8, 18.6])]
+    ida = tmp_path / "bare.dat"
+    ida.write_text("\n".join(rows) + "\n")
+    assert [m for _, m in read_sqm(str(ida))] == pytest.approx([18.4, 18.5, 9.8, 18.6])
+
+
+def test_EXT_OBS_9_one_estimate_short_of_nights_keeps_the_other():
+    """Clouds after midnight on every night leave the post-curfew window
+    with nothing usable; the curfew step, measured around 23:00, still
+    reports, and the shortfall is said."""
+    rng = random.Random(2)
+    readings = [(t, m + (rng.gauss(0.0, 0.3) if local_hour(t, POSIX_TZ) < 2.0 else 0.0)) for t, m in _station(0.12)]
+    r = verify(readings, date(2026, 11, 1), DC_LAT, DC_LON)
+    assert r["curfew_step_change"] is not None and abs(r["curfew_step_change"].effect - 0.12) < 0.04
+    assert r["post_curfew_change"] is None and any("post_curfew_change" in n for n in r["notes"])

@@ -40,12 +40,18 @@ _NAME = re.compile(r"<[A-Za-z0-9+\-]+>|[A-Za-z]{3,}")
 _OFFSET = re.compile(r"[+-]?\d{1,3}(?::\d{1,2}(?::\d{1,2})?)?")
 
 
-def _hms(text: str) -> int:
-    """'5', '-3:30', '+167:00:00' -> seconds."""
+_HMS = re.compile(r"[+-]?\d{1,3}(?::\d{1,2}){0,2}")
+
+
+def _hms(text: str, max_h: int = 167) -> int:
+    """'5', '-3:30', '+167:00:00' -> seconds. Transition times may run to
+    167 h (RFC 8536); UTC offsets are capped at 24 h by the caller."""
+    if not _HMS.fullmatch(text):
+        raise ValueError(f"time {text!r} is not [+-]h[:mm[:ss]]")
     sign = -1 if text.startswith("-") else 1
     parts = [int(p) for p in text.lstrip("+-").split(":")]
     parts += [0] * (3 - len(parts))
-    if parts[0] > 167 or parts[1] > 59 or parts[2] > 59:
+    if parts[0] > max_h or parts[1] > 59 or parts[2] > 59:
         raise ValueError(f"time {text!r} out of range")
     return sign * (parts[0] * 3600 + parts[1] * 60 + parts[2])
 
@@ -113,15 +119,17 @@ class PosixTZ:
         return (utc + timedelta(seconds=self.utcoffset_s(utc))).replace(tzinfo=None)
 
     def to_utc(self, local: datetime) -> datetime:
-        """Inverse of `to_local`. The repeated fall-back hour resolves to
-        daylight time; the skipped spring-forward hour to standard time."""
+        """Inverse of `to_local`, as zoneinfo's fold=0: a repeated hour
+        resolves to its first occurrence, and a skipped hour is read with
+        the offset in force before the jump, so it lands after the gap.
+        Holds for negative DST (Dublin's winter 'daylight') too."""
         local = local.replace(tzinfo=None)
-        offsets = (self.dst_off, self.std_off) if self.has_dst else (self.std_off,)
-        for off in offsets:
-            cand = (local - timedelta(seconds=off)).replace(tzinfo=UTC)
+        offsets = {self.std_off, self.dst_off} if self.has_dst else {self.std_off}
+        cands = sorted((local - timedelta(seconds=o)).replace(tzinfo=UTC) for o in offsets)   # type: ignore[operator]
+        for cand in cands:
             if self.to_local(cand) == local:
                 return cand
-        return (local - timedelta(seconds=self.std_off)).replace(tzinfo=UTC)
+        return (local - timedelta(seconds=self.utcoffset_s(cands[0]))).replace(tzinfo=UTC)
 
 
 @lru_cache(maxsize=1024)
@@ -134,8 +142,8 @@ def _dst_bounds(tz: PosixTZ, year: int) -> Tuple[datetime, datetime]:
 
 
 def _rule(text: str) -> TransitionRule:
-    date_part, _, time_part = text.partition("/")
-    secs = _hms(time_part) if time_part else 7200
+    date_part, slash, time_part = text.partition("/")
+    secs = _hms(time_part) if slash else 7200
     if date_part.startswith("M"):
         m, w, d = (int(x) for x in date_part[1:].split("."))
         if not (1 <= m <= 12 and 1 <= w <= 5 and 0 <= d <= 6):
@@ -162,7 +170,7 @@ def parse_posix_tz(text: str) -> PosixTZ:
         m = _NAME.match(s)
         std_name, pos = m.group(0), m.end()                       # type: ignore[union-attr]
         m = _OFFSET.match(s, pos)
-        std_off, pos = -_hms(m.group(0)), m.end()                 # type: ignore[union-attr]
+        std_off, pos = -_hms(m.group(0), 24), m.end()             # type: ignore[union-attr]
         if pos == len(s):
             return PosixTZ(text, std_name, std_off)
         m = _NAME.match(s, pos)
@@ -170,7 +178,7 @@ def parse_posix_tz(text: str) -> PosixTZ:
         dst_off = std_off + 3600
         m = _OFFSET.match(s, pos)
         if m and m.end() > pos:
-            dst_off, pos = -_hms(m.group(0)), m.end()
+            dst_off, pos = -_hms(m.group(0), 24), m.end()
         rules = s[pos:]
         if not rules:
             rules = ",M3.2.0,M11.1.0"
@@ -343,11 +351,18 @@ def next_crossing(lat: float, lon: float, start: datetime, threshold: float,
 @lru_cache(maxsize=4096)
 def night_bounds(lat: float, lon: float, local_date: date, threshold: float = NIGHT_ELEVATION_DEG,
                  tz: str = POSIX_TZ) -> Tuple[Optional[datetime], Optional[datetime]]:
-    """(dusk, dawn) in UTC for the night that starts on `local_date`. Either
-    is None where the sun does not cross `threshold`: no dusk under the
-    midnight sun or in polar night, no dawn when polar night begins."""
+    """(dusk, dawn) in UTC for the night that starts on `local_date`: the
+    first time the sun sinks below `threshold` within 24 h of that date's
+    solar noon, and the time it next rises above it. Either is None where
+    the sun does not cross: no dusk under the midnight sun or in polar
+    night, no dawn when polar night begins. Starting at solar rather than
+    clock noon finds the brief midday dusk of the days just before polar
+    night (Tromso in early December: 11:50)."""
     noon = local_to_utc(datetime(local_date.year, local_date.month, local_date.day, 12), tz)
-    dusk = next_crossing(lat, lon, noon, threshold, descending=True)
+    transit = 720.0 - 4.0 * lon                                  # mean solar noon, minutes after 00:00 UTC
+    delta = (transit - (noon.hour * 60 + noon.minute) + 720.0) % 1440.0 - 720.0
+    start = noon + timedelta(minutes=delta - 20.0)              # less the equation of time's +-17 min
+    dusk = next_crossing(lat, lon, start, threshold, descending=True, max_hours=24.0)
     if dusk is None:
         return None, None
     return dusk, next_crossing(lat, lon, dusk, threshold, descending=False)

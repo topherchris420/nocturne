@@ -11,8 +11,10 @@ from datetime import date, datetime, timedelta, timezone
 from vdl7.bench import Bench
 from vdl7.clock import night_bounds
 from vdl7.cms import Cms
-from vdl7.nightsignal import (CATEGORIES, decide, migration_events, migration_season, phase_at, sign, signal,
-                              to_ics, verify)
+import pytest
+
+from vdl7.nightsignal import (CATEGORIES, dark_window, decide, migration_events, migration_season, phase_at, sign,
+                              signal, to_ics, verify)
 from vdl7.profiles import RoadClass
 from vdl7.sites import site
 
@@ -80,6 +82,11 @@ def test_EXT_SIG_5_calendar_feed():
     assert ics.count("BEGIN:VEVENT") == 4 and ics.count("Lights Out") == 1
     assert "DTSTART:20261014T030000Z" in ics and "UID:2026-10-13-migration@nocturne" in ics
     assert all(len(line) <= 75 for line in ics.split("\r\n"))
+    assert "SUMMARY:Lighting curfew: facades\\, signs and empty floors off" in ics      # RFC 5545 TEXT escaping
+    undated = dict(docs[0], issued=None)
+    assert "DTSTAMP:\r\n" not in to_ics([undated]) and "DTSTAMP:2" in to_ics([undated])
+    with pytest.raises(ValueError):
+        to_ics([])
 
 
 def test_EXT_SIG_6_migration_alert_reaches_the_streetlights():
@@ -91,8 +98,38 @@ def test_EXT_SIG_6_migration_alert_reaches_the_streetlights():
     out = b.run_until("2026-10-14 20:00", dt=5)
     assert out.level == 60 and "MIGRATION" in out.reasons
     assert migration_events(b.cms, ["x"], signal(date(2026, 10, 14), issued=b.utc), b.utc) == []
+    # sent two days early it would expire before its night; after dawn it is too late
+    early = signal(date(2026, 10, 16), migration={"source": "BirdCast"}, issued=ISSUED)
+    assert migration_events(b.cms, ["x"], early, ISSUED) == []
+    assert len(migration_events(b.cms, ["x"], early, ISSUED + timedelta(days=1, hours=20))) == 1
+    assert migration_events(b.cms, ["x"], doc, b.utc + timedelta(days=1)) == []
 
 
 def test_EXT_SIG_7_migration_seasons():
     assert migration_season(date(2026, 4, 20)) and migration_season(date(2026, 10, 1))
     assert not migration_season(date(2026, 7, 1)) and not migration_season(date(2026, 12, 25))
+
+
+def test_EXT_SIG_8_polar_night_and_the_midnight_sun():
+    """Tromso, 20 December: the sun never reaches -3 deg, so the signal runs
+    from local noon to noon and the curfew holds at 23:30. On the night
+    polar night begins the dark runs on to the next noon, and on the night
+    it ends it stops when the sun returns. Under the midnight sun there is
+    no dark window, but the calendar still carries the curfew (05:00 end),
+    so a summer feed is never an empty calendar."""
+    t = site("tromso")
+    doc = signal(date(2026, 12, 20), site=t, issued=ISSUED)
+    assert doc["dark"]["polar_night"] and doc["sun"]["dusk"] is None
+    assert doc["dark"]["from"] == "2026-12-20T11:00:00Z" and doc["dark"]["to"] == "2026-12-21T11:00:00Z"
+    assert decide(doc, "facade", at("2026-12-20T22:30")) == (0.0, "curfew phase")
+    assert decide(doc, "facade", at("2026-12-20T13:00"))[0] == 1.0
+    begins = signal(date(2026, 12, 16), site=t, issued=ISSUED)
+    assert begins["sun"]["dawn"] is None and begins["dark"]["to"] == "2026-12-17T11:00:00Z"
+    start, end, polar = dark_window(t, date(2026, 12, 26))
+    assert polar and end < datetime(2026, 12, 27, 11, 0, tzinfo=UTC)               # the sun is back before noon
+    summer = [signal(date(2026, 6, 20) + timedelta(days=i), site=t, issued=ISSUED) for i in range(3)]
+    assert all(phase_at(d, at("2026-06-20T23:00")) is None for d in summer)
+    ics = to_ics(summer)
+    assert ics.count("BEGIN:VEVENT") == 3 and "DTEND:20260621T030000Z" in ics
+    for d in (date(2026, 12, 14), date(2026, 12, 20), date(2026, 12, 27)):          # nights join up
+        assert dark_window(t, d)[1] <= dark_window(t, d + timedelta(days=1))[0]

@@ -129,7 +129,7 @@ class Flash:
                 return False
             new = ProfileBundle.from_dict(d)
             errs = validate_bundle(new)
-        except (KeyError, ValueError, TypeError, AttributeError) as e:
+        except (KeyError, ValueError, TypeError, AttributeError, OverflowError) as e:
             self.install_log.append(f"REJECT malformed bundle: {e!r}")
             return False
         if errs:
@@ -180,7 +180,7 @@ class Flash:
             try:
                 b = ProfileBundle.from_dict(SignedMessage(payload, sig).decode())
                 bad = validate_bundle(b)
-            except (KeyError, ValueError, TypeError, AttributeError):
+            except (KeyError, ValueError, TypeError, AttributeError, OverflowError):
                 f.install_log.append(f"BOOT bank {bank} malformed")
                 continue
             if bad:
@@ -475,14 +475,17 @@ class VDL7Controller:
 
     def _near_sun_transition(self, utc: datetime, dusk: bool) -> bool:
         """Learn only from photocell transitions within 45 min of the sun's
-        own dusk or dawn: storm darkness must not become 'dusk'."""
-        loc = to_local(utc, self.cfg.tz)
-        d = loc.date() if (dusk or loc.hour >= 12) else (loc - timedelta(days=1)).date()
-        sun_dusk, sun_dawn = night_bounds(self.cfg.lat, self.cfg.lon, d, tz=self.cfg.tz)
-        ref = sun_dusk if dusk else sun_dawn
-        if ref is None:                        # midnight sun or polar night: nothing to learn from
-            return False
-        return abs((utc - ref).total_seconds()) <= LEARN_GATE_S
+        own dusk or dawn: storm darkness must not become 'dusk'. The night
+        may have begun today or yesterday (a white-night dusk after
+        midnight, any dawn), so both are tried; under the midnight sun or in
+        polar night there is nothing to learn from."""
+        today = to_local(utc, self.cfg.tz).date()
+        for d in (today, today - timedelta(days=1)):
+            sun_dusk, sun_dawn = night_bounds(self.cfg.lat, self.cfg.lon, d, tz=self.cfg.tz)
+            ref = sun_dusk if dusk else sun_dawn
+            if ref is not None and abs((utc - ref).total_seconds()) <= LEARN_GATE_S:
+                return True
+        return False
 
     def _plausible_dusk(self, mono: float) -> float:
         """SAFE-mode anchor. If a dusk was seen yesterday in this boot, a
@@ -630,28 +633,33 @@ class VDL7Controller:
                 self._seed_learning(utc)
                 self._seeded = True
             hour: Optional[float] = local_hour(utc, cfg.tz)
-            astro_night = solar_elevation_deg(cfg.lat, cfg.lon, utc) < cfg.night_elevation_deg
+            elevation = solar_elevation_deg(cfg.lat, cfg.lon, utc)
+            astro_night = elevation < cfg.night_elevation_deg
             lit = astro_night or pc_dark
             self.output_reasons_early = pc_dark and not astro_night
+            storm_dark = pc_dark and elevation >= 0.0          # dark with the sun up: storm darkness (R-SAF-4)
             if pc_dark and not astro_night:
                 reasons.append("PHOTOCELL_EARLY")
             if astro_night and not pc_dark:
                 reasons.append("PHOTOCELL_VETOED")
         else:
             self.output_reasons_early = False
+            storm_dark = False
             lit = pc_dark
             hour = self._safe_night_hour(mono) if lit else None
             reasons.append("SAFE_CLOCK" if hour is not None else "SAFE_NO_ANCHOR")
 
         # 3. Phase -> base level (no estimate: hold the 22:00 level). A zone
         #    overlay replaces the class levels; on a migration night the
-        #    presence classes hold their 22:00 level from dusk.
+        #    presence classes hold their 22:00 level from dusk. Storm darkness
+        #    with the sun up (R-SAF-4) keeps the evening level whatever the alert.
         phase = phase_for_hour(hour) if hour is not None else Phase.STEP
         levels = bundle.levels_for(cfg.road, cfg.zone)
-        if cfg.zone and cfg.zone in bundle.zones:
+        if cfg.zone and cfg.road in bundle.zones.get(cfg.zone, {}):
             reasons.append(f"ZONE:{cfg.zone}")
         base = levels[PHASE_ORDER.index(phase)]
-        if self.events.latest(EventKind.MIGRATION, mono) is not None and cfg.road in bundle.migration_classes:
+        if (self.events.latest(EventKind.MIGRATION, mono) is not None and cfg.road in bundle.migration_classes
+                and not storm_dark):
             step_level = levels[PHASE_ORDER.index(Phase.STEP)]
             if base > step_level:
                 base = step_level

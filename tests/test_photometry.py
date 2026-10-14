@@ -159,3 +159,65 @@ def test_EXT_OPT_9_globe_uplight_and_the_reflector_retrofit(tmp_path):
     f.write_text(write_ies(legacy, {"TEST": "t"}, watts=40))
     loaded = load_ies(str(f))
     assert str(loaded.bug()) == str(legacy.bug()) and loaded.input_watts == 40
+
+
+def _sinusoid(street_side_h=90.0, house_at=270.0):
+    """I = 1000 (1 + 0.5 cos(H - street)), street side brighter."""
+    v = [float(x) for x in range(0, 91, 5)]
+    h = [float(x) for x in range(0, 361, 5)]
+    street = (house_at + 180.0) % 360.0
+    return Photometry(v, h, [[I0 * (1 + 0.5 * math.cos(math.radians(b - street)))] * len(v) for b in h],
+                      street_side_h=street_side_h)
+
+
+def test_EXT_OPT_10_trespass_reads_the_file_on_its_own_street_side():
+    """The same luminaire written with its street side at H = 90 or at
+    H = 270 puts the same light on the house behind it."""
+    usual = _sinusoid(90.0, house_at=270.0)
+    turned = _sinusoid(270.0, house_at=90.0)
+    a, b = window_exposure(usual, 9, 10, 5), window_exposure(turned, 9, 10, 5)
+    assert a.ev_lux == pytest.approx(b.ev_lux, rel=1e-9) and a.zone == b.zone == "BH"
+    assert usual.illuminance(9.0, (0, 10, 5), (0, -1, 0)) > usual.illuminance(9.0, (0, -10, 5), (0, 1, 0))
+    assert turned.illuminance(9.0, (0, -10, 5), (0, 1, 0)) == pytest.approx(
+        usual.illuminance(9.0, (0, -10, 5), (0, 1, 0)), rel=1e-9)
+
+
+def test_EXT_OPT_11_type_v_glare_table_only_for_light_that_repeats_every_90_degrees():
+    """A quadrant-symmetric file is not Type V unless its light repeats every
+    90 deg: 1 + 0.5 cos 2H is a Type II-like distribution declared over 0-90."""
+    v = [float(x) for x in range(0, 181, 5)]
+    quad_h = [float(x) for x in range(0, 91, 5)]
+    oblong = Photometry(v, quad_h, [[I0 * (1 + 0.5 * math.cos(math.radians(2 * b)))] * len(v) for b in quad_h])
+    assert oblong.symmetry == "quadrant" and not oblong.quadrilateral_symmetric()
+    assert not oblong.bug().symmetric_table and oblong.bug(type_v=True).symmetric_table
+    full_h = [float(x) for x in range(0, 361, 5)]
+    square = Photometry(v, full_h, [[I0 * (1 + 0.3 * math.cos(math.radians(4 * b)))] * len(v) for b in full_h])
+    assert square.symmetry == "full" and square.quadrilateral_symmetric() and square.bug().symmetric_table
+    assert iso().quadrilateral_symmetric()
+
+
+def test_EXT_OPT_12_more_lm63_corners():
+    """[MORE] continues a keyword, 'TILT = NONE' may carry spaces, a keyword
+    mentioning tilt is not the TILT line, anything after the table is
+    ignored, and bad numbers say what is wrong."""
+    text = IES_TEXT.replace("[MANUFAC] nobody\r\n", "[MANUFAC] nobody\r\n[MORE] and nobody else\r\n[OTHER] TILT test\r\n")
+    text = text.replace("TILT=INCLUDE", "TILT = INCLUDE") + "end of file\r\n"
+    p = parse_ies(text)
+    assert p.keywords["MANUFAC"] == "nobody and nobody else" and p.keywords["OTHER"] == "TILT test"
+    assert p.candela[0] == pytest.approx([180.0, 144.0, 18.0])
+    with pytest.raises(ValueError, match="non-numeric"):
+        parse_ies(IES_TEXT.replace("100 80 10", "100 eighty 10"))
+    with pytest.raises(ValueError, match="at least one"):
+        parse_ies(IES_TEXT.replace("1, -1, 2, 3, 2,", "1, -1, 2, 0, 2,"))
+
+
+def test_EXT_OPT_13_a_90_270_file_without_180_covers_the_whole_circle():
+    """Bilateral about 90-270 with no 180 column: expanded, the table starts
+    at 30 deg, and the angles below it wrap onto the closing segment."""
+    v = [0.0, 45.0, 90.0]
+    h = [90.0, 120.0, 150.0, 210.0, 240.0, 270.0]
+    cd = lambda b: 1000.0 + 200.0 * math.sin(math.radians(b))       # symmetric about the 90-270 plane
+    p = Photometry(v, h, [[cd(b)] * 3 for b in h])
+    assert p.symmetry == "bilateral-90-270"
+    for b in range(0, 360, 10):
+        assert p.intensity(45.0, b) == pytest.approx(cd(b), rel=0.03), b

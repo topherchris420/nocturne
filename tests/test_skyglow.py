@@ -13,9 +13,10 @@ import os
 import pytest
 
 from vdl7.profiles import RoadClass
-from vdl7.skyglow import (CLASSES, NATURAL_CD, PLACES_DC, Atmosphere, Lighting, SkyAt, calibrate, cd_from_msas,
-                          kernel, lighting_for, load_grid, msas_from_cd, nelm, plan_retrofits, sky_scenarios,
-                          stars_visible, streetlight_luminance)
+from vdl7 import spectral
+from vdl7.skyglow import (CELL_RADIUS_M, CLASSES, NATURAL_CD, PLACES_DC, Atmosphere, Lighting, SkyAt, _cell_kernel,
+                          calibrate, cd_from_msas, kernel, lighting_for, load_grid, msas_from_cd, nelm, plan_retrofits,
+                          sky_scenarios, stars_visible, streetlight_luminance)
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 CCT = {RoadClass.ARTERIAL: "3000K", RoadClass.COLLECTOR: "2700K", RoadClass.LOCAL: "2700K",
@@ -119,3 +120,49 @@ def test_EXT_SKY_8_globe_retrofits_are_ranked_where_they_help_the_places(cells):
     assert distance_m(park.lat, park.lon, steps[0].lat, steps[0].lon) < 4000
     assert [s.score for s in steps] == sorted((s.score for s in steps), reverse=True)
     assert all(0 < s.gain["rock-creek"] < 1 and s.globes_kw >= 0.5 for s in steps)
+
+
+def test_EXT_SKY_9_kernel_edges_and_an_aerosol_free_sky():
+    """Outside the 10 m - 200 km table the kernel carries on along its end
+    slopes rather than going flat; with no aerosol the aerosol kernel is
+    zero, not an error."""
+    for em in ("lambert", "iso"):
+        assert kernel(5.0, em, "R") > kernel(10.0, em, "R") > kernel(20.0, em, "R")
+        assert 0 < kernel(400e3, em, "R") < kernel(200e3, em, "R")
+    clean = Atmosphere(aod_550=0.0)
+    assert kernel(1000.0, "lambert", "A", clean) == 0.0 and kernel(1000.0, "lambert", "R", clean) > 0
+
+
+def test_EXT_SKY_10_a_cell_near_a_place_has_no_step_at_its_edge():
+    """A cell's kernel is its area mean near the place and the point kernel
+    with a 1/d^2 correction beyond six cell radii: continuous at the cell
+    edge and at the switch, and equal to the point kernel far away."""
+    R = CELL_RADIUS_M
+    for em in ("lambert", "iso"):
+        for sc in ("R", "A"):
+            k = lambda d: _cell_kernel(d, em, sc, Atmosphere())
+            for edge in (R, 6 * R):
+                assert k(edge - 1.0) == pytest.approx(k(edge + 1.0), rel=0.03), (em, sc, edge)
+            assert k(0.0) > k(R) > k(3 * R)
+            assert k(30 * R) == pytest.approx(kernel(30 * R, em, sc), rel=0.01)
+
+
+def test_EXT_SKY_11_inputs_are_checked(cells):
+    with pytest.raises(ValueError, match="share"):
+        sky_scenarios(cells, PLACES_DC[:1], CCT, share=0.0)
+    with pytest.raises(ValueError, match="other_curfew_cut"):
+        sky_scenarios(cells, PLACES_DC[:1], CCT, other_curfew_cut=1.5)
+    with pytest.raises(ValueError, match="eye"):
+        spectral.scatter_weight("2700K", 4.0, eye="mesopic")
+    assert spectral.scatter_weight("NBA", 4.0) == spectral.scatter_weight("Narrow-band amber", 4.0)
+    assert spectral.scatter_weight("2200K", 4.0) < spectral.scatter_weight("4000K", 4.0)
+
+
+def test_EXT_SKY_12_stored_white_spectra_are_on_the_locus():
+    """The stored white LED fits (so the command line does not re-run a
+    half-minute search) still land on their CCT with Duv near zero."""
+    for cct, params in spectral.FITTED_WHITE.items():
+        p, g, r, gmu = params
+        x, y = spectral.xy(spectral.white_led(p, g, r, green_mu=gmu))
+        assert spectral.cct_mccamy(x, y) == pytest.approx(cct, rel=0.01) and abs(spectral.duv(x, y)) < 0.002
+        assert spectral.fit_white(cct) == params

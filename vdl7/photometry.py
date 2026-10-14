@@ -90,9 +90,19 @@ class Photometry:
     tilt_ignored: bool = False
 
     def __post_init__(self):
-        self._zcache: Dict[Tuple[float, float], Dict[str, float]] = {}
+        self._zcache: Dict[Tuple[float, float, float], Dict[str, float]] = {}
         self.symmetry = _symmetry(self.h_angles)
         self._full_h, self._full_c = _expand(self.h_angles, self.candela, self.symmetry)
+
+    def file_h(self, dx: float, dy: float) -> float:
+        """The file's horizontal angle for a direction (dx along the road,
+        dy toward the street), honouring `street_side_h`."""
+        return (math.degrees(math.atan2(dy, dx)) + self.street_side_h - 90.0) % 360.0
+
+    def _wrap(self, h: float) -> float:
+        """h on the expanded table's circle, which starts at its first angle."""
+        h %= 360.0
+        return h + 360.0 if h < self._full_h[0] else h
 
     # ------------------------------------------------------------ lookups
     def intensity(self, v: float, h: float) -> float:
@@ -101,10 +111,10 @@ class Photometry:
         va = self.v_angles
         if v < va[0] - 1e-9 or v > va[-1] + 1e-9:
             return 0.0
-        h = h % 360.0
         hs, cs = self._full_h, self._full_c
         if len(hs) == 1:
             return _interp1(va, cs[0], v)
+        h = self._wrap(h)
         k = _bracket(hs, h)
         h0, h1 = hs[k], hs[k + 1]
         f = 0.0 if h1 == h0 else (h - h0) / (h1 - h0)
@@ -114,7 +124,7 @@ class Photometry:
     def zonal_lumens(self, dv: float = 0.5, dh: float = 1.0) -> Dict[str, float]:
         """Lumens in each TM-15 zone plus 'total', 'front', 'back', 'up', by
         the midpoint rule on a dv x dh degree grid."""
-        key = (dv, dh)
+        key = (dv, dh, self.street_side_h)
         if key in self._zcache:
             return dict(self._zcache[key])
         zones = {z: 0.0 for z in ZONES}
@@ -129,8 +139,9 @@ class Photometry:
         else:
             brackets = []
             for h in hs:
-                k = _bracket(full_h, h)
-                brackets.append((k, (h - full_h[k]) / (full_h[k + 1] - full_h[k])))
+                hw = self._wrap(h)
+                k = _bracket(full_h, hw)
+                brackets.append((k, (hw - full_h[k]) / (full_h[k + 1] - full_h[k])))
         for i in range(nv):
             v = (i + 0.5) * dv
             if v < self.v_angles[0] or v > self.v_angles[-1]:
@@ -159,9 +170,24 @@ class Photometry:
         self._zcache[key] = dict(zones)
         return zones
 
-    def bug(self) -> BugRating:
+    def quadrilateral_symmetric(self, tol: float = 0.05) -> bool:
+        """Type V / VS: the distribution repeats every 90 deg of H (within
+        `tol` of its peak), whatever range the file happens to declare."""
+        if len(self._full_h) == 1:
+            return True
+        peak = max(max(row) for row in self._full_c) or 1.0
+        for v in self.v_angles:
+            for h in range(0, 360, 5):
+                if abs(self.intensity(v, h) - self.intensity(v, h + 90.0)) > tol * peak:
+                    return False
+        return True
+
+    def bug(self, type_v: Optional[bool] = None) -> BugRating:
+        """TM-15-11 rating. The glare table for quadrilateral-symmetric
+        luminaires applies when the light repeats every 90 deg; pass
+        `type_v` to state the luminaire's IES type instead."""
         z = self.zonal_lumens()
-        sym = self.symmetry in ("rotational", "quadrant")
+        sym = self.quadrilateral_symmetric() if type_v is None else bool(type_v)
         out, why = {}, {}
         for name, table in (("B", B_TABLE), ("U", U_TABLE), ("G", G_TABLE_SYM if sym else G_TABLE_ASYM)):
             ratings = {zone: _rating(z[zone], lims) for zone, lims in table.items()}
@@ -186,7 +212,7 @@ class Photometry:
         if r == 0:
             return 0.0
         v = math.degrees(math.acos(max(-1.0, min(1.0, -dz / r))))
-        h = math.degrees(math.atan2(dy, dx)) % 360.0
+        h = self.file_h(dx, dy)
         nn = math.sqrt(sum(c * c for c in normal))
         cos_inc = -(dx * normal[0] + dy * normal[1] + dz * normal[2]) / (r * nn)
         if cos_inc <= 0:
@@ -254,7 +280,7 @@ def _expand(h: List[float], cd: List[List[float]], sym: str) -> Tuple[List[float
             pts.setdefault((180.0 - a) % 360.0, list(row))
     hs = sorted(pts)
     rows = [pts[a] for a in hs]
-    hs.append(360.0)                          # close the circle
+    hs.append(hs[0] + 360.0)                  # close the circle (a 90-270 file without 180 starts at 30)
     rows.append(list(rows[0]))
     return hs, rows
 
@@ -262,42 +288,55 @@ def _expand(h: List[float], cd: List[List[float]], sym: str) -> Tuple[List[float
 # ------------------------------------------------------------------ LM-63
 def parse_ies(text: str, street_side_h: float = 90.0) -> Photometry:
     """Parse an IES LM-63 (1991, 1995, 2002 or 2019) photometric file.
-    Only Type C photometry, the roadway and area-lighting norm, is accepted."""
+    Only Type C photometry, the roadway and area-lighting norm, is accepted.
+    Anything after the candela table (an end-of-file marker, a note) is
+    ignored."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     keywords: Dict[str, str] = {}
+    last_key: Optional[str] = None
     i = 0
-    while i < len(lines) and not lines[i].strip().upper().startswith("TILT"):
+    while i < len(lines) and not re.match(r"\s*TILT\s*=", lines[i], re.I):
         m = re.match(r"\s*\[([^\]]+)\]\s*(.*)", lines[i])
         if m:
-            keywords[m.group(1).strip().upper()] = m.group(2).strip()
+            key, value = m.group(1).strip().upper(), m.group(2).strip()
+            if key == "MORE" and last_key is not None:          # continues the previous keyword
+                keywords[last_key] = (keywords[last_key] + " " + value).strip()
+            else:
+                keywords[key] = value
+                last_key = key
         i += 1
     if i == len(lines):
         raise ValueError("no TILT= line: not an LM-63 file")
-    tilt = lines[i].split("=", 1)[1].strip().upper() if "=" in lines[i] else "NONE"
-    nums = [float(t) for t in re.split(r"[\s,]+", " ".join(lines[i + 1:]).strip()) if t]
+    tilt = lines[i].split("=", 1)[1].strip().upper()
+    tokens = [t for t in re.split(r"[\s,]+", " ".join(lines[i + 1:]).strip()) if t]
     pos = 0
+
+    def take(n: int) -> List[float]:
+        nonlocal pos
+        if pos + n > len(tokens):
+            raise ValueError("truncated photometric data")
+        try:
+            vals = [float(t) for t in tokens[pos:pos + n]]
+        except ValueError as e:
+            raise ValueError(f"non-numeric value in photometric data: {e}") from None
+        pos += n
+        return vals
+
     tilt_ignored = False
     if tilt == "INCLUDE":                     # lamp-to-luminaire geometry, n, angles, factors
-        n = int(nums[1])
-        pos = 2 + 2 * n
+        _geometry, n = take(2)
+        take(2 * int(n))
         tilt_ignored = True
     elif tilt != "NONE":
         raise ValueError(f"TILT={tilt}: external tilt files are not supported")
-    try:
-        n_lamps, lm_per_lamp, mult, n_v, n_h, ptype = nums[pos:pos + 6]
-        pos += 10                             # + units type, width, length, height
-        ballast, bl_factor, watts = nums[pos:pos + 3]
-        pos += 3
-        n_v, n_h = int(n_v), int(n_h)
-        v = nums[pos:pos + n_v]
-        pos += n_v
-        h = nums[pos:pos + n_h]
-        pos += n_h
-        raw = nums[pos:pos + n_v * n_h]
-    except ValueError as e:
-        raise ValueError(f"truncated photometric data: {e}") from None
-    if len(v) != n_v or len(h) != n_h or len(raw) != n_v * n_h:
-        raise ValueError("truncated photometric data")
+    n_lamps, lm_per_lamp, mult, n_v, n_h, ptype, _units, _w, _l, _ht = take(10)
+    ballast, bl_factor, watts = take(3)
+    n_v, n_h = int(n_v), int(n_h)
+    if n_v < 1 or n_h < 1:
+        raise ValueError("photometric data needs at least one vertical and one horizontal angle")
+    v = take(n_v)
+    h = take(n_h)
+    raw = take(n_v * n_h)
     if int(ptype) != 1:
         raise ValueError(f"photometric type {int(ptype)}: only Type C (1) is supported")
     if v != sorted(v) or h != sorted(h):
@@ -407,7 +446,7 @@ def window_exposure(phot: Photometry, mounting_h_m: float, setback_m: float, win
     dx, dy, dz = along_m, y, window_h_m - mounting_h_m
     r = math.sqrt(dx * dx + dy * dy + dz * dz)
     v = math.degrees(math.acos(-dz / r)) if r else 0.0
-    h = math.degrees(math.atan2(dy, dx)) % 360.0
+    h = phot.file_h(dx, dy)
     front = ((h - phot.street_side_h + 90.0) % 360.0) < 180.0
     if v >= 100:
         zone = "UH"

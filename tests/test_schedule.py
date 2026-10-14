@@ -39,6 +39,15 @@ def test_EXT_P0_2_arterials_step_hourly_with_expected_traffic():
     assert level_at(steps, 6.5) > level_at(steps, 3.5)                                         # morning traffic
 
 
+def test_EXT_P0_2b_traffic_steps_run_on_to_the_latest_dawns():
+    """Paris dawns as late as 08:28 and Tromso's near 11:30: the arterial
+    programme keeps stepping with the morning traffic instead of holding
+    its 06:00 level until dawn."""
+    steps = program(DEFAULT_PROFILES[RoadClass.ARTERIAL])
+    assert "07:00" in [s.at for s in steps]
+    assert level_at(steps, 8.0) >= level_at(steps, 6.5) and level_at(steps, 8.0) == 100
+
+
 def test_EXT_P0_3_level_lookup_crosses_midnight():
     steps = program(DEFAULT_PROFILES[RoadClass.LOCAL])
     assert level_at(steps, 21.9) == 80 and level_at(steps, 22.1) == 60

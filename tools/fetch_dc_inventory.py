@@ -17,9 +17,14 @@ Class mapping (documented in data/dc/README.md):
                                          style lighting; dimmed only by the arterial profile)
     Collector                         -> collector
     Local, unknown                    -> local
-Tunnel/underpass, overhead guide-sign, navigation and tower lights are kept
-static (`excluded`): tunnels need adaptation lighting by day and the others
-are not street lighting.
+Tunnel/underpass and under-deck lights, overhead guide-sign, navigation and
+tower lights are kept static (`excluded`): tunnels and the wallpacks under
+bridge decks need lighting by day as well, and the others are not street
+lighting.
+
+A pole that reports no wattage is given the median WATTAGE1 of its class and
+fixture style (or of its class), so it is not counted as drawing nothing;
+fleet.json says how many were filled in this way.
 """
 from __future__ import annotations
 
@@ -34,6 +39,7 @@ import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
 from datetime import date
+from statistics import median
 
 LAYER = "https://maps2.dcgis.dc.gov/dcgis/rest/services/DDOT/Streetlights/MapServer/0"
 FIELDS = ["OBJECTID", "ASSETSTATUS", "ASSETTYPE", "LIGHTTYPE", "WATTAGE1", "WATTAGE2", "NUMBERLIGHTS",
@@ -44,7 +50,8 @@ CELL_DEG_LAT = 0.005                       # ~556 m
 CELL_DEG_LON = 0.0064                      # ~555 m at 38.9 N
 
 ASSET_ALLEY, ASSET_TRAIL = 2, 10
-ASSET_EXCLUDED = {3: "overhead guide sign", 4: "tunnel/underpass", 6: "navigation", 8: "tower"}
+ASSET_EXCLUDED = {3: "overhead guide sign", 4: "tunnel/underpass", 6: "navigation", 8: "tower",
+                  13: "under deck"}
 ROAD = {14: "arterial", 16: "arterial", 11: "arterial", 12: "arterial", 17: "collector", 19: "local"}
 FREEWAY = {11, 12}
 LIGHTTYPE = {6: "LED", 1: "HPS", 3: "INC", 4: "MV", 5: "MH", 7: "FL"}
@@ -102,11 +109,31 @@ def _num(s) -> float:
     return float(m.group(1)) if m else 0.0
 
 
-def pole_watts(a: dict) -> float:
+def wattage_table(active) -> dict:
+    """Median WATTAGE1 by (class, fixture style) and by class over the poles
+    that report one: what a pole without a wattage is taken to draw."""
+    by_style, by_class = defaultdict(list), defaultdict(list)
+    for a in active:
+        cls, _ = classify(a)
+        w1 = _num(a.get("WATTAGE1"))
+        if cls is None or w1 <= 0:
+            continue
+        by_style[(cls, a.get("FIXTURESTYLE"))].append(w1)
+        by_class[cls].append(w1)
+    table = {k: median(v) for k, v in by_class.items()}
+    table.update({k: median(v) for k, v in by_style.items() if len(v) >= 20})
+    return table
+
+
+def pole_watts(a: dict, table: dict = None) -> float:
     """Rated watts on the pole. WATTAGE1 is the first luminaire; WATTAGE2, if
-    set, every further one; otherwise all luminaires are WATTAGE1."""
+    set, every further one; otherwise all luminaires are WATTAGE1. With a
+    `wattage_table`, a missing WATTAGE1 takes its class and style median."""
     n = max(1, int(a.get("NUMBERLIGHTS") or 1))
     w1, w2 = _num(a.get("WATTAGE1")), _num(a.get("WATTAGE2"))
+    if w1 <= 0 and table:
+        cls, _ = classify(a)
+        w1 = table.get((cls, a.get("FIXTURESTYLE")), table.get(cls, 0.0))
     return w1 + (w2 if w2 > 0 else w1) * (n - 1)
 
 
@@ -117,9 +144,11 @@ def trim(a: dict) -> float:
 
 
 def cct_of(a: dict) -> str:
+    """'27k', '2700', '3000K', '2701' -> the nearest standard CCT label."""
     s = str(a.get("CCT") or "").strip().lower()
     if s.endswith("k") and s[:-1].isdigit():
-        s = str(int(s[:-1]) * 100)
+        v = int(s[:-1])
+        s = str(v * 100 if v < 100 else v)                 # '27k' is hundreds of kelvin, '3000k' is kelvin
     if s.isdigit():
         v = int(s)
         for ref in (1500, 2200, 2700, 3000, 4000, 5000):
@@ -144,14 +173,15 @@ def classify(a: dict):
 
 def reduce(records):
     active = [a for a in records if a.get("ASSETSTATUS") == "Active"]
+    table = wattage_table(active)
     fleet = {"classes": defaultdict(lambda: Counter()), "cct": defaultdict(Counter), "ward": defaultdict(Counter),
              "lighttype": Counter(), "excluded": Counter(), "shield": Counter(), "fixture": Counter(),
-             "registered": Counter(), "trim_hist": Counter(), "freeway": 0,
+             "registered": Counter(), "trim_hist": Counter(), "freeway": 0, "imputed_w": Counter(),
              "landuse": defaultdict(Counter), "not_led": Counter(), "optics": defaultdict(Counter)}
     grid = defaultdict(lambda: defaultdict(float))
     for a in active:
         cls, flags = classify(a)
-        w, t = pole_watts(a), trim(a)
+        w, t = pole_watts(a, table), trim(a)
         fleet["lighttype"][LIGHTTYPE.get(a.get("LIGHTTYPE"), "unknown")] += 1
         if cls is None:
             fleet["excluded"][flags["excluded"]] += 1
@@ -160,6 +190,8 @@ def reduce(records):
             fleet["freeway"] += 1
         c = fleet["classes"][cls]
         c["poles"] += 1
+        if _num(a.get("WATTAGE1")) <= 0:
+            fleet["imputed_w"][cls] += 1
         c["luminaires"] += max(1, int(a.get("NUMBERLIGHTS") or 1))
         c["rated_w"] += w
         c["trimmed_w"] += w * t
@@ -192,7 +224,9 @@ def reduce(records):
 def segments(active):
     """Street segment -> (ward, dominant Nocturne class, lights, kW), the unit
     the pilot is randomised over (vdl7.pilot)."""
-    segs = defaultdict(lambda: {"ward": Counter(), "cls": Counter(), "lights": 0, "kw": 0.0, "lat": 0.0, "lon": 0.0})
+    table = wattage_table(active)
+    segs = defaultdict(lambda: {"ward": Counter(), "cls": Counter(), "lights": 0, "kw": 0.0, "lat": 0.0, "lon": 0.0,
+                                "located": 0})
     for a in active:
         cls, _ = classify(a)
         sid = a.get("STREETSEGMID")
@@ -202,10 +236,11 @@ def segments(active):
         s["ward"][str(a.get("WARD") or "unknown")] += 1
         s["cls"][cls] += 1
         s["lights"] += 1
-        s["kw"] += pole_watts(a) * trim(a) / 1000.0
+        s["kw"] += pole_watts(a, table) * trim(a) / 1000.0
         if a.get("x") is not None and a.get("y") is not None:
             s["lat"] += a["y"]
             s["lon"] += a["x"]
+            s["located"] += 1
     return segs
 
 
@@ -214,9 +249,10 @@ def write_segments(segs, out_dir: str) -> None:
         f.write("segment,ward,road_class,lights,kw,lat,lon\n")
         for sid in sorted(segs):
             s = segs[sid]
-            n = s["lights"]
+            n, k = s["lights"], s["located"]
+            lat, lon = (f"{s['lat'] / k:.5f}", f"{s['lon'] / k:.5f}") if k else ("", "")   # centroid of the located poles
             f.write(f"{sid},{s['ward'].most_common(1)[0][0]},{s['cls'].most_common(1)[0][0]},{n},"
-                    f"{s['kw']:.3f},{s['lat'] / n:.5f},{s['lon'] / n:.5f}\n")
+                    f"{s['kw']:.3f},{lat},{lon}\n")
 
 
 def write(fleet, grid, n_records, n_active, out_dir: str) -> None:
@@ -232,6 +268,7 @@ def write(fleet, grid, n_records, n_active, out_dir: str) -> None:
         "lighttype": dict(fleet["lighttype"].most_common()),
         "excluded_static": dict(fleet["excluded"]),
         "freeway_poles_in_arterial": fleet["freeway"],
+        "wattage_imputed_poles": dict(fleet["imputed_w"]),
         "classes": {c: {"poles": int(fleet["classes"][c]["poles"]),
                         "luminaires": int(fleet["classes"][c]["luminaires"]),
                         "share": round(fleet["classes"][c]["poles"] / total, 4),

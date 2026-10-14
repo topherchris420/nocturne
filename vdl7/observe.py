@@ -99,19 +99,27 @@ def read_sqm(path: str) -> List[Reading]:
                 names = [x.strip().upper() for x in ln.lstrip("# ").split(",")]
                 if "MSAS" in names:
                     msas_col = names.index("MSAS")
+        rows = [[p.strip() for p in ln.split(";")] for ln in data]
+        if msas_col is None:                 # no header: one column for the whole file, the one most rows suggest
+            votes: Dict[int, int] = {}
+            for parts in rows:
+                g = _guess_msas(parts)
+                if g is not None:
+                    votes[g] = votes.get(g, 0) + 1
+            if not votes:
+                return []
+            msas_col = max(votes, key=lambda k: (votes[k], k))
         out = []
-        for ln in data:
-            parts = [p.strip() for p in ln.split(";")]
-            col = msas_col if msas_col is not None else _guess_msas(parts)
+        for parts in rows:
             try:
-                out.append((_utc(parts[0]), float(parts[col])))
+                out.append((_utc(parts[0]), float(parts[msas_col])))
             except (ValueError, IndexError, TypeError):
                 continue
         return out
-    rows = list(csv.DictReader(lines))
+    rows = list(csv.DictReader(data))           # comment lines are already out
     if not rows:
         return []
-    keys = {k.lower().strip(): k for k in rows[0]}
+    keys = {k.lower().strip(): k for k in rows[0] if k is not None}
     tkey = next((keys[k] for k in keys if k in ("utc", "time", "timestamp", "datetime", "date_utc", "utc_time")), None)
     mkey = next((keys[k] for k in keys if k in ("msas", "mpsas", "sqm", "mag", "brightness")), None)
     if tkey is None or mkey is None:
@@ -266,5 +274,11 @@ def verify(readings: Sequence[Reading], go_live: date, lat: float, lon: float, t
     split = lambda d: ({k: v for k, v in d.items() if k < go_live}, {k: v for k, v in d.items() if k >= go_live})
     s0, s1 = split(steps)
     l0, l1 = split(late)
-    return {"readings": len(readings), "dark": len(good), "nights_with_step": len(steps),
-            "curfew_step_change": difference(s0, s1), "post_curfew_change": difference(l0, l1)}
+    out = {"readings": len(readings), "dark": len(good), "nights_with_step": len(steps), "notes": []}
+    for key, (b, a) in (("curfew_step_change", (s0, s1)), ("post_curfew_change", (l0, l1))):
+        try:
+            out[key] = difference(b, a)
+        except ValueError as e:              # one estimate short of nights must not lose the other
+            out[key] = None
+            out["notes"].append(f"{key}: {e}")
+    return out

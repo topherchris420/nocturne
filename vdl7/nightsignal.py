@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .clock import local_to_utc, night_bounds
+from .clock import NIGHT_ELEVATION_DEG, local_to_utc, next_crossing, night_bounds, solar_elevation_exact
 from .events import EventKind
 from .observe import moon
 from .security import SignedMessage, Verifier
@@ -93,17 +93,42 @@ def _iso(t: Optional[datetime]) -> Optional[str]:
     return t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if t else None
 
 
+def _local_noon(site: Site, day: date) -> datetime:
+    return local_to_utc(datetime(day.year, day.month, day.day, 12), site.tz)
+
+
+def dark_window(site: Site, night_of: date) -> Tuple[Optional[datetime], Optional[datetime], bool]:
+    """(from, to, polar_night): when the signal applies. Dusk to dawn with
+    the sun 3 deg down, as the streetlights switch. In polar night, when the
+    sun stays below that all day, from local noon until it returns or the
+    next noon; the night polar night begins ends at the next noon. None
+    under the midnight sun."""
+    dusk, dawn = night_bounds(site.lat, site.lon, night_of, tz=site.tz)
+    next_noon = _local_noon(site, night_of + timedelta(days=1))
+    polar = False
+    if dusk is None:
+        noon = _local_noon(site, night_of)
+        if solar_elevation_exact(site.lat, site.lon, noon) >= NIGHT_ELEVATION_DEG:
+            return None, None, False                                   # midnight sun: no night
+        polar = True
+        dusk = noon
+        dawn = next_crossing(site.lat, site.lon, noon, NIGHT_ELEVATION_DEG, descending=False, max_hours=24.0)
+    end = min(dawn, next_noon) if dawn else next_noon
+    return (dusk, end, polar) if end > dusk else (None, None, False)
+
+
 def signal(night_of: date, site: Site = DEFAULT_SITE, migration: Optional[Dict[str, str]] = None,
            issuer: str = "Nocturne CMS", issued: Optional[datetime] = None) -> dict:
     """The Night Signal document for the night that begins on `night_of`."""
     dusk, dawn = night_bounds(site.lat, site.lon, night_of, tz=site.tz)
     adusk, adawn = night_bounds(site.lat, site.lon, night_of, threshold=-18.0, tz=site.tz)
-    phases = [{"phase": "evening", "start": _iso(dusk)}]
+    start, end, polar = dark_window(site, night_of)
+    phases = [{"phase": "evening", "start": _iso(start)}]
     for name, hour, offset in PHASE_CLOCK:
         d = night_of + timedelta(days=offset)
         phases.append({"phase": name, "start": _iso(local_to_utc(datetime(d.year, d.month, d.day, hour), site.tz))})
     curfew = next(p["start"] for p in phases if p["phase"] == "curfew")
-    mid = (dusk + (dawn - dusk) / 2) if (dusk and dawn) else local_to_utc(
+    mid = (start + (end - start) / 2) if (start and end) else local_to_utc(
         datetime(night_of.year, night_of.month, night_of.day, 23, 59), site.tz)
     mo = moon(mid, site.lat, site.lon)
     curfew_t = datetime.fromisoformat(curfew.replace("Z", "+00:00"))
@@ -114,6 +139,7 @@ def signal(night_of: date, site: Site = DEFAULT_SITE, migration: Optional[Dict[s
         "night_of": night_of.isoformat(),
         "sun": {"dusk": _iso(dusk), "dawn": _iso(dawn), "astronomical_dusk": _iso(adusk),
                 "astronomical_dawn": _iso(adawn)},
+        "dark": {"from": _iso(start), "to": _iso(end), "polar_night": polar},
         "moon": {"illuminated": round(mo.illuminated, 2),
                  "up_at_curfew": moon(curfew_t, site.lat, site.lon).alt_deg > 0},
         "phases": phases, "curfew": curfew,
@@ -148,11 +174,11 @@ def verify(published: dict, verifier: Verifier) -> Optional[dict]:
 # ------------------------------------------------------------ subscribers
 def phase_at(doc: dict, utc: datetime) -> Optional[str]:
     """The phase in force at `utc`, or None in daylight."""
-    sun = doc["sun"]
-    if not (sun["dusk"] and sun["dawn"]):
+    dark = doc["dark"]
+    if not (dark["from"] and dark["to"]):
         return None
     t = utc.astimezone(UTC)
-    if not (_t(sun["dusk"]) <= t < _t(sun["dawn"])):
+    if not (_t(dark["from"]) <= t < _t(dark["to"])):
         return None
     current = "evening"
     for p in doc["phases"]:
@@ -185,23 +211,50 @@ def decide(doc: dict, category: str, utc: datetime, open_now: bool = False,
 
 
 # ------------------------------------------------------------- calendar
+def _ics_text(s: str) -> str:
+    """RFC 5545 3.3.11 TEXT escaping."""
+    return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _ics_fold(line: str) -> List[str]:
+    """RFC 5545 3.1: lines of at most 75 octets, continued with a space."""
+    out, cur = [], ""
+    for ch in line:
+        if len((cur + ch).encode("utf-8")) > 75:
+            out.append(cur)
+            cur = " "
+        cur += ch
+    return out + [cur]
+
+
+def _ics_time(iso: str) -> str:
+    return iso.replace("-", "").replace(":", "")
+
+
 def to_ics(docs: Iterable[dict], name: str = "Night Signal") -> str:
-    """An iCalendar feed: one event per night from curfew to dawn, and a
-    dusk-to-dawn 'Lights Out' event on migration nights."""
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nocturne//Night Signal//EN", f"X-WR-CALNAME:{name}"]
-    stamp = None
+    """An iCalendar feed: one event per night from curfew until the dark
+    ends, and a whole-night 'Lights Out' event on migration nights. Under
+    the midnight sun the curfew runs to the 05:00 dawn phase, so every
+    night has its event."""
+    docs = list(docs)
+    if not docs:
+        raise ValueError("an iCalendar feed needs at least one night")
+    now = _ics_time(_iso(datetime.now(UTC)) or "")
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nocturne//Night Signal//EN", f"X-WR-CALNAME:{_ics_text(name)}"]
     for d in docs:
-        stamp = (d["issued"] or "").replace("-", "").replace(":", "")
-        sun = d["sun"]
-        events = [("curfew", d["curfew"], sun["dawn"], "Lighting curfew: facades, signs and empty floors off")]
+        stamp = _ics_time(d.get("issued") or "") or now
+        dark = d["dark"]
+        dawn_phase = next(p["start"] for p in d["phases"] if p["phase"] == "dawn")
+        events = [("curfew", d["curfew"], dark["to"] or dawn_phase, "Lighting curfew: facades, signs and empty floors off")]
         if d["migration"]["active"]:
-            events.append(("migration", sun["dusk"], sun["dawn"], "Lights Out: heavy bird migration forecast tonight"))
+            events.append(("migration", dark["from"], dark["to"], "Lights Out: heavy bird migration forecast tonight"))
         for kind, start, end, summary in events:
-            if not (start and end):
+            if not (start and end) or _t(end) <= _t(start):
                 continue
-            lines += ["BEGIN:VEVENT", f"UID:{d['night_of']}-{kind}@nocturne", f"DTSTAMP:{stamp}",
-                      f"DTSTART:{start.replace('-', '').replace(':', '')}",
-                      f"DTEND:{end.replace('-', '').replace(':', '')}", f"SUMMARY:{summary}", "END:VEVENT"]
+            for line in ("BEGIN:VEVENT", f"UID:{d['night_of']}-{kind}@nocturne", f"DTSTAMP:{stamp}",
+                         f"DTSTART:{_ics_time(start)}", f"DTEND:{_ics_time(end)}", f"SUMMARY:{_ics_text(summary)}",
+                         "END:VEVENT"):
+                lines += _ics_fold(line)
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"
 
@@ -209,10 +262,16 @@ def to_ics(docs: Iterable[dict], name: str = "Night Signal") -> str:
 # ------------------------------------------------- the streetlights' half
 def migration_events(cms, segments: Iterable[str], doc: dict, now: datetime) -> List[SignedMessage]:
     """Signed EventKind.MIGRATION events for the streetlights, one per
-    segment, valid until tonight's dawn (at most 24 h)."""
-    if not doc["migration"]["active"] or not doc["sun"]["dawn"]:
+    segment, live from now until the night's dawn. Nothing is sent once
+    the night is over, or while its dawn is more than the firmware's 24 h
+    event lifetime away: an event sent that early would expire before the
+    night it is for, so the CMS sends it on a later run."""
+    end = doc["dark"]["to"]
+    if not doc["migration"]["active"] or not end:
         return []
-    ttl = max(60.0, min(86400.0, (_t(doc["sun"]["dawn"]) - now.astimezone(UTC)).total_seconds()))
+    ttl = (_t(end) - now.astimezone(UTC)).total_seconds()
+    if not (0.0 < ttl <= 86400.0):
+        return []
     payload = {k: v for k, v in doc["migration"].items() if k not in ("active", "season")}
     return [cms.event(EventKind.MIGRATION, ttl, seg, payload, event_id=f"mig-{doc['night_of']}", issued=now)
             for seg in segments]

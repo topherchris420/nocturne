@@ -8,6 +8,8 @@ carry policy minimums.
 """
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from enum import Enum
@@ -15,14 +17,15 @@ from typing import Dict, List, Optional, Tuple
 
 
 def _int(x, name: str) -> int:
-    if isinstance(x, bool) or not isinstance(x, (int, float)) or x != int(x):
+    if (isinstance(x, bool) or not isinstance(x, (int, float))
+            or (isinstance(x, float) and not math.isfinite(x)) or x != int(x)):
         raise TypeError(f"{name} must be an integer, got {x!r}")
     return int(x)
 
 
 def _num(x, name: str) -> float:
-    if isinstance(x, bool) or not isinstance(x, (int, float)):
-        raise TypeError(f"{name} must be a number, got {x!r}")
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+        raise TypeError(f"{name} must be a finite number, got {x!r}")
     return float(x)
 
 
@@ -139,6 +142,7 @@ HIN_FLOOR = 60        # Vision Zero High-Injury Network floor, every class
 # gets the full boost; arterials and collectors keep their traffic-led levels.
 MIGRATION_CLASSES: Tuple[RoadClass, ...] = (RoadClass.LOCAL, RoadClass.ALLEY, RoadClass.PARK)
 MAX_ZONES = 32        # fixed-size table on the MCU
+ZONE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,31}")   # ASCII, fits the MCU's 32-byte field
 RAIN_BOOST = 15       # points, capped at the boost cap
 PRESENCE_HOLD_S = 90
 CARPET_HOLD_S = 60
@@ -284,8 +288,8 @@ def validate_bundle(b: ProfileBundle) -> List[str]:
     if len(b.zones) > MAX_ZONES:
         errs.append(f"{len(b.zones)} zones, firmware holds {MAX_ZONES}")
     for name, z in b.zones.items():
-        if not (1 <= len(name) <= 32):
-            errs.append(f"zone name {name!r} must be 1-32 characters")
+        if not ZONE_NAME.fullmatch(name):
+            errs.append(f"zone name {name!r} must be 1-32 ASCII letters, digits, '.', '_' or '-'")
         for road, lv in z.items():
             p = b.profiles.get(road)
             lo = max(FIRMWARE_MIN_FLOOR[road], p.floor if p else 0)
@@ -302,11 +306,14 @@ def validate_bundle(b: ProfileBundle) -> List[str]:
     if not (1 <= b.valid_days <= 400):
         errs.append(f"valid_days {b.valid_days} outside [1, 400]")
     try:
-        date.fromisoformat(b.issued)
-    except ValueError:
-        errs.append(f"issued {b.issued!r} is not an ISO date")
+        date.fromisoformat(b.issued) + timedelta(days=b.valid_days)
+    except (ValueError, OverflowError):
+        errs.append(f"issued {b.issued!r} is not an ISO date with room for valid_days")
     return errs
 
 
 def bundle_expired(b: ProfileBundle, today: date) -> bool:
-    return today > date.fromisoformat(b.issued) + timedelta(days=b.valid_days)
+    try:
+        return today > date.fromisoformat(b.issued) + timedelta(days=b.valid_days)
+    except (ValueError, OverflowError):
+        return True                    # unreadable expiry: treat as expired (validation refuses these)

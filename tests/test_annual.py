@@ -7,12 +7,16 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timedelta
 
 import pytest
 
+from vdl7 import spectral
 from vdl7.annual import (CLASSES, Economics, dc_fleet, expected_level, format_report, run_year, spec_fleet,
                          _walk_boost)
+from vdl7.clock import local_hour, local_to_utc, solar_elevation_deg
 from vdl7.profiles import DEFAULT_PROFILES, Phase, RoadClass
+from vdl7.schedule import level_at, program
 from vdl7.sites import site
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -98,3 +102,46 @@ def test_EXT_BIZ_7_report_and_break_even(dc_year):
     assert cheap["strategies"]["phase0"]["saved_usd"] < run_year(
         dc_fleet(), days=("2027-03-01", "2027-03-07"))["strategies"]["phase0"]["saved_usd"]
     assert set(dc_year["strategies"]["phase1"]["mean_level_pct"]) == {c.value for c in CLASSES}
+    # Phase 1's per-node figure counts every pole whose saving it includes
+    fleet = dc_fleet()
+    assert be["phase1_nodes"] == fleet.poles
+    by = be["phase1_usd_per_node_by_class"]
+    assert sum(by[c.value] * fleet.classes[c].poles for c in CLASSES) / fleet.poles == pytest.approx(
+        be["phase1_usd_per_node"], abs=0.02)
+    assert "Phase 1 nodes on all" in text
+
+
+def test_EXT_BIZ_8_a_partial_period_reports_no_payback():
+    week = run_year(dc_fleet(), days=("2027-03-01", "2027-03-07"))
+    assert "break_even" not in week and not week["whole_year"]
+    text = format_report(week)
+    assert "MWh/yr" not in text and "pays back" not in text and "whole year only" in text
+
+
+def test_EXT_BIZ_9_each_class_keeps_its_mix_of_spectra():
+    """DC's arterials are 56 % 3000K and 42 % 2700K. Moving them to 2700K
+    costs 1.8 % in energy for the same light, not the 3.1 % a pure-3000K
+    class would; the sky index starts from the mix's Rayleigh per lumen."""
+    art = dc_fleet().classes[RoadClass.ARTERIAL]
+    mix = art.mix()
+    assert sum(mix.values()) == pytest.approx(1.0, abs=1e-4) and 0.5 < mix["3000K"] < 0.6 and 0.4 < mix["2700K"] < 0.45
+    r = run_year(dc_fleet(), days=("2027-03-01", "2027-03-07"))["strategies"]
+    ratio = r["phase2_warm"]["mwh_by_class"]["arterial"] / r["phase1_u0"]["mwh_by_class"]["arterial"]
+    eff = sum(f * spectral.EFFICACY_REL[k] for k, f in mix.items()) / spectral.EFFICACY_REL["2700K"]
+    assert ratio == pytest.approx(eff, abs=0.002) and 1.01 < ratio < 1.025
+
+
+def test_EXT_BIZ_10_phase0_energy_is_the_programmes_sample_for_sample():
+    """One January night: the local class's Phase 0 energy equals the
+    exported programme read at every 5-minute sample's exact local time
+    (no sample slips across a step)."""
+    s, fleet = site("dc"), dc_fleet()
+    r = run_year(fleet, days=("2027-01-12", "2027-01-12"))["strategies"]["phase0"]["mwh_by_class"]["local"]
+    steps = program(DEFAULT_PROFILES[RoadClass.LOCAL], 50.0)
+    t = local_to_utc(datetime(2027, 1, 12), s.tz) + timedelta(seconds=150)
+    kwh = 0.0
+    while t < local_to_utc(datetime(2027, 1, 13), s.tz):
+        if solar_elevation_deg(s.lat, s.lon, t) < -3.0:
+            kwh += fleet.classes[RoadClass.LOCAL].kw * level_at(steps, local_hour(t, s.tz)) / 100.0 * 300 / 3600
+        t += timedelta(seconds=300)
+    assert r == pytest.approx(kwh / 1000.0, abs=0.05)

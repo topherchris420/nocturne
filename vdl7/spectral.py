@@ -181,10 +181,21 @@ def narrow_band_amber() -> List[float]:
     return [gauss(l, 590.0, 16.0) for l in LAMBDA]
 
 
+# fit_white's own results for the standard CCTs, so a command line run does
+# not repeat a half-minute search; tests check they still land on the locus.
+FITTED_WHITE = {4000.0: (1.2550000000000001, 1.0, 1.0, 540.0),
+                3000.0: (0.7103124999999999, 1.0, 1.65625, 540.0),
+                2700.0: (0.5501875000000002, 1.0, 2.0625, 540.0),
+                2200.0: (0.508588134765625, 1.0, 2.59375, 560.0)}
+
+
 @lru_cache(maxsize=32)
-def fit_white(cct_target: float) -> Tuple[float, float, float, float]:
+def fit_white(cct_target: float, search: bool = False) -> Tuple[float, float, float, float]:
     """(pump, green, red, green_mu) that lands on the Planckian locus at the
-    target CCT with Duv ≈ 0. Coarse grid then three refinements."""
+    target CCT with Duv ≈ 0. Coarse grid then three refinements (`search`
+    forces it for a CCT already in FITTED_WHITE)."""
+    if not search and cct_target in FITTED_WHITE:
+        return FITTED_WHITE[cct_target]
     best = None
     for green_mu in (540.0, 550.0, 560.0, 570.0):
         lo_p, hi_p, lo_r, hi_r = 0.01, 2.5, 0.0, 4.0
@@ -330,13 +341,14 @@ def rayleigh_rel(name: str, reference: str = "4000K") -> float:
 
 @lru_cache(maxsize=64)
 def scatter_weight(name: str, alpha: float, eye: str = "photopic") -> float:
-    """Scattered light seen by `eye` per photopic lumen emitted, relative to
-    monochromatic 550 nm: sum S (550/l)^alpha W / sum S V, with W = V for an
-    SQM-like photopic sky meter or V' (scaled to the V peak) for the
-    dark-adapted eye. alpha = 4 for molecules, about 1.3 for aerosol."""
-    spd = spectrum(name) if name in SPECTRA or name.endswith("K") else None
-    if spd is None:
-        raise KeyError(name)
+    """Scattered light seen by `eye` per photopic lumen emitted:
+    sum S (550/l)^alpha W / sum S V, with W = V for an SQM-like photopic sky
+    meter (monochromatic 550 nm gives about 1.0) or V' scaled by 1700/683
+    for the dark-adapted eye (550 nm gives about 1.2). alpha = 4 for
+    molecules, about 1.3 for aerosol."""
+    if eye not in ("photopic", "scotopic"):
+        raise ValueError(f"eye must be 'photopic' or 'scotopic', not {eye!r}")
+    spd = spectrum(name)
     weight = YBAR if eye == "photopic" else [v * 1700.0 / 683.0 for v in SCOT]
     lum = sum(x * y for x, y in zip(spd, YBAR))
     return sum(x * (550.0 / l) ** alpha * w for x, l, w in zip(spd, LAMBDA, weight)) / lum

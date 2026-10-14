@@ -57,7 +57,7 @@ def data() -> dict:
                           "program": [s.__dict__ for s in program(prof, 50.0)], **rows}
     out["night"] = {"hours": hours, "classes": night}
     cells = load_grid()
-    cct = {c: fleet.classes[c].cct_today for c in CLASSES}
+    cct = {c: fleet.classes[c].mix() for c in CLASSES}
     out["sky"] = {"natural_mcd": NATURAL_CD * 1000, "places": [
         {"key": p.key, "name": p.name, "lat": p.lat, "lon": p.lon,
          "moments": {m: {s: streetlight_luminance(cells, p, lighting_for(s, h, cct)) * 1000 for s in SKY_STRATEGIES}

@@ -16,6 +16,7 @@ The city
     nocturne verify station.dat --go-live 2026-11-01       # did the sky get darker?
     nocturne pilot --seed "text published before the draw" [--out plan.csv]
     nocturne pilot --power 0.0014 1.2                      # segment-nights to detect a 20 % change
+    nocturne brake --plan plan.csv --crashes night_crashes.csv --through 2027-02-28   # before each wave
 
 Models
     nocturne spectral [--spd my_engine=lm79.csv]
@@ -156,7 +157,7 @@ def cmd_sky(a) -> int:
     from .annual import dc_fleet
     from .skyglow import CLASSES, PLACES_DC, format_sky, lighting_for, load_grid, plan_retrofits, sky_scenarios
     fleet = dc_fleet()
-    cct = {c: fleet.classes[c].cct_today for c in CLASSES}
+    cct = {c: fleet.classes[c].mix() for c in CLASSES}
     measured = {}
     for item in a.measured or []:
         k, _, v = item.partition("=")
@@ -241,10 +242,12 @@ def cmd_verify(a) -> int:
     r = verify(read_sqm(a.log), date.fromisoformat(a.go_live), s.lat, s.lon, s.tz)
     print(f"{a.log}: {r['readings']:,} readings, {r['dark']:,} in astronomical darkness with the Moon down, "
           f"{r['nights_with_step']} clear nights around the curfew")
-    print(f"change in the 23:00 curfew step after go-live: {r['curfew_step_change']}")
-    print(f"change in the post-curfew sky (23:15-02:00):  {r['post_curfew_change']}")
+    print(f"change in the 23:00 curfew step after go-live: {r['curfew_step_change'] or 'not enough nights'}")
+    print(f"change in the post-curfew sky (23:15-02:00):  {r['post_curfew_change'] or 'not enough nights'}")
+    for note in r["notes"]:
+        print("note:", note)
     print("positive = darker; the curfew-step change is the one weather and season cannot fake")
-    return 0
+    return 0 if r["curfew_step_change"] or r["post_curfew_change"] else 1
 
 
 def cmd_pilot(a) -> int:
@@ -274,6 +277,30 @@ def _zones_from(path):
     with open(path) as f:
         raw = json.load(f)
     return {name: {RoadClass(r): tuple(int(x) for x in lv) for r, lv in z.items()} for name, z in raw.items()}
+
+
+def cmd_brake(a) -> int:
+    import csv
+    from .pilot import brake, tally
+    with open(a.plan) as f:
+        rows = list(csv.DictReader(f))
+    switch_on = {r["segment"]: date.fromisoformat(r["switch_on"]) for r in rows}
+    waves = len({r["wave"] for r in rows})
+    with open(a.crashes) as f:
+        events = [(r["segment"], date.fromisoformat(r["night"])) for r in csv.DictReader(f)]
+    periods, skipped = tally(switch_on, events, date.fromisoformat(a.through))
+    looks = a.looks or max(1, waves - 1)
+    decision, t = brake([p.stratum for p in periods], looks=looks)
+    print(f"{'period from':12s} {'nights':>6s} {'on: events':>11s} {'seg-nights':>11s} {'off: events':>12s} {'seg-nights':>11s}")
+    for p in periods:
+        print(f"{p.start.isoformat():12s} {p.nights:6d} {p.events_on:11d} {p.exposure_on:11,.0f} "
+              f"{p.events_off:12d} {p.exposure_off:11,.0f}")
+    if skipped:
+        print(f"{skipped} events outside the plan or the dates were not counted")
+    print(f"switched vs not yet switched, within periods: {t}")
+    print(f"look threshold: one-sided p < {0.05 / looks:.4f} (5 % split over {looks} looks)")
+    print("PAUSE the next wave and revert the affected class" if decision == "pause" else "continue")
+    return 2 if decision == "pause" else 0
 
 
 def cmd_schedule(a) -> int:
@@ -418,6 +445,13 @@ def main(argv=None) -> int:
     pl.add_argument("--out", help="write the plan as CSV")
     pl.add_argument("--power", nargs=2, metavar=("RATE", "RR"), help="segment-nights needed instead of a plan")
     pl.set_defaults(fn=cmd_pilot)
+
+    bk = sub.add_parser("brake", help="the pilot's safety check before each wave")
+    bk.add_argument("--plan", required=True, help="the plan CSV from `nocturne pilot --out`")
+    bk.add_argument("--crashes", required=True, help="CSV segment,night (YYYY-MM-DD: the evening the night began)")
+    bk.add_argument("--through", required=True, help="last night counted, YYYY-MM-DD")
+    bk.add_argument("--looks", type=int, help="looks the error rate is split over (default: waves - 1)")
+    bk.set_defaults(fn=cmd_brake)
 
     a = ap.parse_args(argv)
     return a.fn(a)

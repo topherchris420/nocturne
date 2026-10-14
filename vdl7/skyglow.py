@@ -45,7 +45,7 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from . import spectral
 from .profiles import RoadClass
@@ -160,26 +160,67 @@ def _kernels(atm: Atmosphere) -> Dict[Tuple[str, str], List[float]]:
 
 def kernel(d_m: float, emission: str, scatterer: str, atm: Atmosphere = Atmosphere()) -> float:
     """Zenith luminance (cd/m^2) per lumen emitted upward `d_m` away,
-    log-log interpolated."""
+    log-log interpolated, and extrapolated along the end segments outside
+    10 m - 200 km. A scatterer that is absent (no aerosol) gives 0."""
     ks = _kernels(atm)[(emission, scatterer)]
-    d = min(max(d_m, _D_GRID[0]), _D_GRID[-1])
+    d = max(d_m, 1e-3)
     x = math.log10(d)
-    i = min(len(_D_GRID) - 2, int((x - 1.0) / 4.3 * 119))
+    i = max(0, min(len(_D_GRID) - 2, int(math.floor((x - 1.0) / 4.3 * 119))))
     x0, x1 = math.log10(_D_GRID[i]), math.log10(_D_GRID[i + 1])
     f = (x - x0) / (x1 - x0)
+    if ks[i] <= 0.0 or ks[i + 1] <= 0.0:
+        return max(0.0, ks[i] + min(1.0, max(0.0, f)) * (ks[i + 1] - ks[i]))
     y0, y1 = math.log10(ks[i]), math.log10(ks[i + 1])
     return 10 ** (y0 + f * (y1 - y0))
 
 
-@lru_cache(maxsize=64)
-def _disk_kernel(radius_m: float, emission: str, scatterer: str, atm: Atmosphere) -> float:
-    """Mean kernel over a disk of `radius_m`: a site inside a cell of lights."""
-    n = 200
+_DISK_STEP_M = 5.0
+
+
+@lru_cache(maxsize=8192)
+def _disk_mean(d_key: int, radius_m: float, emission: str, scatterer: str, atm: Atmosphere) -> float:
+    """Mean kernel over a disk of `radius_m` whose centre is d_key x 5 m
+    from the observer: a cell of lights near or around a place. Integrated
+    in rings about the observer, where the kernel's 1/s core cancels."""
+    d = d_key * _DISK_STEP_M
+    lo, hi = max(0.0, d - radius_m), d + radius_m
+    n = 400
     tot = 0.0
     for i in range(n):
-        d = radius_m * (i + 0.5) / n
-        tot += kernel(d, emission, scatterer, atm) * 2 * math.pi * d * (radius_m / n)
+        r = lo + (hi - lo) * (i + 0.5) / n
+        if r <= radius_m - d:
+            arc = 2.0 * math.pi
+        else:
+            c = (r * r + d * d - radius_m * radius_m) / (2.0 * r * d)
+            arc = 2.0 * math.acos(max(-1.0, min(1.0, c)))
+        tot += kernel(r, emission, scatterer, atm) * r * arc * (hi - lo) / n
     return tot / (math.pi * radius_m ** 2)
+
+
+_NEAR_RADII = 6.0
+
+
+@lru_cache(maxsize=64)
+def _edge_excess(emission: str, scatterer: str, atm: Atmosphere) -> float:
+    edge = _NEAR_RADII * CELL_RADIUS_M
+    k = int(round(edge / _DISK_STEP_M))
+    return _disk_mean(k, CELL_RADIUS_M, emission, scatterer, atm) / kernel(k * _DISK_STEP_M, emission, scatterer, atm) - 1.0
+
+
+def _cell_kernel(d: float, emission: str, scatterer: str, atm: Atmosphere) -> float:
+    """A cell's kernel at distance d: the mean over the cell's area within
+    six cell radii (interpolated between 5 m steps), and beyond that the
+    point kernel with the disk's second-order excess, which falls as 1/d^2.
+    Continuous everywhere, so a place moving past a cell edge sees no step."""
+    edge = _NEAR_RADII * CELL_RADIUS_M
+    if d < edge:
+        x = d / _DISK_STEP_M
+        k = int(math.floor(x))
+        f = x - k
+        a = _disk_mean(k, CELL_RADIUS_M, emission, scatterer, atm)
+        b = _disk_mean(k + 1, CELL_RADIUS_M, emission, scatterer, atm)
+        return a + f * (b - a)
+    return kernel(d, emission, scatterer, atm) * (1.0 + _edge_excess(emission, scatterer, atm) * (edge / d) ** 2)
 
 
 # ------------------------------------------------------------------ grid
@@ -238,9 +279,10 @@ PLACES_DC = [
 @dataclass
 class Lighting:
     """What the streetlights are doing at a moment: level (% of full
-    output) and spectrum by class, and whether the globes were fixed."""
+    output) and spectrum by class (one name, or a mix: name -> share of the
+    class's lights), and whether the globes were fixed."""
     level: Dict[RoadClass, float]
-    cct: Dict[RoadClass, str]
+    cct: Dict[RoadClass, Union[str, Dict[str, float]]]
     globes_u0: bool = False
     ulr_globe: float = ULR_GLOBE
     ulr_teardrop: float = ULR_TEARDROP
@@ -262,9 +304,10 @@ def cell_upward(cell: Cell, light: Lighting, retrofit: bool = False) -> Dict[Tup
         if lm_class[c] <= 0:
             continue
         share = lm_class[c] / lm_total
-        cct = light.cct[c]
-        out[("iso", cct)] = out.get(("iso", cct), 0.0) + up_direct * share
-        out[("lambert", cct)] = out.get(("lambert", cct), 0.0) + REFLECTANCE * down * share
+        spec = light.cct[c]
+        for cct, f in ({spec: 1.0} if isinstance(spec, str) else spec).items():
+            out[("iso", cct)] = out.get(("iso", cct), 0.0) + up_direct * share * f
+            out[("lambert", cct)] = out.get(("lambert", cct), 0.0) + REFLECTANCE * down * share * f
     return out
 
 
@@ -278,13 +321,7 @@ def streetlight_luminance(cells: Sequence[Cell], place: Place, light: Lighting, 
         for (emission, cct), lm in cell_upward(cell, light, idx in retrofit).items():
             wr = spectral.scatter_weight(cct, 4.0, eye)
             wa = spectral.scatter_weight(cct, 1.3, eye)
-            if d < CELL_RADIUS_M:
-                kr = _disk_kernel(CELL_RADIUS_M, emission, "R", atm)
-                ka = _disk_kernel(CELL_RADIUS_M, emission, "A", atm)
-            else:
-                kr = kernel(d, emission, "R", atm)
-                ka = kernel(d, emission, "A", atm)
-            total += lm * (kr * wr + ka * wa)
+            total += lm * (_cell_kernel(d, emission, "R", atm) * wr + _cell_kernel(d, emission, "A", atm) * wa)
     return total
 
 
@@ -353,7 +390,7 @@ def plan_retrofits(cells: Sequence[Cell], places: Sequence[Place], light: Lighti
     base = {p.key: streetlight_luminance(cells, p, light, atm) for p in places}
     steps = []
     for idx, cell in enumerate(cells):
-        if cell.globe_kw < min_globe_kw or light.globes_u0:
+        if cell.globe_kw <= 0.0 or cell.globe_kw < min_globe_kw or light.globes_u0:
             continue
         gain = {}
         for p in places:
@@ -365,10 +402,7 @@ def plan_retrofits(cells: Sequence[Cell], places: Sequence[Place], light: Lighti
                     continue
                 wr = spectral.scatter_weight(cct, 4.0)
                 wa = spectral.scatter_weight(cct, 1.3)
-                if d < CELL_RADIUS_M:
-                    k = _disk_kernel(CELL_RADIUS_M, emission, "R", atm) * wr + _disk_kernel(CELL_RADIUS_M, emission, "A", atm) * wa
-                else:
-                    k = kernel(d, emission, "R", atm) * wr + kernel(d, emission, "A", atm) * wa
+                k = _cell_kernel(d, emission, "R", atm) * wr + _cell_kernel(d, emission, "A", atm) * wa
                 delta += (lm - after) * k
             gain[p.key] = delta / base[p.key] if base[p.key] else 0.0
         score = sum(weights.get(k, 0.0) * v for k, v in gain.items()) / cell.globe_kw
@@ -382,7 +416,7 @@ MOMENTS = {"evening": 21.0, "after_midnight": 1.5}
 SKY_STRATEGIES = ["today", "phase0", "phase1", "phase1_u0", "phase2_warm"]
 
 
-def lighting_for(strategy: str, hour: float, cct_today: Dict[RoadClass, str]) -> Lighting:
+def lighting_for(strategy: str, hour: float, cct_today: Dict[RoadClass, Union[str, Dict[str, float]]]) -> Lighting:
     """Mean class levels and spectra for a business-case strategy at a local
     hour, from the same expected-value model as vdl7.annual."""
     from .annual import STRATEGIES, _cct_new, _walk_boost, expected_level
@@ -399,7 +433,7 @@ def lighting_for(strategy: str, hour: float, cct_today: Dict[RoadClass, str]) ->
     return Lighting(level, cct, globes_u0=u0)
 
 
-def sky_scenarios(cells: Sequence[Cell], places: Sequence[Place], cct_today: Dict[RoadClass, str],
+def sky_scenarios(cells: Sequence[Cell], places: Sequence[Place], cct_today: Dict[RoadClass, Union[str, Dict[str, float]]],
                   share: float = STREETLIGHT_SHARE_PRIOR, other_curfew_cut: float = 0.5,
                   atm: Atmosphere = Atmosphere(), measured: Optional[Dict[str, float]] = None) -> List[dict]:
     """For each place and moment: the streetlights' zenith luminance under
@@ -408,6 +442,10 @@ def sky_scenarios(cells: Sequence[Cell], places: Sequence[Place], cct_today: Dic
     cutting `other_curfew_cut` of its output after 23:00 via the Night
     Signal. `measured` (place key -> msas, taken with today's lighting)
     replaces the share prior where a station exists."""
+    if not (0.0 < share <= 1.0):
+        raise ValueError(f"share {share} must be in (0, 1]: the streetlights' fraction of the artificial light")
+    if not (0.0 <= other_curfew_cut <= 1.0):
+        raise ValueError(f"other_curfew_cut {other_curfew_cut} must be in [0, 1]")
     rows = []
     for p in places:
         for moment, hour in MOMENTS.items():
@@ -426,6 +464,7 @@ def sky_scenarios(cells: Sequence[Cell], places: Sequence[Place], cct_today: Dic
                      "nocturne_plus_signal": SkyAt(p.key, lum["phase2_warm"], other_signal)}
             rows.append({
                 "place": p.key, "name": p.name, "moment": moment, "hour": hour, "other_source": source,
+                "other_curfew_cut": other_curfew_cut,
                 "streetlight_mcd": {s: round(v * 1000, 3) for s, v in lum.items()},
                 "streetlight_reduction": {s: round(reduction(today_sl, v), 3) for s, v in lum.items()},
                 "sky": {k: {"msas": round(v.msas, 2), "nelm": round(v.nelm, 2), "stars": v.stars,
@@ -445,6 +484,13 @@ def format_sky(rows: List[dict]) -> str:
                    f"{sk['today']['msas']:8.2f}{sk['nocturne']['msas']:9.2f}{sk['nocturne_plus_signal']['msas']:9.2f}   "
                    f"{sk['today']['stars']:8d}{sk['nocturne']['stars']:9d}{sk['nocturne_plus_signal']['stars']:9d}")
     if rows:
-        out.append(f"other lighting: {rows[0]['other_source']}. Signal: the rest of the city's lighting "
-                   "halves its output after 23:00. Higher mag/arcsec^2 is darker.")
+        measured = sorted({r["place"] for r in rows if r["other_source"] == "measured"})
+        prior = next((r["other_source"] for r in rows if r["other_source"] != "measured"), None)
+        parts = []
+        if measured:
+            parts.append("measured at " + ", ".join(measured))
+        if prior:
+            parts.append(prior + (" elsewhere" if measured else ""))
+        out.append(f"other lighting: {'; '.join(parts)}. Signal: the rest of the city's lighting cuts "
+                   f"{rows[0]['other_curfew_cut']:.0%} of its output after 23:00. Higher mag/arcsec^2 is darker.")
     return "\n".join(out)

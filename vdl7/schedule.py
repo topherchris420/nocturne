@@ -34,7 +34,7 @@ from .profiles import PHASE_ORDER, ClassProfile, Phase, ProfileBundle, RoadClass
 SCHEMA = "nocturne-phase0-program/1"
 UNSENSED_FLOOR = 50.0
 PHASE_START = {Phase.STEP: 22, Phase.CURFEW: 23, Phase.DEEP: 1, Phase.DAWN: 5}
-NIGHT_HOURS = [22, 23, 0, 1, 2, 3, 4, 5, 6]          # hourly steps for traffic classes
+NIGHT_HOURS = [22, 23] + list(range(12))            # hourly steps for traffic classes, to the latest dawns (Paris 08:28, Tromso 11:30)
 
 
 @dataclass(frozen=True)

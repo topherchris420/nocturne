@@ -20,7 +20,8 @@ strategy:
                (arterial 2700K, collector/local/alley 2200K, park PC-Amber)
 
 and reports energy, cost, carbon, delivered light and a skyglow index, plus
-how much each phase could cost and still pay for itself.
+how much each phase could cost and still pay for itself (for a whole year;
+a run over `days` reports the period's energy only).
 
 Prices, emission factors and the optics' uplight are inputs marked ASSUMED.
 DC's fleet comes from DDOT's own asset layer (data/dc/fleet.json).
@@ -28,8 +29,9 @@ DC's fleet comes from DDOT's own asset layer (data/dc/fleet.json).
 from __future__ import annotations
 
 import json
+import math
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
@@ -60,9 +62,13 @@ DATA_DC = os.path.join(os.path.dirname(__file__), "..", "data", "dc", "fleet.jso
 class ClassFleet:
     poles: int
     kw: float                    # full-output kW today (commissioned trim applied)
-    cct_today: str
+    cct_today: str               # the class's most common spectrum
     uplight: float               # fleet-average upward light ratio today
     uplight_u0: float = 0.0      # after the U0 retrofit
+    cct_mix: Dict[str, float] = field(default_factory=dict)   # spectrum -> share of the class's lights
+
+    def mix(self) -> Dict[str, float]:
+        return self.cct_mix or {self.cct_today: 1.0}
 
 
 @dataclass
@@ -81,9 +87,17 @@ class Fleet:
 
 
 def _snap_cct(name: str) -> str:
+    """An inventory CCT label onto the nearest spectrum the model carries."""
     if name in spectral.EFFICACY_REL:
         return name
-    return "3000K" if name in ("4000K", "4500K", "5000K") else "2700K"
+    try:
+        k = float(name.strip().rstrip("Kk"))
+    except ValueError:
+        return "2700K"
+    for top, label in ((1900, "PC-Amber"), (2450, "2200K"), (2850, "2700K"), (3500, "3000K")):
+        if k < top:
+            return label
+    return "4000K"
 
 
 def dc_fleet(path: str = DATA_DC) -> Fleet:
@@ -94,13 +108,19 @@ def dc_fleet(path: str = DATA_DC) -> Fleet:
     for c in CLASSES:
         row = d["classes"][c.value]
         cct = {k: v for k, v in row["cct"].items() if k != "unknown"}
-        dominant = _snap_cct(max(cct, key=cct.get)) if cct else "2700K"
+        mix: Dict[str, float] = {}
+        for k, v in cct.items():
+            mix[_snap_cct(k)] = mix.get(_snap_cct(k), 0.0) + v
+        n_cct = sum(mix.values())
+        mix = {k: round(v / n_cct, 5) for k, v in sorted(mix.items(), key=lambda kv: -kv[1])} if n_cct else {"2700K": 1.0}
+        dominant = next(iter(mix))
         optics = row.get("optics", {})
         n = sum(optics.values()) or 1
         ulr = sum(ULR_ASSUMED.get(g, 0.03) * k for g, k in optics.items()) / n
         post = optics.get("posttop_globe", 0)
         ulr_u0 = sum(ULR_ASSUMED.get(g, 0.03) * k for g, k in optics.items() if g != "posttop_globe") / n
-        out[c] = ClassFleet(row["poles"], row["trimmed_kw"], dominant, round(ulr, 5), round(ulr_u0 if post else ulr, 5))
+        out[c] = ClassFleet(row["poles"], row["trimmed_kw"], dominant, round(ulr, 5), round(ulr_u0 if post else ulr, 5),
+                            mix)
     return Fleet("dc", out, f"{d['source']}, retrieved {d['retrieved']}")
 
 
@@ -211,7 +231,9 @@ def run_year(fleet: Fleet, site: Site = DEFAULT_SITE, year: int = 2027, bundle: 
              econ: Optional[Economics] = None, unsensed_floor: float = 50.0, step_s: float = STEP_S,
              walk_step_s: Optional[float] = None, days: Optional[Tuple[str, str]] = None) -> dict:
     """Integrate every strategy over a year (or `days` = (first, last) local
-    ISO dates, inclusive) at `site`. Returns a JSON-ready dict."""
+    ISO dates, inclusive) at `site`. Returns a JSON-ready dict. Levels are
+    taken at the middle of each 5-minute bucket of local time, which never
+    straddles a programme step (they fall on the hour)."""
     bundle = bundle or default_bundle()
     econ = econ or Economics()
     walk = _walk_boost(walk_step_s or POLE_SPACING_M / WALK_SPEED_MPS)
@@ -225,32 +247,40 @@ def run_year(fleet: Fleet, site: Site = DEFAULT_SITE, year: int = 2027, bundle: 
     months = {s: [0.0] * 12 for s in STRATEGIES}
     burn = 0.0
     ray = {name: spectral.rayleigh_rel(name) for name in spectral.EFFICACY_REL}
+    eff, sky_w = {}, {}
+    for c in CLASSES:
+        # today's lights by spectrum; lumens per watt and Rayleigh per lumen of the mix
+        mix, prof = fleet.classes[c].mix(), bundle.profiles[c]
+        eff_mix = sum(f * spectral.EFFICACY_REL[k] for k, f in mix.items())
+        ray_mix = sum(f * spectral.EFFICACY_REL[k] * ray[k] for k, f in mix.items()) / eff_mix
+        new = _cct_new(prof)
+        eff[c] = {False: 1.0, True: spectral.EFFICACY_REL[new] / eff_mix}
+        sky_w[c] = {False: ray_mix, True: ray[new]}
     cache: Dict[Tuple, float] = {}
     while t < t_end:
         if solar_elevation_deg(site.lat, site.lon, t) < NIGHT_ELEVATION:
             burn += hours
             h = local_hour(t, site.tz)
             month = to_local(t, site.tz).month - 1
-            phase = phase_for_hour(h)
-            hq = round(h * 12) / 12.0                       # 5-min buckets for the cache
+            bucket = math.floor(h * 12.0)                   # 5-minute bucket of local time
+            hq = (bucket + 0.5) / 12.0
+            phase = phase_for_hour(hq)
             for c in CLASSES:
                 prof, cf = bundle.profiles[c], fleet.classes[c]
                 base = float(prof.levels[PHASE_ORDER.index(phase)])
                 for s, (mode, u0, warm) in STRATEGIES.items():
-                    key = (c, mode, hq, phase)
+                    key = (c, mode, bucket)
                     lvl = cache.get(key)
                     if lvl is None:
                         lvl = cache[key] = expected_level(prof, base, hq, mode, unsensed_floor, walk)
-                    cct = _cct_new(prof) if warm else cf.cct_today
-                    eff = spectral.EFFICACY_REL[cct] / spectral.EFFICACY_REL[cf.cct_today]
-                    kwh = cf.kw * lvl / 100.0 / eff * hours
+                    kwh = cf.kw * lvl / 100.0 / eff[c][warm] * hours
                     up = cf.uplight_u0 if u0 else cf.uplight
                     lm = cf.kw * lvl / 100.0 * hours                      # design-lumen proxy, today's efficacy
                     a = acc[s][c]
                     a["lvl_h"] += lvl * hours
                     a["kwh"] += kwh
                     a["lm"] += lm
-                    a["sky"] += lm * (up + REFLECTED * (1.0 - up)) * ray[cct]
+                    a["sky"] += lm * (up + REFLECTED * (1.0 - up)) * sky_w[c][warm]
                     months[s][month] += kwh
         t += timedelta(seconds=step_s)
     return _report(fleet, site, year, days, acc, months, burn, econ, unsensed_floor)
@@ -260,7 +290,7 @@ def _report(fleet, site, year, days, acc, months, burn, econ, unsensed_floor) ->
     tot = {s: {k: sum(acc[s][c][k] for c in CLASSES) for k in ("kwh", "lm", "sky")} for s in STRATEGIES}
     base = tot["today"]
     out = {"site": site.name, "lat": site.lat, "lon": site.lon, "tz": site.tz,
-           "period": f"{days[0]} to {days[1]}" if days else str(year),
+           "period": f"{days[0]} to {days[1]}" if days else str(year), "whole_year": not days,
            "fleet": {"name": fleet.name, "source": fleet.source, "poles": fleet.poles, "kw": round(fleet.kw, 1),
                      "classes": {c.value: asdict(v) for c, v in fleet.classes.items()}},
            "burn_hours": round(burn, 1), "economics": asdict(econ), "unsensed_floor_pct": unsensed_floor,
@@ -279,14 +309,22 @@ def _report(fleet, site, year, days, acc, months, burn, econ, unsensed_floor) ->
         row["saved_usd"] = round(row["saved_mwh"] * 1000 * econ.usd_per_kwh)
         row["saved_tco2"] = round(row["saved_mwh"] * econ.tco2_per_mwh, 1)
         out["strategies"][s] = row
+    if days:
+        return out                       # payback needs a whole year of savings
     st = out["strategies"]
-    sensed = sum(fleet.classes[c].poles for c in (RoadClass.LOCAL, RoadClass.ALLEY, RoadClass.PARK))
+    usd_class = lambda s, c: acc[s][c]["kwh"] * econ.usd_per_kwh
+    gain = {c: usd_class("phase0", c) - usd_class("phase1", c) for c in CLASSES}   # Phase 1 over Phase 0, $/yr
+    nodes = fleet.poles
     out["break_even"] = {
         "phase0_integration_usd": round(st["phase0"]["saved_usd"] * econ.payback_years_phase0),
         "phase0_years": econ.payback_years_phase0,
-        "phase1_radar_nodes": sensed,
-        "phase1_usd_per_node": round((st["phase1"]["saved_usd"] - st["phase0"]["saved_usd"])
-                                     * econ.payback_years_phase1 / sensed, 2) if sensed else None,
+        # every pole gets a node: presence and the carpet run on every class
+        # (arterials and collectors also take live loop volumes)
+        "phase1_nodes": nodes,
+        "phase1_usd_per_node": round(sum(gain.values()) * econ.payback_years_phase1 / nodes, 2) if nodes else None,
+        "phase1_usd_per_node_by_class": {
+            c.value: round(gain[c] * econ.payback_years_phase1 / fleet.classes[c].poles, 2)
+            for c in CLASSES if fleet.classes[c].poles},
         "phase1_years": econ.payback_years_phase1,
     }
     return out
@@ -294,18 +332,25 @@ def _report(fleet, site, year, days, acc, months, burn, econ, unsensed_floor) ->
 
 def format_report(r: dict) -> str:
     st = r["strategies"]
+    yr = "/yr" if r.get("whole_year", True) else ""
     lines = [f"{r['site']} · {r['period']} · {r['fleet']['poles']:,} lights, {r['fleet']['kw']:,.0f} kW at full output · "
              f"{r['burn_hours']:,.0f} h of night (sun below {NIGHT_ELEVATION:g} deg)",
              f"fleet: {r['fleet']['source']}",
              f"price ${r['economics']['usd_per_kwh']}/kWh, grid {r['economics']['tco2_per_mwh']} tCO2/MWh (ASSUMED)", "",
-             f"{'strategy':12s} {'MWh/yr':>9s} {'energy':>7s} {'light':>6s} {'sky':>6s} {'saved $/yr':>11s} {'tCO2/yr':>8s}"]
+             f"{'strategy':12s} {'MWh' + yr:>9s} {'energy':>7s} {'light':>6s} {'sky':>6s} {'saved $' + yr:>11s} {'tCO2' + yr:>8s}"]
     for k, s in st.items():
         lines.append(f"{k:12s} {s['mwh']:9,.0f} {s['energy_vs_today']:7.3f} {s['light_vs_today']:6.3f} "
                      f"{s['skyglow_vs_today']:6.3f} {s['saved_usd']:11,.0f} {s['saved_tco2']:8,.0f}")
-    be = r["break_even"]
-    lines += ["", f"Phase 0 pays back in {be['phase0_years']:g} years if integration costs under ${be['phase0_integration_usd']:,.0f}.",
-              f"Phase 1 radar nodes on {be['phase1_radar_nodes']:,} local, alley and park poles pay back on energy alone "
-              f"in {be['phase1_years']:g} years only if each costs under ${be['phase1_usd_per_node']:,.2f}."]
+    be = r.get("break_even")
+    if be:
+        by = be["phase1_usd_per_node_by_class"]
+        lines += ["", f"Phase 0 pays back in {be['phase0_years']:g} years if integration costs under "
+                      f"${be['phase0_integration_usd']:,.0f}.",
+                  f"Phase 1 nodes on all {be['phase1_nodes']:,} poles pay back on energy alone in {be['phase1_years']:g} "
+                  f"years only if each costs under ${be['phase1_usd_per_node']:,.2f} "
+                  f"({', '.join(f'{c} ${v:,.2f}' for c, v in by.items())})."]
+    else:
+        lines += ["", "Payback is reported for a whole year only."]
     for k in ("phase0", "phase1"):
         lines.append(f"mean level {k}: " + ", ".join(f"{c} {v:.0f} %" for c, v in st[k]["mean_level_pct"].items()))
     return "\n".join(lines)
