@@ -37,3 +37,5 @@ jobs:
           nocturne signal --date 2026-10-14 --migration --key /tmp/k.pem --ics /tmp/c.ics --days 7 > /dev/null
           nocturne pilot --seed ci --out /tmp/plan.csv > /dev/null && nocturne pilot --power 0.0018 1.2 > /dev/null
           nocturne schedule --plan /tmp/plan.csv --wave 1 --out /tmp/phase0 > /dev/null
+          python -c "import csv; r = list(csv.DictReader(open('/tmp/plan.csv'))); open('/tmp/crashes.csv', 'w').write('segment,night\\n' + ''.join(f'{x[\"segment\"]},2027-02-{1 + i % 27:02d}\\n' for i, x in enumerate(r[::40])))"
+          nocturne brake --plan /tmp/plan.csv --crashes /tmp/crashes.csv --through 2027-04-25 > /dev/null || [ $? -eq 2 ]
