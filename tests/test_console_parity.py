@@ -6,7 +6,9 @@ white and amber channels, mode and phase. Skipped where Node.js is not
 installed.
 
 The console's fleet sits at 20,000 burn hours at dusk, so the Python nodes
-are commissioned at 20,000 h too. The console's SAFE mode counts from a dark
+are commissioned at 20,000 h too. Console nodes start with a trusted clock
+(set at commissioning or by GNSS), so every Python node gets a GNSS fix at
+18:00 before the first tick. The console's SAFE mode counts from a dark
 midpoint learned on the previous clocked night, so the SAFE scenarios first
 run the Python node through the night before (12-13 Oct) on a trusted clock.
 """
@@ -51,6 +53,11 @@ SCENARIOS = [
     # carrier outage from 22:30: hellos stop, the node runs AUTONOMOUS on its own clock
     {"name": "local-outage", "cls": "local", "hello_stop": 16200},
     {"name": "arterial-outage", "cls": "arterial", "veh15": 150, "hello_stop": 16200},   # loop count expires with its TTL
+    # modem fault: no backhaul all night, but the clock is good. With a mesh path to a gateway the node runs MESH
+    # and still gets the CMS's events relayed; with none it runs AUTONOMOUS. Neither is SAFE.
+    {"name": "local-modem-mesh", "cls": "local", "hello_stop": 0, "mesh": True,
+     "events": [{"t": 27000, "kind": "emergency", "ttl": 600, "via": "mesh"}]},
+    {"name": "collector-modem-isolated", "cls": "collector", "veh15": 60, "hello_stop": 0},
     # clock lost (SAFE) with no backhaul to resync it: the night-hour comes from the photocell dusk
     {"name": "local-safe", "cls": "local", "clock_loss": 16200, "warmup": True},
     {"name": "arterial-safe", "cls": "arterial", "veh15": 150, "clock_loss": 16200, "warmup": True},
@@ -74,6 +81,7 @@ for (const sc of SCN) {
     if (sc.clock_loss === t) n.rtcTrusted = false;
     for (const ev of (sc.events || [])) if (ev.t === t) n.receive(Object.assign({ id: ev.kind + '-' + t }, ev), t);
     if ((sc.presence || []).includes(t)) n.presenceUntil = t + 90;
+    if (sc.mesh) n.lastGateway = t;
     n.photocell(skyLux(elevAt(t)), t);
     const o = n.tick(t, DT, null);
     for (const f of Object.keys(rec)) rec[f].push(o[f]);
@@ -121,15 +129,20 @@ def _py_run(sc):
         t = k * DT
         hello_ok = not (sc.get("clock_loss") is not None and t >= sc["clock_loss"]) and not (
             sc.get("hello_stop") is not None and t >= sc["hello_stop"])
+        if t == 0:
+            b.node.gnss_fix(b.mono, b.utc)  # the console's nodes start with a trusted clock
         _step(b, t % 900 == 0 and hello_ok, sc.get("veh15", 0))
         if sc.get("clock_loss") == t:
             b.rtc.reset()                  # wall time lost; no hello comes to resync it
         for ev in sc.get("events", []):
             if ev["t"] == t:
                 payload = {"level": ev["level"]} if "level" in ev else {}
-                b.send(KIND[ev["kind"]], ev["ttl"], payload, priority=ev.get("priority", Priority.NONE))
+                b.send(KIND[ev["kind"]], ev["ttl"], payload, priority=ev.get("priority", Priority.NONE),
+                       via=ev.get("via"))
         if t in sc.get("presence", []):
             b.node.radar_detect(b.mono)
+        if sc.get("mesh"):
+            b.node.mesh_gateway_seen(b.mono)
         b.node.photocell_sample(b.lx_now(), b.mono)
         out = b.node.tick(b.mono, DT)
         for f, v in zip(FIELDS, (out.level, out.drive, out.white, out.amber, out.mode.value, out.phase.value)):
@@ -162,4 +175,6 @@ def test_EXT_UI_1_console_controller_matches_python_tick_for_tick():
     assert lv("local-override", 29400) == 50
     assert lv("alley-emergency-ic-override", 28800) == 5
     assert js["local-safe"]["mode"][19800 // DT] == "SAFE" and js["local-outage"]["mode"][19800 // DT] == "AUTONOMOUS"
+    assert set(js["local-modem-mesh"]["mode"]) == {"MESH"} and lv("local-modem-mesh", 27010) == 100
+    assert set(js["collector-modem-isolated"]["mode"]) == {"AUTONOMOUS"}
     assert max(js["collector-tunable"]["amber"]) > 0 and js["arterial"]["drive"][3600 // DT] < 100

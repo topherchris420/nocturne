@@ -366,7 +366,9 @@ class Node {
     this.hin = false; this.tunable = !!cls.tunable && i % 4 === 0;
     this.level = 0; this.mode = 'SAFE'; this.lastBackhaul = -1e9; this.lastGateway = -1e9;
     this.presenceUntil = -1e9; this.carpetUntil = -1e9; this.events = []; this.burnHours = BURN_HOURS0;
-    this.rtcTrusted = false; this.pcDark = false; this.pcRaw = false; this.pcRawSince = 0;
+    // the RTC was set at commissioning (or by GNSS) and holds for years: a node with no backhaul still knows
+    // the time, so a modem fault gives MESH or AUTONOMOUS, not SAFE. Only a lost clock (the pole action) is SAFE.
+    this.rtcTrusted = true; this.pcDark = false; this.pcRaw = false; this.pcRawSince = 0;
     this.pcDuskMono = null;
     this.out = null;
   }
