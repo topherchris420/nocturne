@@ -61,7 +61,26 @@ def test_EXT_P0_4_export_and_zones():
     assert doc["schema"] == SCHEMA and doc["bundle_version"] == 4
     zone = doc["programs"]["rock-creek-buffer/local"]
     assert zone["zone"] == "rock-creek-buffer" and [s["level"] for s in zone["steps"]] == [60, 50, 0]
-    assert set(programs()) == {r.value for r in RoadClass}
+    assert {k for k in programs() if not k.startswith("hin/")} == {r.value for r in RoadClass}
+
+
+def test_EXT_P0_4b_high_injury_network_programmes_keep_the_hin_floor():
+    """A Phase 0 export must not dim a High-Injury Network segment below the
+    floor the firmware would hold it at."""
+    bd = default_bundle()
+    bd.zones = {"rock-creek-buffer": {RoadClass.LOCAL: (60, 40, 30, 30, 30)}}
+    progs = programs(bd, 50.0)
+    for road in RoadClass:
+        plain = [s["level"] for s in progs[road.value]["steps"][:-1]]
+        hin = progs.get(f"hin/{road.value}")
+        if min(plain) >= bd.hin_floor:
+            assert hin is None
+            continue
+        assert hin["hin"] and min(s["level"] for s in hin["steps"][:-1]) >= bd.hin_floor
+        assert hin["steps"][-1] == {"at": "dawn", "level": 0}
+    assert min(s["level"] for s in progs["rock-creek-buffer/hin/local"]["steps"][:-1]) == bd.hin_floor
+    doc = json.loads(export(bd))
+    assert doc["hin_floor_pct"] == bd.hin_floor and "hin/arterial" in doc["programs"]
 
 
 @pytest.mark.parametrize("road", list(RoadClass))
