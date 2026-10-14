@@ -188,6 +188,7 @@ th.n { text-align: right; }
       <h2>Weather</h2>
       <div class="field"><label for="weather">Signed weather event, refreshed every 15 min while the backhaul is up</label>
         <select id="weather"><option value="none">Clear</option><option value="rain">Rain · +15 points to cap</option><option value="fog">Fog · no boost</option><option value="snow">Snow · no boost</option></select></div>
+      <label class="toggle"><input type="checkbox" id="fMigration"><span>Heavy migration forecast<small>Night Signal at 18:00: local, alley and park streets hold their 22:00 level; facades and empty offices dark</small></span></label>
     </section>
     <section class="panel">
       <h2>Pole click</h2>
@@ -265,11 +266,13 @@ th.n { text-align: right; }
     </section>
   </aside>
 </div>
-<p class="foot">Reference implementation of VD-DSL-SPEC-001 RevA Sections 2, 4, 5. Traffic, pedestrians, class mix and wattages are the Section 6.4 assumptions. The same control loop ships in Python in nocturne-vdl7.zip with its 36-test acceptance suite.</p>
+<p class="foot">Reference implementation of VD-DSL-SPEC-001 RevA Sections 2, 4, 5. Traffic, pedestrians, class mix and wattages are the Section 6.4 assumptions. The same control loop runs in Python in the nocturne-vdl7 package, where an automated parity test holds this page's controller to it.</p>
 
 <script>
 (function () {
 'use strict';
+// <controller> Pure code, no DOM: tests/test_console_parity.py runs this block in Node and
+// checks it against the Python controller.
 // ----------------------------------------------------------------- constants
 const DT = 10, T_END = 50400, START_HOUR = 18, LAT = 38.8977, LON = -77.0365;
 const CLASSES = [
@@ -281,6 +284,7 @@ const CLASSES = [
 ];
 const MIX_SHARE = { arterial: 0.18, collector: 0.17, local: 0.45, alley: 0.15, park: 0.05 };
 const N_LIGHTS = 75000, POLES = 20, HIN_FLOOR = 60, RAIN_BOOST = 15;
+const MIGRATION_CLASSES = ['local', 'alley', 'park'];   // presence classes hold their 22:00 level on migration nights
 const PHASES = ['evening', 'step', 'curfew', 'deep', 'dawn'];
 const MIX = { evening: [100, 0], step: [60, 40], curfew: [0, 100], deep: [0, 100], dawn: [60, 40] };
 const EFF = { '3000K': 1.0, '2700K': 0.97, '2200K': 0.88, 'PC-Amber': 0.70 };
@@ -368,7 +372,9 @@ class Node {
     let lit, hour;
     if (this.rtcTrusted) { hour = localHour(t); const astro = elevAt(t) < -3; lit = astro || this.pcDark; if (astro && !this.pcDark) reasons.push('PHOTOCELL_VETOED'); if (!astro && this.pcDark) reasons.push('PHOTOCELL_EARLY'); }
     else { lit = this.pcDark; hour = lit ? this.safeHour(t) : null; reasons.push(hour === null ? 'SAFE_NO_ANCHOR' : 'SAFE_CLOCK'); }
-    const phase = hour === null ? 'step' : phaseFor(hour), base = c.levels[PHASES.indexOf(phase)];
+    const phase = hour === null ? 'step' : phaseFor(hour);
+    let base = c.levels[PHASES.indexOf(phase)];
+    if (this.active('migration', t).length && MIGRATION_CLASSES.includes(c.id)) { base = Math.min(base, c.levels[1]); reasons.push('MIGRATION'); }
     let a = 0;
     if ((mode === 'ONLINE' || mode === 'MESH') && this.loop && c.vol && t - this.loop.t <= 900) { a = Math.min(1, Math.max(0, this.loop.v / c.vol)); if (a > 0) reasons.push('LOOP'); }
     const presence = t < this.presenceUntil, carpet = t < this.carpetUntil;
@@ -392,9 +398,10 @@ class Node {
     return this.out;
   }
 }
+// </controller>
 
 // --------------------------------------------------------------- simulation
-const state = { t: 0, playing: false, speed: 300, sel: { s: 2, p: 10 }, actions: [], faults: { outage: false, modem: false, brk: false, legacy: false }, weather: 'none', acct: { u0: true, warm: true } };
+const state = { t: 0, playing: false, speed: 300, sel: { s: 2, p: 10 }, actions: [], faults: { outage: false, modem: false, brk: false, legacy: false }, weather: 'none', migration: false, acct: { u0: true, warm: true } };
 const sim = { streets: [], series: [], metrics: null, log: [], legacy: [] };
 
 function bucketChain(st) { st.links = []; for (let i = 0; i < POLES; i++) { st.links.push(new Set()); } for (let i = 0; i < POLES - 1; i++) { if (st.cls.id === 'local' && state.faults.brk && i === 9) continue; st.links[i].add(i + 1); st.links[i + 1].add(i); } }
@@ -423,6 +430,7 @@ function cmsStep(t) {
     const ev = st.cls.vol ? { kind: 'loop', id: 'loop', ttl: 900, veh15: pw(TRAFFIC, h) * (st.cls.id === 'arterial' ? 1 : 0.42) * (0.9 + 0.2 * st.rnd()) } : null;
     for (let i = 0; i < POLES; i++) if (backhaulUp(st, i, t)) { st.nodes[i].hello(t); st.lastHello[i] = t; if (ev) st.nodes[i].receive(ev, t); }
   }
+  if (t === 0 && state.migration) { const all = []; for (let i = 0; i < POLES; i++) all.push(i); for (const st of sim.streets) deliver(st, all, { kind: 'migration', id: 'mig', ttl: T_END }, t, null); logLine(t, 'Night Signal: heavy migration forecast. Presence streets hold their 22:00 level; facades and empty offices dark from dusk'); }
   if (t === 16200 && state.faults.outage) logLine(t, 'Carrier outage: no backhaul to any node until 05:30', true);
   if (t === 41400 && state.faults.outage) logLine(t, 'Carrier back: next hello returns every node to ONLINE');
   if (state.weather !== 'none' && t - sim.lastRain >= 900) {
@@ -630,6 +638,7 @@ $('reset').addEventListener('click', () => { setPlaying(false); state.t = 0; sta
 $('scrub').addEventListener('input', e => { setPlaying(false); state.t = +e.target.value; if (state.t < sim.t) resetSim(); simulateTo(state.t); render(); });
 for (const [id, key] of [['fOutage', 'outage'], ['fModem', 'modem'], ['fBreak', 'brk'], ['fLegacy', 'legacy']]) $(id).addEventListener('change', e => { state.faults[key] = e.target.checked; resimulate(); });
 $('weather').addEventListener('change', e => { state.weather = e.target.value; resimulate(); });
+$('fMigration').addEventListener('change', e => { state.migration = e.target.checked; resimulate(); });
 $('aU0').addEventListener('change', e => { state.acct.u0 = e.target.checked; resimulate(); });
 $('aWarm').addEventListener('change', e => { state.acct.warm = e.target.checked; resimulate(); });
 $('ovApply').addEventListener('click', () => { const t = Math.floor(state.t / DT) * DT; state.actions.push({ kind: 'override', s: 0, p: 0, t, level: Math.max(0, Math.min(100, +$('ovLevel').value || 0)), priority: +$('ovPrio').value, key: `ov-${t}-${state.actions.length}` }); resimulate(); });
@@ -638,11 +647,11 @@ $('ovCancel').addEventListener('click', () => { const t = Math.floor(state.t / D
 // boot: open at the curfew with a realistic night already underway
 function start(saved) {
   buildBoard();
-  if (saved && saved.state) { Object.assign(state, saved.state); state.playing = false; $('fOutage').checked = state.faults.outage; $('fModem').checked = state.faults.modem; $('fBreak').checked = state.faults.brk; $('fLegacy').checked = state.faults.legacy; $('weather').value = state.weather; $('aU0').checked = state.acct.u0; $('aWarm').checked = state.acct.warm; }
+  if (saved && saved.state) { Object.assign(state, saved.state); state.playing = false; $('fOutage').checked = state.faults.outage; $('fModem').checked = state.faults.modem; $('fBreak').checked = state.faults.brk; $('fLegacy').checked = state.faults.legacy; $('weather').value = state.weather; $('fMigration').checked = !!state.migration; $('aU0').checked = state.acct.u0; $('aWarm').checked = state.acct.warm; }
   else { state.t = 19800; state.actions = [{ kind: 'cad', s: 2, p: 10, t: 18000, key: 'demo-cad' }]; }
   resimulate();
 }
-try { window.claude?.hot?.snapshot?.(() => ({ state: { t: state.t, actions: state.actions, faults: state.faults, weather: state.weather, acct: state.acct, sel: state.sel, speed: state.speed } })); } catch (e) { }
+try { window.claude?.hot?.snapshot?.(() => ({ state: { t: state.t, actions: state.actions, faults: state.faults, weather: state.weather, migration: state.migration, acct: state.acct, sel: state.sel, speed: state.speed } })); } catch (e) { }
 (window.claude?.hot?.ready) ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
 </script>

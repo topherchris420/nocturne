@@ -435,16 +435,16 @@ def sky_scenarios(cells: Sequence[Cell], places: Sequence[Place], cct_today: Dic
 
 
 def format_sky(rows: List[dict]) -> str:
-    out = [f"{'place':18s} {'moment':15s} {'streetlight sky removed: p0 / p1 / +U0 / +warm':48s} "
-           f"{'sky msas: today -> Nocturne -> +Signal':40s} stars"]
+    out = [f"{'':18s} {'':15s} {'streetlight sky removed':>27s}   {'whole sky, mag/arcsec^2':>26s}   {'stars overhead':>24s}",
+           f"{'place':18s} {'moment':15s} {'p0':>6s}{'p1':>6s}{'+U0':>6s}{'+warm':>7s}   "
+           f"{'today':>8s}{'Nocturne':>9s}{'+Signal':>9s}   {'today':>8s}{'Nocturne':>9s}{'+Signal':>9s}"]
     for r in rows:
-        red = r["streetlight_reduction"]
-        sk = r["sky"]
+        red, sk = r["streetlight_reduction"], r["sky"]
         out.append(f"{r['place']:18s} {r['moment']:15s} "
-                   f"{red['phase0']:6.0%} {red['phase1']:6.0%} {red['phase1_u0']:6.0%} {red['phase2_warm']:6.0%}"
-                   f"{'':22s}{sk['today']['msas']:6.2f} -> {sk['nocturne']['msas']:6.2f} -> "
-                   f"{sk['nocturne_plus_signal']['msas']:6.2f}   "
-                   f"{sk['today']['stars']} -> {sk['nocturne']['stars']} -> {sk['nocturne_plus_signal']['stars']}")
-    out.append(f"other lighting: {rows[0]['other_source'] if rows else ''}; Signal = the rest of the city's "
-               "lighting halves its output after 23:00")
+                   f"{red['phase0']:6.0%}{red['phase1']:6.0%}{red['phase1_u0']:6.0%}{red['phase2_warm']:7.0%}   "
+                   f"{sk['today']['msas']:8.2f}{sk['nocturne']['msas']:9.2f}{sk['nocturne_plus_signal']['msas']:9.2f}   "
+                   f"{sk['today']['stars']:8d}{sk['nocturne']['stars']:9d}{sk['nocturne_plus_signal']['stars']:9d}")
+    if rows:
+        out.append(f"other lighting: {rows[0]['other_source']}. Signal: the rest of the city's lighting "
+                   "halves its output after 23:00. Higher mag/arcsec^2 is darker.")
     return "\n".join(out)

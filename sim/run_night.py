@@ -73,6 +73,7 @@ class Scenario:
     legacy: bool = False            # cloud-dependent node: fails bright 15 min after losing the CMS
     emergency: Optional[Tuple[str, int, str, int]] = None   # (class, street, start HH:MM, minutes); centred on pole 10
     rain: Optional[Tuple[str, str]] = None
+    migration: bool = False         # Night Signal heavy-migration alert signed to every segment at 18:00
     seed: int = 7
 
 
@@ -87,6 +88,7 @@ SCENARIOS: Dict[str, Scenario] = {
     "emergency": Scenario("emergency", "Full Nocturne with a CAD incident on one local street 00:40-01:40",
                           emergency=("local", 0, "00:40", 60)),
     "rain": Scenario("rain", "Full Nocturne with rain 23:00-02:00", rain=("23:00", "02:00")),
+    "migration": Scenario("migration", "Full Nocturne on a forecast heavy-migration night", migration=True),
 }
 
 
@@ -137,6 +139,7 @@ class NetworkSim:
         self._rain = self._window(scn.rain)
         self._emergency_at = self._window((scn.emergency[2], scn.emergency[2]))[0] if scn.emergency else None
         self._emergency_sent = False
+        self._migration_sent = False
         self._rain_sent_mono = -math.inf
         self.rejected = 0
         # outputs
@@ -192,6 +195,13 @@ class NetworkSim:
                 for n in st.nodes:
                     self.rejected += 0 if n.receive(msg, self.mono) else 1
             self._rain_sent_mono = self.mono
+        if self.scn.migration and not self._migration_sent and backhaul_up:
+            for st in self.streets:                          # one signed event per segment, valid to dawn
+                msg = self.cms.event(EventKind.MIGRATION, 14 * 3600, st.segment, {"source": "BirdCast"},
+                                     event_id="mig-2026-10-13", issued=utc)
+                for n in st.nodes:
+                    self.rejected += 0 if n.receive(msg, self.mono) else 1
+            self._migration_sent = True
         if self._emergency_at is not None and not self._emergency_sent and utc >= self._emergency_at:
             road, k, _, minutes = self.scn.emergency
             st = next(s for s in self.streets if s.road == RoadClass(road) and s.k == k)

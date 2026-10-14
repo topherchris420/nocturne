@@ -1,11 +1,24 @@
 """`nocturne` command line.
 
-    nocturne trace --road local
+The node
+    nocturne trace --road local [--site sydney]
     nocturne trace --road arterial --offline-at 22:00 --event emergency@00:40:60
+    nocturne keygen --out cms_key.pem                      # CMS signing key, prints the node public key
+    nocturne bundle --key cms_key.pem --version 2 [--zones zones.json] --out bundle.json
+
+The city
+    nocturne business-case [--site dc] [--price 0.13] [--co2 0.30]     # a year, DC's real fleet
+    nocturne sky [--share 0.15] [--measured rock-creek=18.4] [--retrofits 10]
+    nocturne bug fixture.ies                               # TM-15 BUG rating and uplight
+    nocturne trespass fixture.ies --height 9 --setback 10 --window 5 --road local
+    nocturne signal --date 2026-10-14 [--migration] [--key cms_key.pem] [--ics curfew.ics --days 30]
+    nocturne verify station.dat --go-live 2026-11-01       # did the sky get darker?
+    nocturne pilot --seed "text published before the draw" [--out plan.csv]
+    nocturne pilot --power 0.0014 1.2                      # segment-nights to detect a 20 % change
+
+Models
     nocturne spectral [--spd my_engine=lm79.csv]
     nocturne simulate --out out
-    nocturne keygen --out cms_key.pem                      # CMS signing key, prints the node public key
-    nocturne bundle --key cms_key.pem --version 2 --out bundle.json
 """
 from __future__ import annotations
 
@@ -14,17 +27,20 @@ import base64
 import json
 import os
 import sys
+from datetime import date, timedelta
 
 from . import spectral
 from .bench import Bench
 from .clock import parse_local
 from .events import EventKind, Priority
-from .profiles import RoadClass, default_bundle, validate_bundle
+from .profiles import PHASE_ORDER, RoadClass, default_bundle, validate_bundle
 from .security import Ed25519Signer
+from .sites import SITES, site
 
 
 def cmd_trace(a) -> int:
-    b = Bench(RoadClass(a.road), start=a.start, hin=a.hin, tunable=a.tunable, online=not a.offline)
+    b = Bench(RoadClass(a.road), start=a.start, hin=a.hin, tunable=a.tunable, online=not a.offline,
+              site=site(a.site))
     events = []
     for spec in a.event or []:
         kind, _, rest = spec.partition("@")
@@ -35,7 +51,7 @@ def cmd_trace(a) -> int:
         events.append((kind, at, ttl_min, level))
     print(f"{'local':6s} {'mode':10s} {'phase':8s} {'lit':3s} {'base':>4s} {'act':>4s} {'target':>6s} "
           f"{'level':>5s} {'white':>5s} {'amber':>5s}  reasons")
-    end_utc = parse_local(a.end)
+    end_utc = parse_local(a.end, b.site.tz)
     last_key, fired = None, set()
     while b.utc < end_utc:
         loc = b.local
@@ -106,6 +122,10 @@ def cmd_bundle(a) -> int:
     with open(a.key, "rb") as f:
         signer = Ed25519Signer.from_pem(f.read())
     bundle = default_bundle(version=a.version, issued=a.issued)
+    if a.zones:
+        with open(a.zones) as f:
+            raw = json.load(f)
+        bundle.zones = {name: {RoadClass(r): tuple(int(x) for x in lv) for r, lv in z.items()} for name, z in raw.items()}
     errs = validate_bundle(bundle)
     if errs:
         print("refusing to sign an invalid bundle:\n  " + "\n  ".join(errs), file=sys.stderr)
@@ -121,6 +141,133 @@ def cmd_bundle(a) -> int:
         print("wrote", a.out)
     else:
         print(text)
+    return 0
+
+
+def cmd_business_case(a) -> int:
+    from .annual import Economics, dc_fleet, format_report, run_year, spec_fleet
+    fleet = dc_fleet() if a.fleet == "dc" else spec_fleet(a.lights)
+    r = run_year(fleet, site=site(a.site), year=a.year, unsensed_floor=a.floor,
+                 econ=Economics(usd_per_kwh=a.price, tco2_per_mwh=a.co2))
+    print(json.dumps(r, indent=2) if a.json else format_report(r))
+    return 0
+
+
+def cmd_sky(a) -> int:
+    from .annual import dc_fleet
+    from .skyglow import CLASSES, PLACES_DC, format_sky, lighting_for, load_grid, plan_retrofits, sky_scenarios
+    fleet = dc_fleet()
+    cct = {c: fleet.classes[c].cct_today for c in CLASSES}
+    measured = {}
+    for item in a.measured or []:
+        k, _, v = item.partition("=")
+        measured[k] = float(v)
+    places = [p for p in PLACES_DC if not a.place or p.key in a.place]
+    cells = load_grid()
+    rows = sky_scenarios(cells, places, cct, share=a.share, other_curfew_cut=a.cut, measured=measured or None)
+    if a.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        print(format_sky(rows))
+    if a.retrofits:
+        print("\nPost-top globes to fix first (top reflectors), ranked by sky regained at these places per kW:")
+        for s in plan_retrofits(cells, places, lighting_for("phase1", 1.5, cct), top=a.retrofits):
+            best = max(s.gain, key=s.gain.get)
+            print(f"  {s.lat:.4f},{s.lon:.4f}  {s.globes_kw:5.1f} kW of globes  "
+                  f"-{s.gain[best]:.1%} of the streetlight sky at {best}")
+    return 0
+
+
+def cmd_bug(a) -> int:
+    from .photometry import load_ies
+    phot = load_ies(a.ies)
+    bug = phot.bug()
+    z = bug.zones
+    if a.json:
+        print(json.dumps({"bug": str(bug), "B": bug.B, "U": bug.U, "G": bug.G, "limiting": bug.limiting,
+                          "ulr": phot.ulr, "zonal_lumens": {k: round(v, 1) for k, v in z.items()},
+                          "symmetry": phot.symmetry}, indent=2))
+        return 0
+    print(f"{a.ies}: {bug}   (limited by {bug.limiting['B']}, {bug.limiting['U']}, {bug.limiting['G']}; "
+          f"{phot.symmetry} photometry{', Type V glare table' if bug.symmetric_table else ''})")
+    print(f"total {z['total']:,.0f} lm, upward {z['up']:,.1f} lm (ULR {phot.ulr:.2%})"
+          + (f", {z['total'] / phot.input_watts:.0f} lm/W" if phot.input_watts else ""))
+    print("  ".join(f"{k} {z[k]:,.0f}" for k in ("BL", "BM", "BH", "BVH", "FL", "FM", "FH", "FVH", "UL", "UH")))
+    if bug.U > 0:
+        print("not U0: fails the Section 3 uplight requirement")
+    return 0
+
+
+def cmd_trespass(a) -> int:
+    from .photometry import load_ies, trespass_report
+    from .profiles import DEFAULT_MIX, DEFAULT_PROFILES
+    phot = load_ies(a.ies)
+    prof = DEFAULT_PROFILES[RoadClass(a.road)]
+    levels = {ph.value: float(lv) for ph, lv in zip(PHASE_ORDER, prof.levels)}
+    spectra = {ph.value: ("PC-Amber" if (a.tunable and DEFAULT_MIX[ph][1] == 100) else a.spectrum) for ph in PHASE_ORDER}
+    rows = trespass_report(phot, a.height, a.setback, a.window, levels, spectra, env_zone=a.zone)
+    print(f"window {a.setback:g} m behind a {a.height:g} m pole, {a.window:g} m up; CIE 150 zone {a.zone}")
+    print(f"{'phase':8s} {'level':>5s} {'spectrum':>9s} {'Ev lx':>7s} {'limit':>6s} {'mel-EDI lx':>10s}  verdict")
+    for r in rows:
+        verdict = []
+        verdict.append("ok" if r["within_cie150"] else "over CIE 150")
+        verdict.append("below 1 lx sleep guide" if r["below_sleep_guide"] else "above 1 lx sleep guide")
+        print(f"{r['phase']:8s} {r['level_pct']:5.0f} {r['spectrum']:>9s} {r['ev_lux']:7.2f} {r['cie150_limit_lux']:6.1f} "
+              f"{r['mel_edi_lux']:10.2f}  {', '.join(verdict)}")
+    return 0
+
+
+def cmd_signal(a) -> int:
+    from .nightsignal import sign, signal, to_ics
+    s = site(a.site)
+    first = date.fromisoformat(a.date) if a.date else date.today()
+    mig = {"source": a.migration_source} if a.migration else None
+    docs = [signal(first + timedelta(days=i), site=s, migration=mig if i == 0 else None)
+            for i in range(max(1, a.days))]
+    if a.ics:
+        with open(a.ics, "w", newline="") as f:
+            f.write(to_ics(docs))
+        print(f"wrote {a.ics}: {len(docs)} nights")
+    out = docs[0]
+    if a.key:
+        with open(a.key, "rb") as f:
+            out = sign(out, Ed25519Signer.from_pem(f.read()))
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def cmd_verify(a) -> int:
+    from .observe import read_sqm, verify
+    s = site(a.site)
+    r = verify(read_sqm(a.log), date.fromisoformat(a.go_live), s.lat, s.lon, s.tz)
+    print(f"{a.log}: {r['readings']:,} readings, {r['dark']:,} in astronomical darkness with the Moon down, "
+          f"{r['nights_with_step']} clear nights around the curfew")
+    print(f"change in the 23:00 curfew step after go-live: {r['curfew_step_change']}")
+    print(f"change in the post-curfew sky (23:15-02:00):  {r['post_curfew_change']}")
+    print("positive = darker; the curfew-step change is the one weather and season cannot fake")
+    return 0
+
+
+def cmd_pilot(a) -> int:
+    from .pilot import exposure_needed, load_segments, stepped_wedge
+    if a.power:
+        rate, rr = float(a.power[0]), float(a.power[1])
+        n = exposure_needed(rate, rr)
+        print(f"{n:,.0f} segment-nights per arm to detect a rate ratio of {rr:g} on a baseline of {rate:g} "
+              f"events per segment-night (two-sided 5 %, 80 % power)")
+        return 0
+    if not a.seed:
+        print("--seed is required: a string published before the draw", file=sys.stderr)
+        return 1
+    segs = load_segments(a.segments) if a.segments else load_segments()
+    plan = stepped_wedge(segs, a.seed, waves=a.waves, start=date.fromisoformat(a.start), wave_days=a.wave_days)
+    for w in range(1, plan.waves + 1):
+        n = sum(1 for v in plan.assignment.values() if v == w)
+        lights = sum(sg.lights for sg in segs if plan.assignment[sg.id] == w)
+        print(f"wave {w}: {n:,} segments, {lights:,} lights, switch on {plan.wave_start(w).isoformat()}")
+    if a.out:
+        plan.to_csv(a.out, segs)
+        print("wrote", a.out)
     return 0
 
 
@@ -140,6 +287,7 @@ def main(argv=None) -> int:
     t.add_argument("--offline-at", help="HH:MM local at which the backhaul is lost")
     t.add_argument("--event", action="append",
                    help="kind@HH:MM[:ttl_min[:level]], e.g. emergency@00:40:60 or override@23:00:120:50")
+    t.add_argument("--site", default="dc", choices=sorted(SITES), help="where the node is (latitude, longitude, DST rule)")
     t.set_defaults(fn=cmd_trace)
 
     s = sub.add_parser("spectral", help="print the spectral metrics table")
@@ -162,8 +310,71 @@ def main(argv=None) -> int:
     bnd.add_argument("--key", required=True, help="PEM private key from `nocturne keygen`")
     bnd.add_argument("--version", type=int, default=1)
     bnd.add_argument("--issued", default="2026-10-13", help="ISO date; valid 400 days")
+    bnd.add_argument("--zones", help="JSON {zone: {road_class: [5 phase levels]}} neighbourhood overlays")
     bnd.add_argument("--out")
     bnd.set_defaults(fn=cmd_bundle)
+
+    bc = sub.add_parser("business-case", help="a year of energy, cost, carbon, light and skyglow")
+    bc.add_argument("--site", default="dc", choices=sorted(SITES))
+    bc.add_argument("--fleet", default="dc", choices=["dc", "spec"], help="DC's real fleet, or the Section 6.4 assumed one")
+    bc.add_argument("--lights", type=int, default=75_000, help="fleet size for --fleet spec")
+    bc.add_argument("--year", type=int, default=2027)
+    bc.add_argument("--price", type=float, default=0.13, help="USD per kWh (ASSUMED)")
+    bc.add_argument("--co2", type=float, default=0.30, help="tCO2 per MWh (ASSUMED)")
+    bc.add_argument("--floor", type=float, default=50.0, help="Phase 0 floor for streets without presence sensing, %%")
+    bc.add_argument("--json", action="store_true")
+    bc.set_defaults(fn=cmd_business_case)
+
+    sk = sub.add_parser("sky", help="zenith sky brightness and stars at DC's dark places")
+    sk.add_argument("--share", type=float, default=0.15, help="streetlights' share of artificial light (Tucson prior)")
+    sk.add_argument("--cut", type=float, default=0.5, help="Night Signal: share of other lighting cut after 23:00")
+    sk.add_argument("--measured", action="append", help="place=msas from a sky quality meter, e.g. rock-creek=18.4")
+    sk.add_argument("--place", action="append", help="limit to these place keys")
+    sk.add_argument("--retrofits", type=int, default=0, help="also list the N best cells for globe retrofits")
+    sk.add_argument("--json", action="store_true")
+    sk.set_defaults(fn=cmd_sky)
+
+    bg = sub.add_parser("bug", help="BUG rating and uplight of an IES LM-63 file")
+    bg.add_argument("ies")
+    bg.add_argument("--json", action="store_true")
+    bg.set_defaults(fn=cmd_bug)
+
+    tr = sub.add_parser("trespass", help="light on a bedroom window through the night")
+    tr.add_argument("ies")
+    tr.add_argument("--height", type=float, default=9.0, help="mounting height, m")
+    tr.add_argument("--setback", type=float, default=10.0, help="window distance behind the pole, m")
+    tr.add_argument("--window", type=float, default=5.0, help="window height, m")
+    tr.add_argument("--road", default="local", choices=[r.value for r in RoadClass])
+    tr.add_argument("--spectrum", default="2700K", choices=["4000K", "3000K", "2700K", "2200K", "PC-Amber"])
+    tr.add_argument("--tunable", action="store_true", help="amber channel in the curfew and deep phases")
+    tr.add_argument("--zone", default="E3", choices=["E1", "E2", "E3", "E4"], help="CIE 150 environmental zone")
+    tr.set_defaults(fn=cmd_trespass)
+
+    sg = sub.add_parser("signal", help="tonight's Night Signal (JSON, optionally signed; iCal feed)")
+    sg.add_argument("--date", help="the evening, YYYY-MM-DD (default today)")
+    sg.add_argument("--site", default="dc", choices=sorted(SITES))
+    sg.add_argument("--migration", action="store_true", help="heavy migration forecast tonight")
+    sg.add_argument("--migration-source", default="BirdCast")
+    sg.add_argument("--key", help="PEM key to sign with")
+    sg.add_argument("--ics", help="also write an iCalendar feed here")
+    sg.add_argument("--days", type=int, default=1, help="nights in the iCalendar feed")
+    sg.set_defaults(fn=cmd_signal)
+
+    vf = sub.add_parser("verify", help="before/after evidence from a sky quality meter log")
+    vf.add_argument("log")
+    vf.add_argument("--go-live", required=True, help="first night of the new lighting, YYYY-MM-DD")
+    vf.add_argument("--site", default="dc", choices=sorted(SITES))
+    vf.set_defaults(fn=cmd_verify)
+
+    pl = sub.add_parser("pilot", help="randomised stepped-wedge rollout over DC's street segments")
+    pl.add_argument("--seed", help="public text fixed before the draw")
+    pl.add_argument("--waves", type=int, default=4)
+    pl.add_argument("--start", default="2027-01-04")
+    pl.add_argument("--wave-days", type=int, default=56)
+    pl.add_argument("--segments", help="CSV segment,ward,road_class,lights,kw (default: DC's)")
+    pl.add_argument("--out", help="write the plan as CSV")
+    pl.add_argument("--power", nargs=2, metavar=("RATE", "RR"), help="segment-nights needed instead of a plan")
+    pl.set_defaults(fn=cmd_pilot)
 
     a = ap.parse_args(argv)
     return a.fn(a)
