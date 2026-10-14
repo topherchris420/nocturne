@@ -23,7 +23,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 class EventKind(str, Enum):
@@ -45,6 +45,8 @@ class Priority(IntEnum):
 
 
 PROTECTED = (EventKind.EMERGENCY, EventKind.OVERRIDE)   # evicted last
+MAX_TTL_S = 86400.0          # longest TTL an event may carry
+SEQ_LIMIT = 1 << 64          # seq is a 64-bit counter: 32-bit CMS epoch + 32-bit count
 
 
 # ------------------------------------------------------------------ targets
@@ -75,6 +77,7 @@ class Event:
     targets: Optional[dict] = None      # None addresses nobody
     seq: int = 0
     received_mono: float = 0.0
+    age_s: float = 0.0             # age on arrival, from `issued` (0 without a trusted clock)
     via: str = "backhaul"
     cancelled: bool = False
 
@@ -94,8 +97,8 @@ class Event:
     def from_dict(cls, d: dict) -> "Event":
         """Raises ValueError on an unknown kind or a malformed record."""
         ttl, seq, prio = d["ttl_s"], d.get("seq", 0), d.get("priority", 0)
-        if (isinstance(ttl, bool) or not isinstance(ttl, (int, float)) or not (0 < ttl <= 86400)
-                or isinstance(seq, bool) or not isinstance(seq, int)
+        if (isinstance(ttl, bool) or not isinstance(ttl, (int, float)) or not (0 < ttl <= MAX_TTL_S)
+                or isinstance(seq, bool) or not isinstance(seq, int) or not (0 <= seq < SEQ_LIMIT)
                 or isinstance(prio, bool) or not isinstance(prio, int) or not isinstance(d.get("payload", {}), dict)):
             raise TypeError("bad ttl_s, seq, priority or payload")
         return cls(kind=EventKind(d["kind"]), ttl_s=float(ttl), payload=dict(d.get("payload", {})),
@@ -112,6 +115,7 @@ class EventStore:
     def __init__(self, capacity: int = 64):
         self.capacity = capacity
         self._events: Dict[str, Event] = {}
+        self._cancelled: Dict[str, Tuple[int, float]] = {}   # id -> (cancel's seq, held until mono)
 
     def put(self, ev: Event, mono: float) -> None:
         ev.received_mono = mono
@@ -122,12 +126,28 @@ class EventStore:
             oldest = min(pool, key=lambda e: e.received_mono)
             del self._events[oldest.id]
 
-    def cancel(self, event_id: str) -> bool:
+    def cancel(self, event_id: str, mono: float = 0.0, seq: int = 0) -> bool:
+        """Cancel `event_id`; True if a stored event was cancelled. The cancel
+        is also remembered for the longest TTL, so a copy of the event that
+        arrives after it (reordered within the replay window, or the slower
+        of a backhaul + mesh pair) is refused rather than running its full
+        TTL. Only copies issued before the cancel (lower `seq`) are refused:
+        the CMS may reuse an id later, as loop volumes do."""
+        self._cancelled[event_id] = (seq, mono + MAX_TTL_S)
+        for k in [k for k, (_, until) in self._cancelled.items() if until <= mono]:
+            del self._cancelled[k]
+        while len(self._cancelled) > self.capacity:
+            del self._cancelled[min(self._cancelled, key=lambda k: self._cancelled[k][1])]
         ev = self._events.get(event_id)
         if ev is None:
             return False
         ev.cancelled = True
         return True
+
+    def cancelled_before(self, ev: Event, mono: float) -> bool:
+        """True if a cancel for `ev.id` that was issued after `ev` is held."""
+        held = self._cancelled.get(ev.id)
+        return held is not None and mono < held[1] and ev.seq < held[0]
 
     def purge(self, mono: float) -> None:
         for k in [k for k, e in self._events.items() if not e.active(mono)]:

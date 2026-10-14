@@ -458,8 +458,11 @@ class RtcHoldover:
         return self._raw_base + (mono - self._raw_mono_base)
 
     def sync(self, mono: float, utc: datetime) -> None:
+        """Raises ValueError on a naive datetime: it names no instant."""
+        if utc.tzinfo is None or utc.utcoffset() is None:
+            raise ValueError("time sync needs a timezone-aware datetime")
         self.synced = True
-        self.utc_at_sync = utc
+        self.utc_at_sync = utc.astimezone(timezone.utc)
         self.mono_at_sync = mono
         self.age_before_mono_s = 0.0
 
