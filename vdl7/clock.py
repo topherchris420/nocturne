@@ -253,6 +253,18 @@ def julian_day(utc: datetime) -> float:
     return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + b - 1524.5 + frac
 
 
+def sun_apparent_longitude_deg(utc: datetime) -> float:
+    """The Sun's apparent ecliptic longitude (NOAA series), for the Moon's
+    phase in vdl7.observe."""
+    jc = (julian_day(utc) - 2451545.0) / 36525.0
+    l0 = (280.46646 + jc * (36000.76983 + jc * 0.0003032)) % 360.0
+    m = math.radians(357.52911 + jc * (35999.05029 - 0.0001537 * jc))
+    c = (math.sin(m) * (1.914602 - jc * (0.004817 + 0.000014 * jc)) + math.sin(2 * m) * (0.019993 - 0.000101 * jc)
+         + math.sin(3 * m) * 0.000289)
+    omega = 125.04 - 1934.136 * jc
+    return (l0 + c - 0.00569 - 0.00478 * math.sin(math.radians(omega))) % 360.0
+
+
 def _solar_elevation(lat: float, lon: float, jd: float, minutes_utc: float) -> float:
     jc = (jd - 2451545.0) / 36525.0
     l0 = (280.46646 + jc * (36000.76983 + jc * 0.0003032)) % 360.0

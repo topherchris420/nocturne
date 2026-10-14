@@ -38,7 +38,7 @@ from datetime import date
 LAYER = "https://maps2.dcgis.dc.gov/dcgis/rest/services/DDOT/Streetlights/MapServer/0"
 FIELDS = ["OBJECTID", "ASSETSTATUS", "ASSETTYPE", "LIGHTTYPE", "WATTAGE1", "WATTAGE2", "NUMBERLIGHTS",
           "CCT", "FIXTURESTYLE", "ROADCLASSIFICATION", "WARD", "SHIELD", "POLEHEIGHT",
-          "CLIGHT_SCAN_SUCCESS_1", "CLIGHT_DIMMING_1", "LANDUSE", "OWNER"]
+          "CLIGHT_SCAN_SUCCESS_1", "CLIGHT_DIMMING_1", "LANDUSE", "OWNER", "STREETSEGMID"]
 PAGE = 1000
 CELL_DEG_LAT = 0.005                       # ~556 m
 CELL_DEG_LON = 0.0064                      # ~555 m at 38.9 N
@@ -48,6 +48,13 @@ ASSET_EXCLUDED = {3: "overhead guide sign", 4: "tunnel/underpass", 6: "navigatio
 ROAD = {14: "arterial", 16: "arterial", 11: "arterial", 12: "arterial", 17: "collector", 19: "local"}
 FREEWAY = {11, 12}
 LIGHTTYPE = {6: "LED", 1: "HPS", 3: "INC", 4: "MV", 5: "MH", 7: "FL"}
+# FIXTURESTYLE codes grouped by how much light they can send upward. 22 and 23
+# are not in the layer's domain; their LIGHT_MODEL values show 22 is the LED
+# cobra-head roadway luminaire and 23 the twin post-top globe retrofit kit.
+OPTIC_GROUP = {22: "cutoff_roadway", 12: "cutoff_roadway", 1: "cutoff_roadway", 21: "cutoff_roadway",
+               3: "posttop_globe", 23: "posttop_globe", 14: "posttop_globe", 19: "posttop_globe",
+               20: "posttop_globe", 16: "posttop_globe", 6: "posttop_globe", 17: "posttop_globe",
+               18: "posttop_globe", 4: "teardrop", 13: "teardrop", 15: "teardrop", 2: "semi_cutoff"}
 
 
 def _get(params: dict, retries: int = 4) -> dict:
@@ -140,7 +147,7 @@ def reduce(records):
     fleet = {"classes": defaultdict(lambda: Counter()), "cct": defaultdict(Counter), "ward": defaultdict(Counter),
              "lighttype": Counter(), "excluded": Counter(), "shield": Counter(), "fixture": Counter(),
              "registered": Counter(), "trim_hist": Counter(), "freeway": 0,
-             "landuse": defaultdict(Counter), "not_led": Counter()}
+             "landuse": defaultdict(Counter), "not_led": Counter(), "optics": defaultdict(Counter)}
     grid = defaultdict(lambda: defaultdict(float))
     for a in active:
         cls, flags = classify(a)
@@ -158,6 +165,7 @@ def reduce(records):
         c["trimmed_w"] += w * t
         fleet["cct"][cls][cct_of(a)] += 1
         fleet["landuse"][cls][str(a.get("LANDUSE") or "unknown")] += 1
+        fleet["optics"][cls][OPTIC_GROUP.get(a.get("FIXTURESTYLE"), "other")] += 1
         if a.get("LIGHTTYPE") != 6:
             fleet["not_led"][cls] += 1
         fleet["ward"][str(a.get("WARD") or "unknown")][cls] += 1
@@ -172,10 +180,43 @@ def reduce(records):
         cell = grid[key]
         cell[f"{cls}_n"] += 1
         cell[f"{cls}_w"] += w * t
+        group = OPTIC_GROUP.get(a.get("FIXTURESTYLE"), "other")
+        if group in ("posttop_globe", "teardrop"):
+            cell[f"{group}_w"] += w * t
         cell["sx"] += x
         cell["sy"] += y
         cell["n"] += 1
     return active, fleet, grid
+
+
+def segments(active):
+    """Street segment -> (ward, dominant Nocturne class, lights, kW), the unit
+    the pilot is randomised over (vdl7.pilot)."""
+    segs = defaultdict(lambda: {"ward": Counter(), "cls": Counter(), "lights": 0, "kw": 0.0, "lat": 0.0, "lon": 0.0})
+    for a in active:
+        cls, _ = classify(a)
+        sid = a.get("STREETSEGMID")
+        if cls is None or not sid:
+            continue
+        s = segs[int(sid)]
+        s["ward"][str(a.get("WARD") or "unknown")] += 1
+        s["cls"][cls] += 1
+        s["lights"] += 1
+        s["kw"] += pole_watts(a) * trim(a) / 1000.0
+        if a.get("x") is not None and a.get("y") is not None:
+            s["lat"] += a["y"]
+            s["lon"] += a["x"]
+    return segs
+
+
+def write_segments(segs, out_dir: str) -> None:
+    with open(os.path.join(out_dir, "segments.csv"), "w") as f:
+        f.write("segment,ward,road_class,lights,kw,lat,lon\n")
+        for sid in sorted(segs):
+            s = segs[sid]
+            n = s["lights"]
+            f.write(f"{sid},{s['ward'].most_common(1)[0][0]},{s['cls'].most_common(1)[0][0]},{n},"
+                    f"{s['kw']:.3f},{s['lat'] / n:.5f},{s['lon'] / n:.5f}\n")
 
 
 def write(fleet, grid, n_records, n_active, out_dir: str) -> None:
@@ -200,6 +241,7 @@ def write(fleet, grid, n_records, n_active, out_dir: str) -> None:
                         "mean_trim": round(fleet["classes"][c]["trimmed_w"] / max(1e-9, fleet["classes"][c]["rated_w"]), 3),
                         "cct": dict(fleet["cct"][c].most_common()),
                         "landuse": dict(fleet["landuse"][c].most_common()),
+                        "optics": dict(fleet["optics"][c].most_common()),
                         "not_led": int(fleet["not_led"][c])}
                     for c in classes},
         "by_ward": {w: dict(v) for w, v in sorted(fleet["ward"].items())},
@@ -212,13 +254,15 @@ def write(fleet, grid, n_records, n_active, out_dir: str) -> None:
     with open(os.path.join(out_dir, "fleet.json"), "w") as f:
         json.dump(doc, f, indent=2)
         f.write("\n")
-    cols = ["lat", "lon"] + [f"{c}_{k}" for c in classes for k in ("n", "w")]
+    extra = ["posttop_globe_w", "teardrop_w"]
+    cols = ["lat", "lon"] + [f"{c}_{k}" for c in classes for k in ("n", "w")] + extra
     with open(os.path.join(out_dir, "grid.csv"), "w") as f:
         f.write(",".join(cols) + "\n")
         for key in sorted(grid):
             cell = grid[key]
             lat, lon = cell["sy"] / cell["n"], cell["sx"] / cell["n"]   # centroid of the poles in the cell
-            row = [f"{lat:.5f}", f"{lon:.5f}"] + [f"{cell.get(f'{c}_{k}', 0.0):.0f}" for c in classes for k in ("n", "w")]
+            row = ([f"{lat:.5f}", f"{lon:.5f}"] + [f"{cell.get(f'{c}_{k}', 0.0):.0f}" for c in classes for k in ("n", "w")]
+                   + [f"{cell.get(e, 0.0):.0f}" for e in extra])
             f.write(",".join(row) + "\n")
 
 
@@ -239,6 +283,7 @@ def main(argv=None) -> int:
                 f.write(json.dumps(r) + "\n")
     active, fleet, grid = reduce(records)
     write(fleet, grid, len(records), len(active), a.out)
+    write_segments(segments(active), a.out)
     print(f"{len(records)} records, {len(active)} active, {len(grid)} grid cells -> {os.path.abspath(a.out)}")
     return 0
 

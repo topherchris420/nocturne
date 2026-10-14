@@ -43,6 +43,13 @@
         "Intermediate": 4335,
         "unknown": 62
       },
+      "optics": {
+        "cutoff_roadway": 10031,
+        "posttop_globe": 5480,
+        "teardrop": 2728,
+        "other": 166,
+        "semi_cutoff": 161
+      },
       "not_led": 708
     },
     "collector": {
@@ -65,6 +72,13 @@
         "Intermediate": 1442,
         "Commercial": 1343,
         "unknown": 28
+      },
+      "optics": {
+        "cutoff_roadway": 5476,
+        "posttop_globe": 2250,
+        "teardrop": 561,
+        "semi_cutoff": 61,
+        "other": 47
       },
       "not_led": 184
     },
@@ -90,6 +104,13 @@
         "Commercial": 1138,
         "unknown": 737
       },
+      "optics": {
+        "cutoff_roadway": 22199,
+        "posttop_globe": 6321,
+        "teardrop": 643,
+        "other": 459,
+        "semi_cutoff": 135
+      },
       "not_led": 769
     },
     "alley": {
@@ -113,6 +134,13 @@
         "unknown": 53,
         "Commercial": 4
       },
+      "optics": {
+        "cutoff_roadway": 14822,
+        "semi_cutoff": 73,
+        "posttop_globe": 50,
+        "other": 26,
+        "teardrop": 2
+      },
       "not_led": 210
     },
     "park": {
@@ -132,6 +160,12 @@
         "Residential": 297,
         "Commercial": 187,
         "Intermediate": 8
+      },
+      "optics": {
+        "posttop_globe": 392,
+        "teardrop": 73,
+        "other": 14,
+        "cutoff_roadway": 13
       },
       "not_led": 4
     }

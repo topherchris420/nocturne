@@ -35,6 +35,7 @@ from vdl7.bench import sky_lux
 from vdl7.clock import DC_LAT, DC_LON, RtcHoldover, local_hour, parse_local, solar_elevation_deg, to_local
 from vdl7.cms import GEOFENCE_RADIUS_M, Cms, geofence
 from vdl7.controller import Flash, NodeConfig, VDL7Controller
+from vdl7.demand import POLE_SPACING_M, POLES, WALK_POLES, WALK_SPEED_MPS, ped_rate_per_h, traffic_veh15
 from vdl7.driver import LuminaireDriver
 from vdl7.events import EventKind
 from vdl7.mesh import MeshNetwork
@@ -45,9 +46,6 @@ CLASS_MIX = {RoadClass.ARTERIAL: 0.18, RoadClass.COLLECTOR: 0.17, RoadClass.LOCA
              RoadClass.ALLEY: 0.15, RoadClass.PARK: 0.05}
 N_LIGHTS = 75_000
 STREETS_PER_CLASS = 4
-POLES = 20
-POLE_SPACING_M = 30.0
-WALK_SPEED_MPS = 1.4
 UPLIGHT_TODAY = 0.03          # direct uplight, network average (globes, tilt)
 UPLIGHT_U0 = 0.0
 REFLECTED = 0.12              # ground and facade reflectance
@@ -62,29 +60,6 @@ CLASS_LABEL = {RoadClass.ARTERIAL: "Arterial", RoadClass.COLLECTOR: "Collector",
 # Section 6.3 as printed in VD-DSL-SPEC-001 RevA: (energy, delivered light) vs today
 SPEC_TABLE_6_3 = {"today": (1.00, 1.00), "dimming": (0.65, 0.65), "dimming_u0": (0.65, 0.65),
                   "nocturne": (0.70, 0.65), "outage": (0.68, 0.63), "legacy_outage": (1.00, 0.92)}
-
-
-def _pw(points: List[Tuple[float, float]], h: float) -> float:
-    """Piecewise-linear curve over a 24 h clock given as (hour, value) with
-    hours after midnight written as 24+."""
-    hh = h if h >= 12 else h + 24
-    for (h0, v0), (h1, v1) in zip(points, points[1:]):
-        if h0 <= hh <= h1:
-            return v0 + (v1 - v0) * (hh - h0) / (h1 - h0)
-    return points[-1][1] if hh > points[-1][0] else points[0][1]
-
-
-TRAFFIC = [(18, 290), (20, 210), (22, 130), (24, 60), (27, 25), (29, 60), (31, 250), (32, 290)]
-PEDS = [(18, 30), (21, 15), (23, 6), (25, 2), (27, 1), (29, 2), (31, 15), (32, 20)]
-
-
-def traffic_veh15(h: float, road: RoadClass) -> float:
-    base = _pw(TRAFFIC, h)
-    return base if road == RoadClass.ARTERIAL else base * 0.42
-
-
-def ped_rate_per_h(h: float) -> float:
-    return _pw(PEDS, h)
 
 
 @dataclass
@@ -230,7 +205,7 @@ class NetworkSim:
         rng = st.ped_rng
         if rng.random() < ped_rate_per_h(h) / 3600.0 * self.dt:
             start = 0 if rng.random() < 0.5 else POLES - 1
-            st.walkers.append(Walker(start, 1 if start == 0 else -1, rng.randint(4, 14), self.mono))
+            st.walkers.append(Walker(start, 1 if start == 0 else -1, rng.randint(*WALK_POLES), self.mono))
         step_s = POLE_SPACING_M / WALK_SPEED_MPS
         alive = []
         for w in st.walkers:

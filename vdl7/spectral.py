@@ -328,6 +328,20 @@ def rayleigh_rel(name: str, reference: str = "4000K") -> float:
     return t[name].rayleigh_per_lm / t[reference].rayleigh_per_lm
 
 
+@lru_cache(maxsize=64)
+def scatter_weight(name: str, alpha: float, eye: str = "photopic") -> float:
+    """Scattered light seen by `eye` per photopic lumen emitted, relative to
+    monochromatic 550 nm: sum S (550/l)^alpha W / sum S V, with W = V for an
+    SQM-like photopic sky meter or V' (scaled to the V peak) for the
+    dark-adapted eye. alpha = 4 for molecules, about 1.3 for aerosol."""
+    spd = spectrum(name) if name in SPECTRA or name.endswith("K") else None
+    if spd is None:
+        raise KeyError(name)
+    weight = YBAR if eye == "photopic" else [v * 1700.0 / 683.0 for v in SCOT]
+    lum = sum(x * y for x, y in zip(spd, YBAR))
+    return sum(x * (550.0 / l) ** alpha * w for x, l, w in zip(spd, LAMBDA, weight)) / lum
+
+
 def window_melanopic_edi(ev_lux: float, name: str) -> float:
     """Melanopic EDI (lx) at a window from vertical illuminance under a spectrum."""
     return ev_lux * table()[name].mel_der
