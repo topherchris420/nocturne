@@ -1,0 +1,548 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Nocturne for Washington</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a decision brief read top to bottom in the order the decision is made:
+   what DC has, what it saves, what a street does, what the sky does, how it rolls out,
+   what to decide. One reading column (~68ch) with wider figure bands. Dark-first,
+   like the operator console: the subject is the night. */
+:root {
+  --bg: #0b1020;          /* night over the city */
+  --panel: #121a2e;
+  --panel-2: #18223a;
+  --line: #26324c;
+  --fg: #e9ecf5;
+  --muted: #a3aec8;
+  --faint: #6f7c98;
+  --amber: #f2b350;       /* the light itself */
+  --accent: #9dbcff;      /* links, focus */
+  --s-today: #d95926;     /* series: today (validated set, dark steps) */
+  --s-p0: #3987e5;        /* series: Phase 0 */
+  --s-p1: #199e70;        /* series: Phase 1 */
+  --grid: #222d45;
+  --axis: #36425e;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f5f9; --panel: #ffffff; --panel-2: #eceff6; --line: #d5dae5;
+    --fg: #121826; --muted: #4c5770; --faint: #7a849a; --amber: #9a5f06; --accent: #2457b8;
+    --s-today: #eb6834; --s-p0: #2a78d6; --s-p1: #1baf7a; --grid: #e6e9f0; --axis: #c2c8d5;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f3f5f9; --panel: #ffffff; --panel-2: #eceff6; --line: #d5dae5;
+  --fg: #121826; --muted: #4c5770; --faint: #7a849a; --amber: #9a5f06; --accent: #2457b8;
+  --s-today: #eb6834; --s-p0: #2a78d6; --s-p1: #1baf7a; --grid: #e6e9f0; --axis: #c2c8d5;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 17px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+.prose { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.005em; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 700; line-height: 1.08; }
+h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 600; line-height: 1.2; }
+h3 { font-size: 17px; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, .chart:focus-visible {
+  outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 20px; line-height: 1.5; color: var(--fg); max-width: 62ch; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+section { display: flex; flex-direction: column; gap: 18px; }
+section > header { display: flex; flex-direction: column; gap: 8px; }
+
+/* Head */
+.head { display: flex; flex-direction: column; gap: 18px; padding-top: 8px; }
+.clockline { font-family: var(--font-mono); font-size: 13px; color: var(--amber); }
+.figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+@media (max-width: 820px) { .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fig { background: var(--panel); padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fig .v { font-family: var(--font-body); font-weight: 600; font-size: clamp(28px, 4vw, 38px); line-height: 1.05; }
+.fig .v small { font-size: 0.5em; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.fig .l { font-size: 14px; color: var(--muted); line-height: 1.4; }
+
+/* Fleet facts */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px 22px; }
+.fact { display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 2px solid var(--line); min-width: 0; }
+.fact b { font-family: var(--font-mono); font-weight: 500; font-size: 20px; color: var(--fg); }
+.fact span { font-size: 15px; color: var(--muted); }
+
+/* Panels and controls */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: flex-end; }
+.control { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.control label, .control .lab { font-size: 13px; color: var(--muted); }
+.control output { font-family: var(--font-mono); font-size: 14px; color: var(--fg); }
+input[type=range] { width: 210px; max-width: 100%; accent-color: var(--amber); }
+select { font: inherit; font-size: 15px; color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; max-width: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 14px; color: var(--muted); background: transparent; border: 0; padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--fg); box-shadow: inset 0 -2px 0 var(--amber); }
+.results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 640px) { .results { grid-template-columns: 1fr; } }
+.result { background: var(--panel-2); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.result h3 { display: flex; align-items: center; gap: 8px; }
+.key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+.result dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; }
+.result dt { color: var(--muted); font-size: 14px; }
+.result dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.note { font-size: 15px; color: var(--muted); max-width: 72ch; }
+
+/* Charts */
+.chart { position: relative; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--muted); font-family: var(--font-body); font-size: 12px; }
+.chart .endlab { fill: var(--fg); font-size: 12.5px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); min-width: 150px; }
+.tip[hidden] { display: none !important; }
+.tip .t { color: var(--muted); font-family: var(--font-mono); font-size: 12px; margin-bottom: 4px; }
+.tip .row { display: flex; align-items: center; gap: 8px; }
+.tip .row b { font-family: var(--font-mono); font-weight: 500; color: var(--fg); min-width: 64px; }
+.tip .row span:last-child { color: var(--muted); }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.tablewrap { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Skies */
+.skies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 760px) { .skies { grid-template-columns: 1fr; } }
+.sky { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sky canvas { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; background: #03050c; max-width: 100%; }
+.sky .cap { display: flex; flex-direction: column; gap: 2px; }
+.sky .cap b { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.sky .cap span { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sky .cap .stars { color: var(--fg); font-size: 15px; }
+
+/* Rollout */
+.waves { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .waves { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.wave { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wave .d { font-family: var(--font-mono); font-size: 13px; color: var(--amber); }
+.wave b { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.wave span { font-size: 14px; color: var(--muted); }
+.brake { font-size: 15px; color: var(--muted); display: flex; gap: 10px; align-items: baseline; }
+.brake::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--amber); transform: translateY(1px); }
+
+/* Decisions */
+ol.decide { margin: 0; padding: 0; list-style: none; counter-reset: d; display: flex; flex-direction: column; gap: 14px; max-width: 76ch; }
+ol.decide li { counter-increment: d; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
+ol.decide li::before { content: counter(d); font-family: var(--font-mono); color: var(--amber); font-size: 15px; padding-top: 2px; }
+ol.decide b { font-weight: 600; }
+
+.evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px 28px; }
+.ev { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ev h3 { font-size: 16px; }
+.ev p { font-size: 15px; color: var(--muted); }
+footer { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--muted); max-width: 80ch; }
+footer code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div class="eyebrow">Nocturne · a proposal for the District of Columbia · October 2026</div>
+    <h1>Nocturne for Washington</h1>
+    <p class="lede">DC already owns the hard part. Its 72,512 streetlights are 97 % LED, and 96 % sit on a network that can dim them. A night schedule pushed to those nodes saves about 5.3 GWh a year with no new hardware. Roll it out as a randomised trial with a safety brake, measure it at the sky, then bring the rest of the city's lighting onto the same curfew.</p>
+    <div class="clockline">Curfew 23:00 local · tonight that is 03:00 UTC · every node keeps its own clock</div>
+    <div class="figures" id="figures">
+      <div class="fig"><div class="v">5.3<small>GWh / yr</small></div><div class="l">saved by Phase 0: a schedule on the nodes DC already has</div></div>
+      <div class="fig"><div class="v" id="figUsd">$686K<small>/ yr</small></div><div class="l" id="figUsdL">at $0.13 per kWh; set your own rate below</div></div>
+      <div class="fig"><div class="v">31<small>%</small></div><div class="l">less streetlight and streetlight skyglow, with every street above its RP-8 floor</div></div>
+      <div class="fig"><div class="v">≈2×</div><div class="l">the stars over Rock Creek Park after midnight if the rest of the city keeps the curfew too</div></div>
+    </div>
+  </div>
+
+  <section>
+    <header><div class="eyebrow">What DC already has</div><h2>The network to do this exists today</h2></header>
+    <div class="facts" id="facts"></div>
+    <p class="note">From DDOT's streetlight asset layer on DC GIS (retrieved <span id="retrieved"></span>). Commissioned output trims are applied, so the baseline is what the fleet draws at full output today.</p>
+  </section>
+
+  <section>
+    <header><div class="eyebrow">Phase 0 · weeks, no new hardware</div><h2>What a schedule on the existing nodes saves</h2>
+      <p class="prose muted">A full year (2027) on DC's own fleet, integrated in five-minute steps on the node's astronomical clock. Arterials and collectors follow the hour's expected traffic; streets without presence sensing never go below the floor you choose here.</p></header>
+    <div class="panel">
+      <div class="controls">
+        <div class="control"><label for="price">Energy price</label><input type="range" id="price" min="0.06" max="0.25" step="0.005" value="0.13"><output id="priceOut" for="price">$0.130 / kWh</output></div>
+        <div class="control"><label for="co2">Grid emission factor</label><input type="range" id="co2" min="0.10" max="0.60" step="0.01" value="0.30"><output id="co2Out" for="co2">0.30 t CO₂ / MWh</output></div>
+        <div class="control"><span class="lab" id="floorLab">Floor without presence sensing</span>
+          <div class="seg" role="group" aria-labelledby="floorLab" id="floorSeg"><button type="button" data-floor="40" aria-pressed="false">40 %</button><button type="button" data-floor="50" aria-pressed="true">50 %</button><button type="button" data-floor="60" aria-pressed="false">60 %</button></div></div>
+      </div>
+      <div class="results">
+        <div class="result"><h3><span class="key" style="background: var(--s-p0)"></span>Phase 0 · schedule on existing nodes</h3><dl id="r0"></dl></div>
+        <div class="result"><h3><span class="key" style="background: var(--s-p1)"></span>Phase 1 · VDL-7 adaptive control</h3><dl id="r1"></dl></div>
+      </div>
+      <p class="note" id="breakEven"></p>
+      <div>
+        <h3>Energy by month, 2027</h3>
+        <div class="legend" id="legendMonth"></div>
+        <div class="chart" id="chartMonth" tabindex="0" aria-label="Energy by month in 2027 for today, Phase 0 and Phase 1. Use the arrow keys to read each month."></div>
+        <details><summary>Table view</summary><div class="tablewrap"><table id="tableMonth"></table></div></details>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <header><div class="eyebrow">Through the night</div><h2>What a street does, hour by hour</h2>
+      <p class="prose muted">Mean output of one pole, as a share of its full output today. Phase 1's radar brings a street back to its cap within two seconds when someone walks in. The lines show the average over a night of real pedestrian and traffic patterns.</p></header>
+    <div class="panel">
+      <div class="controls"><div class="control"><span class="lab" id="clsLab">Road class</span>
+        <div class="seg" role="group" aria-labelledby="clsLab" id="clsSeg"></div></div></div>
+      <div class="legend" id="legendNight"></div>
+      <div class="chart" id="chartNight" tabindex="0" aria-label="Output through the night by strategy. Use the arrow keys to move through the night."></div>
+      <p class="note" id="nightNote"></p>
+      <details><summary>Table view</summary><div class="tablewrap"><table id="tableNight"></table></div></details>
+    </div>
+  </section>
+
+  <section>
+    <header><div class="eyebrow">At the sky</div><h2>What people will see when they look up</h2>
+      <p class="prose muted">DC's 550 m light grid, carried through the atmosphere to six places where people go to see the night. Streetlights are only part of the glow. In Tucson's city-wide experiment they were about 14 % of the light behind its skyglow, so Nocturne alone moves the whole sky a little. The Night Signal asks everyone else's lights to keep the same 23:00 curfew. That is where most of the stars come back.</p></header>
+    <div class="panel">
+      <div class="controls">
+        <div class="control"><label for="place">Place</label><select id="place"></select></div>
+        <div class="control"><span class="lab" id="momLab">Time</span>
+          <div class="seg" role="group" aria-labelledby="momLab" id="momSeg"><button type="button" data-m="after_midnight" aria-pressed="true">01:30</button><button type="button" data-m="evening" aria-pressed="false">21:00</button></div></div>
+        <div class="control"><label for="share">Streetlights' share of the glow today</label><input type="range" id="share" min="0.05" max="0.40" step="0.01" value="0.15"><output id="shareOut" for="share">15 %</output></div>
+        <div class="control"><label for="cut">Other lighting cut after 23:00</label><input type="range" id="cut" min="0" max="0.8" step="0.05" value="0.5"><output id="cutOut" for="cut">50 %</output></div>
+      </div>
+      <div class="skies">
+        <figure class="sky" style="margin:0"><canvas id="sky0" aria-label="Simulated sky today"></canvas><figcaption class="cap"><b>Today</b><span id="cap0"></span><span class="stars" id="st0"></span></figcaption></figure>
+        <figure class="sky" style="margin:0"><canvas id="sky1" aria-label="Simulated sky with Nocturne"></canvas><figcaption class="cap"><b>With Nocturne</b><span id="cap1"></span><span class="stars" id="st1"></span></figcaption></figure>
+        <figure class="sky" style="margin:0"><canvas id="sky2" aria-label="Simulated sky with Nocturne and the Night Signal"></canvas><figcaption class="cap"><b>Nocturne + Night Signal</b><span id="cap2"></span><span class="stars" id="st2"></span></figcaption></figure>
+      </div>
+      <p class="note" id="skyNote"></p>
+      <details open><summary>All six places</summary><div class="tablewrap"><table id="tableSky"></table></div></details>
+    </div>
+  </section>
+
+  <section>
+    <header><div class="eyebrow">Rollout</div><h2>A randomised trial with a brake, every ward in every wave</h2>
+      <p class="prose muted">DC's 12,106 lit street segments are split into four waves by ward and road class. The draw is seeded from a text published in advance, so anyone can re-run it. Before each wave, night-time crashes on switched segments are compared with segments not yet switched over the same nights. A signal pauses the next wave and reverts that class.</p></header>
+    <div class="waves" id="waves"></div>
+    <div class="brake" id="brakeNote"></div>
+    <p class="note">Illustrative draw; the real seed is published before the draw. DC recorded 18,173 crashes in 2025. Roughly half happened after dark, on the order of 0.002 per lit segment-night. Detecting a 20 % change takes about 190,000–240,000 segment-nights per arm. The wedge has that by the end of its second wave.</p>
+  </section>
+
+  <section>
+    <header><div class="eyebrow">This quarter</div><h2>What DDOT decides</h2></header>
+    <ol class="decide">
+      <li><div><b>Adopt the class schedule and the floors as policy.</b> Each class has five levels: evening, 22:00, curfew, deep night and dawn. No street goes below its RP-8 class, no High-Injury Network segment below 60 %, and no unsensed street below the Phase 0 floor.</div></li>
+      <li><div><b>Confirm who may change schedules under the streetlight programme's contract,</b> and how energy savings are counted and shared.</div></li>
+      <li><div><b>Publish the seed text, then draw the waves.</b> Name the brake's data feed: night-time crashes by location from the District's crash layer.</div></li>
+      <li><div><b>Load wave 1 into the central system,</b> and open a 311 category for "street too dark at night" that routes to an operator override for that segment.</div></li>
+      <li><div><b>Buy six sky-quality meters,</b> one for each place above. A season of readings measures the curfew step and calibrates the sky model with DC's own numbers.</div></li>
+      <li><div><b>Invite the other lighting owners onto the Night Signal:</b> NPS, GSA, the Architect of the Capitol and the Smithsonian, business improvement districts, stadiums and sign owners. Start with heavy-migration nights alongside Lights Out DC.</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <header><div class="eyebrow">Evidence</div><h2>What the research says, including where it cuts against us</h2></header>
+    <div class="evidence">
+      <div class="ev"><h3>Dimming has not cost safety</h3><p>Across 62 local authorities in England and Wales, switch-off, part-night lighting, dimming and white light showed little evidence of harm to night-time collisions or crime (<a href="https://discovery.ucl.ac.uk/id/eprint/1471690/">Steinbach et al. 2015</a>).</p></div>
+      <div class="ev"><h3>Light where people are does help</h3><p>In a randomised trial in New York public housing, added lighting cut night-time outdoor index crime by at least 36 % (<a href="https://www.nber.org/papers/w25798">Chalfin et al. 2022</a>). Nocturne brings the light back within two seconds when someone is there.</p></div>
+      <div class="ev"><h3>Streetlights are a minority of the glow</h3><p>In Tucson, about 14 % of the emissions behind skyglow came from city streetlights (<a href="https://arxiv.org/abs/2005.12357">Barentine et al. 2020</a>), and 13 % of the light seen from orbit after midnight (<a href="https://doi.org/10.1177/1477153520958463">Kyba et al. 2021</a>). That is why the Night Signal exists.</p></div>
+      <div class="ev"><h3>The sky is getting brighter, fast</h3><p>Citizen observations show the sky brightening 7–10 % a year from 2011 to 2022 (<a href="https://doi.org/10.1126/science.abq7781">Kyba et al. 2023</a>). The Milky Way is already hidden from nearly 80 % of North Americans (<a href="https://arxiv.org/abs/1609.01041">Falchi et al. 2016</a>).</p></div>
+      <div class="ev"><h3>Sleep, birds and insects</h3><p>The sleep-environment guide is at most 1 lx melanopic EDI (<a href="https://doi.org/10.1371/journal.pbio.3001571">Brown et al. 2022</a>). Migrating birds caught in a beam dispersed within minutes once it went dark (<a href="https://doi.org/10.1073/pnas.1708574114">Van Doren et al. 2017</a>). Light at night is a driver of insect decline (<a href="https://doi.org/10.1016/j.biocon.2019.108259">Owens et al. 2020</a>).</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>How these numbers were made.</b> The fleet is DDOT's streetlight asset layer. Crashes come from the District's crash layer. Energy is a year of nights on each node's own astronomical clock and DST rule. The sky is a single-scattering model, molecules plus aerosol, over DC's 550 m light grid. It is calibrated to Tucson's measured streetlight share until DC has its own meters.</p>
+    <p><b>Assumed:</b> the energy price and grid factor (both set above), aerosol load, ground reflectance, luminaire efficacy and the post-top globes' uplight. The baseline assumes lights run at their commissioned maximum all night. A dimming schedule already in place would shrink the Phase 0 saving.</p>
+    <p>Everything here reproduces from the open-source Nocturne repository: <code>nocturne business-case</code>, <code>nocturne sky</code> and <code>nocturne pilot</code>. The firmware, the 192 tests and the playbook are at <a href="https://github.com/topherchris420/nocturne">github.com/topherchris420/nocturne</a>.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+'use strict';
+const D = {"year":{"burn_hours":4161.8,"fleet_kw":4052.7,"poles":72183,"by_floor":{"40":{"today":{"mwh":16866.3,"energy_vs_today":1.0,"light_vs_today":1.0,"skyglow_vs_today":1.0,"mwh_by_month":[1732.9,1459.3,1461.3,1262.4,1165.8,1059.1,1130.0,1251.6,1360.7,1565.0,1649.1,1769.0],"mean_level_pct":{"arterial":100.0,"collector":100.0,"local":100.0,"alley":100.0,"park":100.0},"mwh_by_class":{"arterial":8492.1,"collector":2182.0,"local":5036.1,"alley":1016.7,"park":139.4}},"phase0":{"mwh":11247.0,"energy_vs_today":0.6668,"light_vs_today":0.6668,"skyglow_vs_today":0.6731,"mwh_by_month":[1216.4,1008.2,978.4,813.0,727.4,646.5,694.6,795.0,896.7,1063.4,1156.1,1251.2],"mean_level_pct":{"arterial":76.5,"collector":69.3,"local":53.3,"alley":48.5,"park":45.1},"mwh_by_class":{"arterial":6495.5,"collector":1513.0,"local":2682.2,"alley":493.3,"park":62.9}},"phase1":{"mwh":11134.3,"energy_vs_today":0.6602,"light_vs_today":0.6602,"skyglow_vs_today":0.6671,"mwh_by_month":[1209.1,1000.2,969.4,803.1,715.8,634.9,683.0,784.4,887.7,1055.8,1147.7,1243.5],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6538.0,"collector":1523.4,"local":2597.5,"alley":431.4,"park":44.0}},"phase1_u0":{"mwh":11134.3,"energy_vs_today":0.6602,"light_vs_today":0.6602,"skyglow_vs_today":0.5797,"mwh_by_month":[1209.1,1000.2,969.4,803.1,715.8,634.9,683.0,784.4,887.7,1055.8,1147.7,1243.5],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6538.0,"collector":1523.4,"local":2597.5,"alley":431.4,"park":44.0}},"phase2_warm":{"mwh":11819.1,"energy_vs_today":0.7008,"light_vs_today":0.6602,"skyglow_vs_today":0.538,"mwh_by_month":[1284.0,1062.0,1029.0,852.2,759.4,673.4,724.5,832.2,942.1,1120.8,1218.9,1320.6],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6740.2,"collector":1679.2,"local":2863.2,"alley":475.5,"park":61.0}}},"50":{"today":{"mwh":16866.3,"energy_vs_today":1.0,"light_vs_today":1.0,"skyglow_vs_today":1.0,"mwh_by_month":[1732.9,1459.3,1461.3,1262.4,1165.8,1059.1,1130.0,1251.6,1360.7,1565.0,1649.1,1769.0],"mean_level_pct":{"arterial":100.0,"collector":100.0,"local":100.0,"alley":100.0,"park":100.0},"mwh_by_class":{"arterial":8492.1,"collector":2182.0,"local":5036.1,"alley":1016.7,"park":139.4}},"phase0":{"mwh":11589.2,"energy_vs_today":0.6871,"light_vs_today":0.6871,"skyglow_vs_today":0.692,"mwh_by_month":[1246.1,1034.6,1007.5,841.0,755.8,673.8,723.0,823.8,925.0,1093.0,1184.7,1280.8],"mean_level_pct":{"arterial":76.5,"collector":69.3,"local":58.5,"alley":55.1,"park":52.5},"mwh_by_class":{"arterial":6495.5,"collector":1513.0,"local":2947.2,"alley":560.2,"park":73.3}},"phase1":{"mwh":11134.3,"energy_vs_today":0.6602,"light_vs_today":0.6602,"skyglow_vs_today":0.6671,"mwh_by_month":[1209.1,1000.2,969.4,803.1,715.8,634.9,683.0,784.4,887.7,1055.8,1147.7,1243.5],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6538.0,"collector":1523.4,"local":2597.5,"alley":431.4,"park":44.0}},"phase1_u0":{"mwh":11134.3,"energy_vs_today":0.6602,"light_vs_today":0.6602,"skyglow_vs_today":0.5797,"mwh_by_month":[1209.1,1000.2,969.4,803.1,715.8,634.9,683.0,784.4,887.7,1055.8,1147.7,1243.5],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6538.0,"collector":1523.4,"local":2597.5,"alley":431.4,"park":44.0}},"phase2_warm":{"mwh":11819.1,"energy_vs_today":0.7008,"light_vs_today":0.6602,"skyglow_vs_today":0.538,"mwh_by_month":[1284.0,1062.0,1029.0,852.2,759.4,673.4,724.5,832.2,942.1,1120.8,1218.9,1320.6],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6740.2,"collector":1679.2,"local":2863.2,"alley":475.5,"park":61.0}}},"60":{"today":{"mwh":16866.3,"energy_vs_today":1.0,"light_vs_today":1.0,"skyglow_vs_today":1.0,"mwh_by_month":[1732.9,1459.3,1461.3,1262.4,1165.8,1059.1,1130.0,1251.6,1360.7,1565.0,1649.1,1769.0],"mean_level_pct":{"arterial":100.0,"collector":100.0,"local":100.0,"alley":100.0,"park":100.0},"mwh_by_class":{"arterial":8492.1,"collector":2182.0,"local":5036.1,"alley":1016.7,"park":139.4}},"phase0":{"mwh":12006.5,"energy_vs_today":0.7119,"light_vs_today":0.7119,"skyglow_vs_today":0.715,"mwh_by_month":[1284.8,1067.9,1043.7,874.6,787.8,703.7,754.9,857.8,960.0,1131.4,1220.8,1319.1],"mean_level_pct":{"arterial":76.5,"collector":69.3,"local":65.1,"alley":62.5,"park":60.0},"mwh_by_class":{"arterial":6495.5,"collector":1513.0,"local":3278.3,"alley":635.9,"park":83.7}},"phase1":{"mwh":11134.3,"energy_vs_today":0.6602,"light_vs_today":0.6602,"skyglow_vs_today":0.6671,"mwh_by_month":[1209.1,1000.2,969.4,803.1,715.8,634.9,683.0,784.4,887.7,1055.8,1147.7,1243.5],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6538.0,"collector":1523.4,"local":2597.5,"alley":431.4,"park":44.0}},"phase1_u0":{"mwh":11134.3,"energy_vs_today":0.6602,"light_vs_today":0.6602,"skyglow_vs_today":0.5797,"mwh_by_month":[1209.1,1000.2,969.4,803.1,715.8,634.9,683.0,784.4,887.7,1055.8,1147.7,1243.5],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6538.0,"collector":1523.4,"local":2597.5,"alley":431.4,"park":44.0}},"phase2_warm":{"mwh":11819.1,"energy_vs_today":0.7008,"light_vs_today":0.6602,"skyglow_vs_today":0.538,"mwh_by_month":[1284.0,1062.0,1029.0,852.2,759.4,673.4,724.5,832.2,942.1,1120.8,1218.9,1320.6],"mean_level_pct":{"arterial":77.0,"collector":69.8,"local":51.6,"alley":42.4,"park":31.6},"mwh_by_class":{"arterial":6740.2,"collector":1679.2,"local":2863.2,"alley":475.5,"park":61.0}}}}},"night":{"hours":[18.0,18.25,18.5,18.75,19.0,19.25,19.5,19.75,20.0,20.25,20.5,20.75,21.0,21.25,21.5,21.75,22.0,22.25,22.5,22.75,23.0,23.25,23.5,23.75,24.0,24.25,24.5,24.75,25.0,25.25,25.5,25.75,26.0,26.25,26.5,26.75,27.0,27.25,27.5,27.75,28.0,28.25,28.5,28.75,29.0,29.25,29.5,29.75,30.0,30.25,30.5,30.75,31.0],"classes":{"arterial":{"levels":[100,80,60,50,75],"floor":50,"cap":100,"phase0":[100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,88.7,88.1,87.5,86.9,72.7,71.5,70.3,69.2,68.0,67.6,67.2,66.8,58.1,57.6,57.1,56.6,56.1,55.6,55.1,54.7,54.2,54.9,55.6,56.4,57.1,57.8,58.5,59.3,80.0,82.0,84.0,85.9,87.9,89.9,91.9,93.9,95.8],"phase1":[100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,89.0,88.5,88.0,87.4,73.7,72.7,71.5,70.4,69.2,68.7,68.2,67.7,58.9,58.4,57.9,57.4,56.8,56.3,55.8,55.2,54.7,55.5,56.2,57.0,57.8,58.5,59.3,60.0,80.4,82.5,84.4,86.2,87.9,89.9,91.9,93.9,95.8]},"collector":{"levels":[100,70,50,40,65],"floor":40,"cap":90,"phase0":[100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,79.1,78.5,77.9,77.3,63.3,62.1,60.9,59.6,58.4,58.0,57.6,57.2,48.5,47.9,47.4,46.9,46.4,45.9,45.4,44.9,44.4,45.1,45.9,46.7,47.4,48.2,49.0,49.7,70.2,72.3,74.4,76.5,78.6,80.6,82.7,84.8,86.9],"phase1":[100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,100.0,79.3,78.8,78.3,77.7,64.3,63.1,62.0,60.8,59.6,59.0,58.5,58.0,49.3,48.8,48.2,47.7,47.1,46.6,46.0,45.5,44.9,45.7,46.5,47.3,48.1,48.9,49.7,50.5,70.6,72.8,74.8,76.7,78.6,80.6,82.7,84.8,86.9]},"local":{"levels":[80,60,40,30,50],"floor":30,"cap":70,"phase0":[80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,60.0,60.0,60.0,60.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0],"phase1":[80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,80.0,62.6,62.3,62.0,61.8,44.8,44.4,44.0,43.6,43.2,42.8,42.4,42.0,32.2,32.0,31.9,31.8,31.6,31.5,31.4,31.2,31.1,31.2,31.4,31.5,31.6,31.8,31.9,32.0,51.0,51.9,52.7,53.5,54.4,55.2,56.0,56.8,57.7]},"alley":{"levels":[70,50,30,20,40],"floor":20,"cap":70,"phase0":[70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0],"phase1":[70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,70.0,55.4,54.8,54.2,53.6,36.5,36.0,35.5,34.9,34.4,33.8,33.3,32.7,22.8,22.6,22.5,22.3,22.1,21.9,21.8,21.6,21.4,21.6,21.8,21.9,22.1,22.3,22.5,22.6,41.6,42.9,44.2,45.5,46.7,48.0,49.3,50.6,51.9]},"park":{"levels":[60,40,20,10,30],"floor":10,"cap":50,"phase0":[60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0,50.0],"phase1":[60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,60.0,42.6,42.3,42.0,41.8,24.8,24.4,24.0,23.6,23.2,22.8,22.4,22.0,12.2,12.0,11.9,11.8,11.6,11.5,11.4,11.2,11.1,11.2,11.4,11.5,11.6,11.8,11.9,12.0,31.0,31.9,32.7,33.5,34.4,35.2,36.0,36.8,37.7]}}},"sky":{"natural_mcd":0.1711684647858,"places":[{"key":"rock-creek","name":"Rock Creek Park (Nature Center & Planetarium)","lat":38.9594,"lon":-77.0525,"moments":{"evening":{"today":1.1872337360112704,"phase0":1.1038405330531695,"phase1":1.1038405330531695,"phase1_u0":0.9972889866384607,"phase2_warm":0.9719200370893739},"after_midnight":{"today":1.1872337360112704,"phase0":0.6321557418667779,"phase1":0.5627899978082491,"phase1_u0":0.5079409141427342,"phase2_warm":0.49593841615958173}}},{"key":"arboretum","name":"U.S. National Arboretum","lat":38.9122,"lon":-76.9658,"moments":{"evening":{"today":1.463309243929471,"phase0":1.3539799266329673,"phase1":1.3539799266329673,"phase1_u0":1.1922573116293806,"phase2_warm":1.1617537565472151},"after_midnight":{"today":1.463309243929471,"phase0":0.7839982940094161,"phase1":0.6922171710420592,"phase1_u0":0.6080982843577444,"phase2_warm":0.5937848825118291}}},{"key":"kenilworth","name":"Kenilworth Aquatic Gardens","lat":38.9124,"lon":-76.942,"moments":{"evening":{"today":1.430684087501914,"phase0":1.277138235619753,"phase1":1.277138235619753,"phase1_u0":1.178533338833787,"phase2_warm":1.1465282373861527},"after_midnight":{"today":1.430684087501914,"phase0":0.7567397039625934,"phase1":0.6229640005399647,"phase1_u0":0.5721820227874036,"phase2_warm":0.5578707321804444}}},{"key":"anacostia","name":"Anacostia Park","lat":38.876,"lon":-76.9735,"moments":{"evening":{"today":2.761960183551294,"phase0":2.5134633465908363,"phase1":2.5134633465908363,"phase1_u0":2.213950872012954,"phase2_warm":2.1574269282824},"after_midnight":{"today":2.761960183551294,"phase0":1.482875116406692,"phase1":1.2683641812351008,"phase1_u0":1.113115066208126,"phase2_warm":1.0879955556654293}}},{"key":"roosevelt-island","name":"Theodore Roosevelt Island","lat":38.8968,"lon":-77.0647,"moments":{"evening":{"today":2.1416794925551597,"phase0":1.988703178895477,"phase1":1.988703178895477,"phase1_u0":1.6222439751935305,"phase2_warm":1.582635899691403},"after_midnight":{"today":2.1416794925551597,"phase0":1.149235525243807,"phase1":1.0217431264377472,"phase1_u0":0.8308510666684006,"phase2_warm":0.8120170710405544}}},{"key":"national-mall","name":"National Mall (Washington Monument grounds)","lat":38.8895,"lon":-77.0353,"moments":{"evening":{"today":2.9574168030696195,"phase0":2.8284649048243042,"phase1":2.8284649048243042,"phase1_u0":2.1545449046916767,"phase2_warm":2.1051249770463953},"after_midnight":{"today":2.9574168030696195,"phase0":1.6016124542950076,"phase1":1.5032444167544463,"phase1_u0":1.1411803311048938,"phase2_warm":1.1166927787563041}}}]},"retrofits":[{"lat":38.87705,"lon":-76.97666,"kw":4.98,"best":"anacostia","gain":0.0339},{"lat":38.91805,"lon":-76.94284,"kw":1.44,"best":"kenilworth","gain":0.0042},{"lat":38.88646,"lon":-77.03151,"kw":4.19,"best":"national-mall","gain":0.0081},{"lat":38.89337,"lon":-77.03249,"kw":11.62,"best":"national-mall","gain":0.0215},{"lat":38.87231,"lon":-76.97592,"kw":0.59,"best":"anacostia","gain":0.001},{"lat":38.91722,"lon":-76.97633,"kw":0.9,"best":"arboretum","gain":0.0012},{"lat":38.89354,"lon":-77.04105,"kw":5.64,"best":"national-mall","gain":0.0067},{"lat":38.90247,"lon":-76.94383,"kw":3.05,"best":"kenilworth","gain":0.0037}],"pilot":{"segments":12106,"waves":[{"wave":1,"segments":3027,"lights":18238,"start":"2027-01-04","wards":["1","2","3","4","5","6","7","8"]},{"wave":2,"segments":3027,"lights":18076,"start":"2027-03-01","wards":["1","2","3","4","5","6","7","8"]},{"wave":3,"segments":3026,"lights":17583,"start":"2027-04-26","wards":["1","2","3","4","5","6","7","8"]},{"wave":4,"segments":3026,"lights":17543,"start":"2027-06-21","wards":["1","2","3","4","5","6","7","8"]}]},"fleet":{"active":72512,"led":70595,"registered":{"no":2540,"yes":69643},"retrieved":"2026-10-14","shield":{"None":70946,"unknown":711,"LED Built in":203,"Internal 180 with hat":89,"External for Cobra":75,"Prismatic Globe Built in":37,"Internal 180":30,"Internal 360":24,"180\u00b0 External":18,"Yes":14,"Internal for LED":13,"Internal 90":9,"External for LED":8,"360\u00b0 External":6},"classes":{"arterial":{"poles":18566,"kw":2040.5,"cct":{"3000K":9726,"2700K":7356,"unknown":1241,"4000K":233,"1500K":6,"4500K":4},"optics":{"cutoff_roadway":10031,"posttop_globe":5480,"teardrop":2728,"other":166,"semi_cutoff":161}},"collector":{"poles":8395,"kw":524.3,"cct":{"2700K":8037,"unknown":224,"3000K":95,"4000K":38,"1500K":1},"optics":{"cutoff_roadway":5476,"posttop_globe":2250,"teardrop":561,"semi_cutoff":61,"other":47}},"local":{"poles":29757,"kw":1210.1,"cct":{"2700K":28272,"unknown":1241,"3000K":184,"4000K":43,"1500K":16,"4500K":1},"optics":{"cutoff_roadway":22199,"posttop_globe":6321,"teardrop":643,"other":459,"semi_cutoff":135}},"alley":{"poles":14973,"kw":244.3,"cct":{"2700K":14663,"unknown":272,"5000K":13,"4000K":12,"3000K":7,"1500K":6},"optics":{"cutoff_roadway":14822,"semi_cutoff":73,"posttop_globe":50,"other":26,"teardrop":2}},"park":{"poles":492,"kw":33.5,"cct":{"2700K":466,"3000K":14,"unknown":12},"optics":{"posttop_globe":392,"teardrop":73,"other":14,"cutoff_roadway":13}}}}};
+const $ = id => document.getElementById(id);
+const fmtInt = n => Math.round(n).toLocaleString('en-US');
+const fmtUsd = n => n >= 1e6 ? '$' + (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3).toLocaleString('en-US') + 'K' : '$' + Math.round(n);
+const SERIES = [
+  { key: 'today', name: 'Today', color: 'var(--s-today)' },
+  { key: 'phase0', name: 'Phase 0', color: 'var(--s-p0)' },
+  { key: 'phase1', name: 'Phase 1', color: 'var(--s-p1)' },
+];
+const CLASS_NAMES = { arterial: 'Arterial', collector: 'Collector', local: 'Local', alley: 'Alley', park: 'Park edge' };
+const svgNS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function text(parent, x, y, str, attrs) { const t = el('text', Object.assign({ x, y }, attrs || {}), parent); t.textContent = str; return t; }
+function legend(node, series) {
+  node.textContent = '';
+  for (const s of series) { const sp = document.createElement('span'); const k = document.createElement('i'); k.className = 'key'; k.style.background = s.color; k.style.height = '3px'; k.style.width = '16px'; k.style.borderRadius = '2px'; k.style.display = 'inline-block'; sp.appendChild(k); sp.appendChild(document.createTextNode(s.name)); node.appendChild(sp); }
+}
+
+// ------------------------------------------------------------ fleet facts
+(function facts() {
+  const f = D.fleet, reg = f.registered.yes, tot = f.registered.yes + f.registered.no;
+  const kw = Object.values(f.classes).reduce((a, c) => a + c.kw, 0);
+  const globes = Object.values(f.classes).reduce((a, c) => a + (c.optics.posttop_globe || 0), 0);
+  const c2700 = Object.values(f.classes).reduce((a, c) => a + (c.cct['2700K'] || 0), 0);
+  const noShield = f.shield['None'] || 0;
+  const items = [
+    [fmtInt(f.active), 'active streetlights'],
+    [Math.round(100 * f.led / f.active) + ' %', 'LED already'],
+    [Math.round(100 * reg / tot) + ' %', 'on a registered networked node'],
+    [Math.round(100 * c2700 / tot) + ' %', 'already 2700K'],
+    [(kw / 1000).toFixed(2) + ' MW', 'at full output, all classes'],
+    [fmtInt(globes), 'post-top globes, the main source of streetlight uplight'],
+    [Math.round(100 * noShield / tot) + ' %', 'recorded with no house-side shield'],
+  ];
+  const box = $('facts');
+  for (const [v, l] of items) { const d = document.createElement('div'); d.className = 'fact'; const b = document.createElement('b'); b.textContent = v; const s = document.createElement('span'); s.textContent = l; d.append(b, s); box.appendChild(d); }
+  $('retrieved').textContent = f.retrieved;
+})();
+
+// ------------------------------------------------------------ line chart
+function lineChart(host, opts) {
+  const W = 760, H = opts.height || 300, m = { l: 46, r: 96, t: opts.bands ? 26 : 12, b: 30 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const xs = opts.xs, n = xs.length;
+  const x = i => m.l + pw * (opts.xPos ? opts.xPos(i) : i / (n - 1));
+  const y = v => m.t + ph * (1 - v / opts.yMax);
+  host.textContent = '';
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-hidden': 'true' }, host);
+  if (opts.bands) for (const b of opts.bands) {
+    const x0 = m.l + pw * b.from, x1 = m.l + pw * b.to;
+    el('rect', { x: x0, y: m.t, width: Math.max(0, x1 - x0), height: ph, fill: b.shade ? 'var(--panel-2)' : 'transparent' }, svg);
+    if (b.from > 0) el('line', { x1: x0, x2: x0, y1: m.t, y2: m.t + ph, stroke: 'var(--grid)', 'stroke-width': 1 }, svg);
+    text(svg, x0 + 4, m.t - 9, b.label, { 'font-size': 11.5 });
+  }
+  for (const v of opts.yTicks) {
+    el('line', { x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v), stroke: v === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }, svg);
+    text(svg, m.l - 8, y(v) + 4, opts.yFmt(v), { 'text-anchor': 'end' });
+  }
+  for (const i of opts.xTickIdx) text(svg, x(i), H - 8, opts.xFmt(i), { 'text-anchor': 'middle' });
+  const ends = [];
+  for (const s of opts.series) {
+    const d = s.values.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1)).join('');
+    el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    ends.push({ s, yy: y(s.values[n - 1]), v: s.values[n - 1] });
+  }
+  // end labels with leader lines when they would collide
+  ends.sort((a, b) => a.yy - b.yy);
+  const placed = [];
+  for (const e of ends) { let yy = e.yy; if (placed.length && yy - placed[placed.length - 1] < 15) yy = placed[placed.length - 1] + 15; placed.push(yy); e.ly = yy; }
+  for (const e of ends) {
+    const x0 = x(n - 1);
+    el('circle', { cx: x0, cy: e.yy, r: 4, fill: e.s.color, stroke: 'var(--panel)', 'stroke-width': 2 }, svg);
+    if (Math.abs(e.ly - e.yy) > 2) el('line', { x1: x0 + 6, x2: x0 + 14, y1: e.yy, y2: e.ly, stroke: 'var(--faint)', 'stroke-width': 1 }, svg);
+    text(svg, x0 + 16, e.ly + 4, e.s.name + ' ' + opts.endFmt(e.v), { class: 'endlab' });
+  }
+  // hover layer: crosshair snaps to the nearest x; one tooltip lists every series
+  const cross = el('line', { x1: 0, x2: 0, y1: m.t, y2: m.t + ph, stroke: 'var(--faint)', 'stroke-width': 1, visibility: 'hidden' }, svg);
+  const dots = opts.series.map(s => el('circle', { r: 4, fill: s.color, stroke: 'var(--panel)', 'stroke-width': 2, visibility: 'hidden' }, svg));
+  const tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true; host.appendChild(tip);
+  let cur = null;
+  function show(i) {
+    cur = i; const cx = x(i);
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+    opts.series.forEach((s, k) => { dots[k].setAttribute('cx', cx); dots[k].setAttribute('cy', y(s.values[i])); dots[k].setAttribute('visibility', 'visible'); });
+    tip.textContent = '';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = opts.tipTitle(i); tip.appendChild(t);
+    for (const s of opts.series) { const r = document.createElement('div'); r.className = 'row'; const k = document.createElement('i'); k.className = 'key'; k.style.background = s.color; const b = document.createElement('b'); b.textContent = opts.tipFmt(s.values[i]); const nm = document.createElement('span'); nm.textContent = s.name; r.append(k, b, nm); tip.appendChild(r); }
+    tip.hidden = false;
+    const box = host.getBoundingClientRect(), scale = box.width / W;
+    let left = cx * scale + 14; if (left + 170 > box.width) left = cx * scale - 184;
+    tip.style.left = Math.max(0, left) + 'px'; tip.style.top = (m.t * scale) + 'px';
+  }
+  function hide() { cur = null; cross.setAttribute('visibility', 'hidden'); dots.forEach(d => d.setAttribute('visibility', 'hidden')); tip.hidden = true; }
+  const hit = el('rect', { x: m.l, y: 0, width: pw, height: H, fill: 'transparent' }, svg);
+  hit.addEventListener('pointermove', ev => {
+    const box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) * W / box.width;
+    let best = 0, bd = Infinity; for (let i = 0; i < n; i++) { const d = Math.abs(x(i) - px); if (d < bd) { bd = d; best = i; } }
+    show(best);
+  });
+  hit.addEventListener('pointerleave', hide);
+  host.onkeydown = ev => {
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    ev.preventDefault();
+    const step = opts.keyStep || 1;
+    const i = cur === null ? 0 : Math.max(0, Math.min(n - 1, cur + (ev.key === 'ArrowRight' ? step : -step)));
+    show(i);
+  };
+  host.onblur = hide;
+}
+
+// ------------------------------------------------------------ Phase 0 calculator
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const RADAR_NODES = D.fleet.classes.local.poles + D.fleet.classes.alley.poles + D.fleet.classes.park.poles;
+const calc = { price: 0.13, co2: 0.30, floor: '50' };
+function renderCalc() {
+  const y = D.year.by_floor[calc.floor];
+  const today = y.today.mwh, p0 = y.phase0.mwh, p1 = y.phase1.mwh;
+  const rows = (saved, light) => [
+    ['Energy saved', fmtInt(saved) + ' MWh / yr'],
+    ['Money saved', fmtUsd(saved * 1000 * calc.price) + ' / yr'],
+    ['CO₂ avoided', fmtInt(saved * calc.co2) + ' t / yr'],
+    ['Light delivered', Math.round(light * 100) + ' % of today'],
+  ];
+  for (const [id, saved, light] of [['r0', today - p0, y.phase0.light_vs_today], ['r1', today - p1, y.phase1.light_vs_today]]) {
+    const dl = $(id); dl.textContent = '';
+    for (const [k, v] of rows(saved, light)) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); }
+  }
+  const usd0 = (today - p0) * 1000 * calc.price, usd1 = (today - p1) * 1000 * calc.price;
+  $('breakEven').textContent = `Phase 0 pays for itself within three years if integrating the schedule costs less than ${fmtUsd(3 * usd0)}. ` +
+    `Phase 1's radar nodes do not pay back on energy alone: over ten years each could cost at most ${fmtUsd(Math.max(0, (usd1 - usd0) * 10 / RADAR_NODES))}. Their case is light where people are and darkness where they are not.`;
+  $('figUsd').firstChild.textContent = fmtUsd(usd0);
+  $('figUsdL').textContent = `a year at $${calc.price.toFixed(3)} per kWh; set your own rate below`;
+  const series = SERIES.map(s => ({ name: s.name, color: s.color, values: y[s.key].mwh_by_month }));
+  legend($('legendMonth'), series);
+  lineChart($('chartMonth'), {
+    xs: MONTHS, series, yMax: 2000, yTicks: [0, 500, 1000, 1500, 2000], yFmt: v => v ? (v / 1000) + 'K' : '0',
+    xTickIdx: [0, 2, 4, 6, 8, 10], xFmt: i => MONTHS[i], endFmt: v => fmtInt(v) + ' MWh', tipTitle: i => MONTHS[i] + ' 2027',
+    tipFmt: v => fmtInt(v) + ' MWh', height: 280,
+  });
+  const tb = $('tableMonth'); tb.textContent = '';
+  const hr = tb.insertRow(); for (const h of ['Month', 'Today, MWh', 'Phase 0, MWh', 'Phase 1, MWh']) { const th = document.createElement('th'); th.textContent = h; if (h !== 'Month') th.className = 'n'; hr.appendChild(th); }
+  MONTHS.forEach((mo, i) => { const r = tb.insertRow(); const c0 = r.insertCell(); c0.textContent = mo; for (const s of series) { const c = r.insertCell(); c.className = 'n'; c.textContent = fmtInt(s.values[i]); } });
+}
+$('price').addEventListener('input', e => { calc.price = +e.target.value; $('priceOut').textContent = '$' + calc.price.toFixed(3) + ' / kWh'; renderCalc(); });
+$('co2').addEventListener('input', e => { calc.co2 = +e.target.value; $('co2Out').textContent = calc.co2.toFixed(2) + ' t CO₂ / MWh'; renderCalc(); });
+for (const b of $('floorSeg').querySelectorAll('button')) b.addEventListener('click', () => {
+  calc.floor = b.dataset.floor; for (const o of $('floorSeg').querySelectorAll('button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); renderCalc();
+});
+
+// ------------------------------------------------------------ through the night
+const night = { cls: 'local' };
+function hhmm(h) { const hh = Math.floor(h) % 24, mm = Math.round((h - Math.floor(h)) * 60); return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); }
+function renderNight() {
+  const N = D.night, c = N.classes[night.cls], hs = N.hours;
+  const series = [
+    { name: 'Today', color: 'var(--s-today)', values: hs.map(() => 100) },
+    { name: 'Phase 0', color: 'var(--s-p0)', values: c.phase0 },
+    { name: 'Phase 1', color: 'var(--s-p1)', values: c.phase1 },
+  ];
+  legend($('legendNight'), series);
+  const span = hs[hs.length - 1] - hs[0], pos = h => (h - hs[0]) / span;
+  lineChart($('chartNight'), {
+    xs: hs, series, yMax: 100, yTicks: [0, 25, 50, 75, 100], yFmt: v => v + ' %', height: 300,
+    xPos: i => pos(hs[i]), xTickIdx: hs.map((h, i) => i).filter(i => Number.isInteger(hs[i]) && hs[i] % 2 === 0),
+    xFmt: i => hhmm(hs[i]), endFmt: v => Math.round(v) + ' %', tipTitle: i => hhmm(hs[i]), tipFmt: v => v.toFixed(0) + ' %', keyStep: 2,
+    bands: [{ from: 0, to: pos(22), label: 'evening' }, { from: pos(22), to: pos(23), label: '22:00', shade: true },
+            { from: pos(23), to: pos(25), label: 'curfew' }, { from: pos(25), to: pos(29), label: 'deep night', shade: true },
+            { from: pos(29), to: 1, label: 'dawn' }],
+  });
+  const lv = c.levels;
+  $('nightNote').textContent = `${CLASS_NAMES[night.cls]} streets: base levels ${lv.join(' / ')} % across the five phases, floor ${c.floor} %, boost cap ${c.cap} %. ` +
+    (night.cls === 'arterial' || night.cls === 'collector' ? 'The loop volume raises the level with traffic, so busy hours stay bright.' : 'Without presence sensing, Phase 0 holds the street at its floor setting or above; with it, Phase 1 can go deeper and come back when someone walks in.');
+  const tb = $('tableNight'); tb.textContent = '';
+  const hr = tb.insertRow(); for (const h of ['Time', 'Today', 'Phase 0', 'Phase 1']) { const th = document.createElement('th'); th.textContent = h; if (h !== 'Time') th.className = 'n'; hr.appendChild(th); }
+  hs.forEach((h, i) => { if (i % 4) return; const r = tb.insertRow(); r.insertCell().textContent = hhmm(h); for (const s of series) { const cc = r.insertCell(); cc.className = 'n'; cc.textContent = s.values[i].toFixed(0) + ' %'; } });
+}
+(function () {
+  const seg = $('clsSeg');
+  for (const k of Object.keys(CLASS_NAMES)) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = CLASS_NAMES[k]; b.dataset.cls = k; b.setAttribute('aria-pressed', k === night.cls ? 'true' : 'false');
+    b.addEventListener('click', () => { night.cls = k; for (const o of seg.children) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); renderNight(); });
+    seg.appendChild(b);
+  }
+})();
+
+// ------------------------------------------------------------ the sky
+const NATURAL = D.sky.natural_mcd;                       // mcd/m^2 at 22.0 mag/arcsec^2
+const COUNTS = [[1.0, 15], [2.0, 48], [3.0, 171], [4.0, 513], [5.0, 1602], [6.0, 4800], [6.5, 9100], [7.0, 14000]];
+const msas = mcd => -2.5 * Math.log10(mcd / 1000 / 10.8e4);
+const nelm = m => 7.93 - 5 * Math.log10(Math.pow(10, 4.316 - m / 5) + 1);
+function stars(lim) {
+  if (lim <= COUNTS[0][0]) return Math.round(COUNTS[0][1] / 2 * Math.pow(10, 0.45 * (lim - COUNTS[0][0])));
+  for (let k = 0; k < COUNTS.length - 1; k++) { const [m0, n0] = COUNTS[k], [m1, n1] = COUNTS[k + 1]; if (lim <= m1) { const f = (lim - m0) / (m1 - m0); return Math.round(Math.pow(10, Math.log10(n0) + f * (Math.log10(n1) - Math.log10(n0))) / 2); } }
+  return COUNTS[COUNTS.length - 1][1] / 2;
+}
+function skies(place, moment, share, cut) {
+  const L = place.moments[moment], today = L.today, other = today * (1 - share) / share;
+  const after = moment === 'after_midnight', otherSig = after ? other * (1 - cut) : other;
+  return [today + other + NATURAL, L.phase2_warm + other + NATURAL, L.phase2_warm + otherSig + NATURAL].map(t => { const m = msas(t); const l = nelm(m); return { mcd: t, msas: m, nelm: l, stars: stars(l) }; });
+}
+// one fixed star field: the same stars in every panel, so fewer visible means a brighter sky
+function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const FIELD = (() => {
+  const r = rng(20261014), total = COUNTS[COUNTS.length - 2][1] / 2, out = [];
+  const cum = COUNTS.map(([m, n]) => [m, Math.log10(n / 2)]);
+  for (let i = 0; i < total; i++) {
+    const target = Math.log10(Math.max(1, r() * total));
+    let mag = 6.5; for (let k = 0; k < cum.length - 1; k++) { if (target <= cum[k + 1][1]) { const f = (target - cum[k][1]) / (cum[k + 1][1] - cum[k][1]); mag = cum[k][0] + Math.max(0, f) * (cum[k + 1][0] - cum[k][0]); break; } }
+    const hue = r(); out.push({ x: r(), y: r(), m: mag, c: hue < 0.18 ? [255, 214, 170] : hue < 0.4 ? [205, 220, 255] : [255, 250, 240] });
+  }
+  return out;
+})();
+function drawSky(canvas, s) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = canvas.clientWidth || 300, h = Math.round(w * 3 / 4);
+  if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const glow = Math.max(0, Math.min(1, Math.log10(s.mcd / NATURAL) / 2.2));
+  const top = [4 + 52 * glow, 6 + 50 * glow, 14 + 52 * glow], bottom = [6 + 92 * glow, 8 + 80 * glow, 18 + 62 * glow];
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `rgb(${top.map(Math.round)})`); g.addColorStop(1, `rgb(${bottom.map(Math.round)})`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  for (const st of FIELD) {
+    if (st.m >= s.nelm) continue;
+    const a = Math.min(1, (s.nelm - st.m) / 1.2), r = Math.max(0.55, 2.4 - 0.33 * st.m) * (w / 340);
+    ctx.fillStyle = `rgba(${st.c[0]},${st.c[1]},${st.c[2]},${a.toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(st.x * w, st.y * h, r, 0, 6.2832); ctx.fill();
+  }
+}
+const sky = { place: 0, moment: 'after_midnight', share: 0.15, cut: 0.5 };
+function renderSky() {
+  const P = D.sky.places, p = P[sky.place], s = skies(p, sky.moment, sky.share, sky.cut);
+  s.forEach((v, i) => {
+    drawSky($('sky' + i), v);
+    $('cap' + i).textContent = `${v.msas.toFixed(2)} mag/arcsec² · naked-eye limit ${v.nelm.toFixed(1)}`;
+    $('st' + i).textContent = `≈ ${fmtInt(v.stars)} stars overhead`;
+  });
+  const red = 1 - p.moments[sky.moment].phase2_warm / p.moments[sky.moment].today;
+  $('skyNote').textContent = (sky.moment === 'evening' ? 'At 21:00 the curfew has not begun, so the third sky matches the second. ' : '') +
+    `Nocturne removes ${Math.round(red * 100)} % of the streetlights' share of this sky at this hour. ` +
+    `Higher mag/arcsec² is darker; natural sky is about 22.0. Brighter skies wash out the faint stars first.`;
+  const tb = $('tableSky'); tb.textContent = '';
+  const hr = tb.insertRow(); for (const h of ['Place', 'Sky today', 'Nocturne', '+ Night Signal', 'Stars today', 'Nocturne', '+ Signal']) { const th = document.createElement('th'); th.textContent = h; if (h !== 'Place') th.className = 'n'; hr.appendChild(th); }
+  for (const q of P) { const v = skies(q, sky.moment, sky.share, sky.cut); const r = tb.insertRow(); r.insertCell().textContent = q.name; for (const x of v) { const c = r.insertCell(); c.className = 'n'; c.textContent = x.msas.toFixed(2); } for (const x of v) { const c = r.insertCell(); c.className = 'n'; c.textContent = fmtInt(x.stars); } }
+}
+(function () {
+  const sel = $('place');
+  D.sky.places.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = p.name; sel.appendChild(o); });
+  sel.addEventListener('change', e => { sky.place = +e.target.value; renderSky(); });
+  for (const b of $('momSeg').querySelectorAll('button')) b.addEventListener('click', () => { sky.moment = b.dataset.m; for (const o of $('momSeg').querySelectorAll('button')) o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); renderSky(); });
+  $('share').addEventListener('input', e => { sky.share = +e.target.value; $('shareOut').textContent = Math.round(sky.share * 100) + ' %'; renderSky(); });
+  $('cut').addEventListener('input', e => { sky.cut = +e.target.value; $('cutOut').textContent = Math.round(sky.cut * 100) + ' %'; renderSky(); });
+  let t = null; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(renderSky, 120); });
+})();
+
+// ------------------------------------------------------------ rollout
+(function () {
+  const box = $('waves'), fmtDate = s => new Date(s + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  for (const w of D.pilot.waves) {
+    const d = document.createElement('div'); d.className = 'wave';
+    const a = document.createElement('div'); a.className = 'd'; a.textContent = 'Wave ' + w.wave + ' · ' + fmtDate(w.start);
+    const b = document.createElement('b'); b.textContent = fmtInt(w.segments) + ' segments';
+    const c = document.createElement('span'); c.textContent = fmtInt(w.lights) + ' lights · all ' + w.wards.length + ' wards';
+    d.append(a, b, c); box.appendChild(d);
+  }
+  $('brakeNote').textContent = 'Brake check before each wave: an exact test of night-time crash rates, switched against not-yet-switched segments. Its error rate is split across the looks.';
+})();
+
+renderCalc(); renderNight(); renderSky();
+})();
+</script>
+</body></html>

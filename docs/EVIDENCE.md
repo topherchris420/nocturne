@@ -22,7 +22,7 @@ This page collects the research the design leans on, what each source actually f
 - `vdl7/pilot.py` randomises DC's 12,106 lit street segments into a stepped wedge, stratified by ward and road class.
 - At each wave, an exact rate-ratio test on night-time crashes acts as a brake.
 - DC's open crash layer recorded **18,173 crashes in 2025**. Between 44 % and 56 % happened with the sun below −3°, depending on whether the layer's `FROMDATE` is read as UTC or local time. That gives on the order of 0.002 night crashes per lit segment-night.
-- At that rate, detecting a 20 % change needs about 190,000–240,000 segment-nights per arm (`nocturne pilot --power 0.0018 1.2`). The wedge reaches that by its second look.
+- At that rate, detecting a 20 % change needs about 190,000–240,000 segment-nights per arm (`nocturne pilot --power 0.0018 1.2`). The wedge reaches that by its second brake check, at the end of wave 2.
 
 ## 2. Streetlights are a minority of skyglow. That sets the ambition.
 

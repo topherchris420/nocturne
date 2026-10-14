@@ -22,7 +22,10 @@ This version turns that firmware into a program a city can start this quarter:
   - Polar day and night are handled.
   - 17 city presets are built in.
 
-**Start here:** [docs/PLAYBOOK.md](docs/PLAYBOOK.md) is the DC plan, phase by phase. [docs/EVIDENCE.md](docs/EVIDENCE.md) covers what the research says, including where it cuts against us.
+**Start here:**
+- [docs/brief.html](docs/brief.html) is the interactive decision brief: savings at your own energy price, a street through the night, the sky at six DC places, and the rollout. Rebuild it with `python tools/make_brief.py`.
+- [docs/PLAYBOOK.md](docs/PLAYBOOK.md) is the DC plan, phase by phase.
+- [docs/EVIDENCE.md](docs/EVIDENCE.md) covers what the research says, including where it cuts against us.
 
 > **Status: prototype.** The firmware is a Python reference model of the behaviour, structured to port to C on a Cortex-M33; it is not certified firmware. Energy prices, grid emission factors, aerosol load, luminaire uplight and the network simulation's traffic and pedestrian curves are inputs marked ASSUMED. Every one can be changed from the command line.
 
@@ -52,12 +55,12 @@ nocturne-vdl7/
 │   ├── demand.py           traffic and pedestrian curves (Section 6.4)
 │   └── cli.py              the `nocturne` command
 ├── data/dc/                DC's streetlights from DDOT's asset layer: fleet, 550 m grid, 12,106 street segments
-├── tools/                  fetch_dc_inventory.py (refresh data/dc), make_example_ies.py
+├── tools/                  fetch_dc_inventory.py (refresh data/dc), make_example_ies.py, make_brief.py
 ├── examples/ies/           synthetic photometry for trying `nocturne bug` and `nocturne trespass`
 ├── sim/run_night.py        400-node night simulation, 9 scenarios, scaled to 75,000 lights
 ├── tests/                  192 tests: the Section 6.2 table, the firmware extensions and every city tool
 ├── console/index.html      the operator console as a standalone page (parity-tested against the Python)
-├── docs/                   PLAYBOOK.md (the DC plan) and EVIDENCE.md (the research)
+├── docs/                   brief.html (the decision brief), PLAYBOOK.md (the DC plan), EVIDENCE.md (the research)
 └── out/                    simulation results: summary.json, report.md, timeseries.csv, charts
 ```
 
