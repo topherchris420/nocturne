@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nocturne Operator Console</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- Web fonts are optional: loaded as a non-matching media sheet so a slow or blocked font host never
+     holds up the page (opened from a ZIP, offline, or behind a filter); the system stacks below take over. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Layout: a night-operations console. Top rail (clock + transport), then a three-lane
    grid: scenario rack | street board + night trace | node inspector + fleet. Stacks on phones.
@@ -19,6 +21,9 @@
   --faint: #5f6b85;
   --amber: #f0b454;        /* the 2200K/PC-Amber light itself */
   --amber-ink: #0a0f1c;
+  --amber-text: #f0b454;   /* amber used as text on panels */
+  --err-text: #ff8a80;
+  --good-text: #0ca30c; --mesh-text: #6da7ec; --warn-text: #fab219; --critical-text: #ff8a80;   /* mode pills */
   --white-light: #f6efe0;  /* 2700K white */
   --c1: #9ec5f4; --c2: #6da7ec; --c3: #3987e5; --c4: #256abf; --c5: #184f95; /* ordinal blue, park -> arterial */
   --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --critical: #d03b3b;
@@ -31,7 +36,8 @@
   :root:not([data-theme="dark"]) {
     --bg: #f3f4f7; --panel: #ffffff; --panel-2: #e9ecf2; --line: #d3d8e3;
     --fg: #121826; --muted: #4f5b73; --faint: #8a94a8;
-    --amber: #c9880f; --amber-ink: #ffffff; --white-light: #c8b58e;
+    --amber: #c9880f; --amber-ink: #121826; --amber-text: #8a5a00; --err-text: #b42318; --white-light: #c8b58e;
+    --good-text: #0a7a0a; --mesh-text: #1c5cab; --warn-text: #8a5a00; --critical-text: #b42318;
     --c1: #86b6ef; --c2: #5598e7; --c3: #2a78d6; --c4: #1c5cab; --c5: #104281;
     color-scheme: light;
   }
@@ -39,7 +45,8 @@
 :root[data-theme="light"] {
   --bg: #f3f4f7; --panel: #ffffff; --panel-2: #e9ecf2; --line: #d3d8e3;
   --fg: #121826; --muted: #4f5b73; --faint: #8a94a8;
-  --amber: #c9880f; --amber-ink: #ffffff; --white-light: #c8b58e;
+  --amber: #c9880f; --amber-ink: #121826; --amber-text: #8a5a00; --err-text: #b42318; --white-light: #c8b58e;
+  --good-text: #0a7a0a; --mesh-text: #1c5cab; --warn-text: #8a5a00; --critical-text: #b42318;
   --c1: #86b6ef; --c2: #5598e7; --c3: #2a78d6; --c4: #1c5cab; --c5: #104281;
   color-scheme: light;
 }
@@ -53,9 +60,9 @@ h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacin
 button, select, input { font: inherit; color: inherit; }
 button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
 button:hover { border-color: var(--muted); }
-button:focus-visible, select:focus-visible, input:focus-visible, .pole:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+button:focus-visible, select:focus-visible, input:focus-visible, .tablewrap:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 button.primary { background: var(--amber); color: var(--amber-ink); border-color: transparent; font-weight: 600; }
-button.on { border-color: var(--amber); color: var(--amber); }
+button.on { border-color: var(--amber); color: var(--amber-text); }
 button[disabled] { opacity: 0.45; cursor: default; }
 select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 input[type=range] { width: 100%; accent-color: var(--amber); }
@@ -72,7 +79,7 @@ input[type=number] { width: 72px; background: var(--panel-2); border: 1px solid 
 .transport .speed button:first-child { border-radius: 6px 0 0 6px; }
 .transport .speed button:last-child { border-radius: 0 6px 6px 0; }
 .scrub { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.scrub .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); font-family: var(--font-mono); }
+.scrub .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
 
 .grid { display: grid; grid-template-columns: 250px minmax(0, 1fr) 280px; gap: 14px; padding-top: 14px; }
 @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
@@ -86,6 +93,10 @@ input[type=number] { width: 72px; background: var(--panel-2); border: 1px solid 
 .toggle input { accent-color: var(--amber); width: 16px; height: 16px; margin: 0; }
 .toggle span small { display: block; color: var(--muted); font-size: 12px; }
 .hint { font-size: 12px; color: var(--muted); }
+.msg { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.msg:empty { display: none; }
+.msg.err { color: var(--err-text); font-weight: 600; }
+input[aria-invalid="true"] { border-color: var(--err-text); }
 
 /* KPI tiles */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
@@ -95,19 +106,24 @@ input[type=number] { width: 72px; background: var(--panel-2); border: 1px solid 
 .kpi .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 /* Street board */
-.board { display: flex; flex-direction: column; gap: 6px; }
-.street { display: grid; grid-template-columns: 112px minmax(0, 1fr) 70px; align-items: center; gap: 8px; }
-@media (max-width: 560px) { .street { grid-template-columns: 1fr; gap: 2px; } }
+.board { display: flex; flex-direction: column; gap: 6px; container-type: inline-size; }
+.street { display: grid; grid-template-columns: 96px minmax(0, 1fr) 48px; align-items: center; gap: 8px; }
 .street .name { font-size: 13px; line-height: 1.2; }
 .street .name small { display: block; color: var(--muted); font-size: 11px; }
-.poles { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 3px; }
-.pole { position: relative; aspect-ratio: 1; border-radius: 50%; border: 0; padding: 0; background: var(--panel-2); cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--line); max-width: 100%; }
-.pole .lamp { position: absolute; inset: 15%; border-radius: 50%; background: var(--white-light); opacity: 0; transition: opacity 120ms linear, background 300ms linear; }
-.pole.mesh { box-shadow: inset 0 0 0 2px var(--c3); }
-.pole.auto { box-shadow: inset 0 0 0 2px var(--warn); }
-.pole.safe { box-shadow: inset 0 0 0 2px var(--critical); }
-.pole.sel { outline: 2px solid var(--amber); outline-offset: 1px; }
+/* Each pole button is a square hit target of at least 24 px (WCAG 2.5.8); the dot is drawn inside it.
+   Twenty to a row while there is room, else two rows of ten (poles 0-9 | 10-19). */
+.poles { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 0; padding-top: 7px; }
+@container (max-width: 639px) { .poles { grid-template-columns: repeat(10, minmax(0, 1fr)); row-gap: 7px; } }
+@container (max-width: 459px) { .street { grid-template-columns: 1fr; gap: 2px; } }
+.pole { position: relative; aspect-ratio: 1; min-width: 24px; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.pole::before { content: ""; position: absolute; inset: 8%; border-radius: 50%; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+.pole .lamp { position: absolute; inset: 21%; border-radius: 50%; background: var(--white-light); opacity: 0; transition: opacity 120ms linear, background 300ms linear; }
+.pole.mesh::before { box-shadow: inset 0 0 0 2px var(--c3); }
+.pole.auto::before { box-shadow: inset 0 0 0 2px var(--warn); }
+.pole.safe::before { box-shadow: inset 0 0 0 2px var(--critical); }
+.pole.sel::before { outline: 2px solid var(--amber); outline-offset: 1px; }
+.pole:focus-visible { outline: none; }
+.pole:focus-visible::before { outline: 2px solid var(--amber); outline-offset: 2px; }
 .pole .mark { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; }
 .pole .mark.walker { border-bottom: 6px solid var(--good); }
 .pole .mark.cad { border-top: 6px solid var(--critical); }
@@ -131,16 +147,16 @@ canvas { display: block; width: 100%; height: 260px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-family: var(--font-mono); border: 1px solid var(--line); }
-.pill.ONLINE { color: var(--good); border-color: var(--good); }
-.pill.MESH { color: var(--c3); border-color: var(--c3); }
-.pill.AUTONOMOUS { color: var(--warn); border-color: var(--warn); }
-.pill.SAFE { color: var(--critical); border-color: var(--critical); }
+.pill.ONLINE { color: var(--good-text); border-color: var(--good); }
+.pill.MESH { color: var(--mesh-text); border-color: var(--c3); }
+.pill.AUTONOMOUS { color: var(--warn-text); border-color: var(--warn); }
+.pill.SAFE { color: var(--critical-text); border-color: var(--critical); }
 .reasons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .reasons span { font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel-2); }
 .log { font-family: var(--font-mono); font-size: 12px; max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
 .log div { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
-.log .t { color: var(--faint); }
-.log .x { color: var(--critical); }
+.log .t { color: var(--muted); }
+.log .x { color: var(--critical-text); }
 
 /* Spectral strip */
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
@@ -204,13 +220,14 @@ th.n { text-align: right; }
     <section class="panel">
       <h2>Operator override</h2>
       <div class="row">
-        <input type="number" id="ovLevel" min="0" max="100" value="50" aria-label="Override level percent"><span class="hint">%</span>
+        <input type="number" id="ovLevel" min="0" max="100" step="any" value="50" aria-label="Override level percent" aria-describedby="ovMsg"><span class="hint">%</span>
         <select id="ovPrio" aria-label="Override priority"><option value="1">Planned</option><option value="2" selected>Operator</option><option value="3">Incident command</option></select>
       </div>
       <div class="row" style="margin-top:8px">
         <button id="ovApply">Apply to all streets, 60 min</button>
         <button id="ovCancel">Cancel overrides</button>
       </div>
+      <p class="msg" id="ovMsg" role="status" aria-live="polite"></p>
       <p class="hint">Only an incident-command override can pull an active emergency below 100 %.</p>
     </section>
     <section class="panel">
@@ -243,11 +260,11 @@ th.n { text-align: right; }
     <section class="panel">
       <h2>Night trace · mean output by road class</h2>
       <div class="chartwrap"><canvas id="chart" aria-label="Mean output by road class through the night" role="img"></canvas><div class="tip" id="tip"></div></div>
-      <p class="hint">Lines are 5-minute means of 20 poles. Dashed verticals are the profile phases; shading is a fault window. Hover for values.</p>
+      <p class="hint">Lines are 5-minute means of 20 poles. Dashed verticals are the profile phases; shading is a fault window. Hover or tap for values.</p>
     </section>
     <section class="panel">
       <h2>Spectral engineering · per photopic lumen, 4000K = 1.00</h2>
-      <div class="tablewrap"><table id="spectral">
+      <div class="tablewrap" tabindex="0" role="region" aria-label="Spectral engineering table, scrolls sideways"><table id="spectral">
         <thead><tr><th>Spectrum</th><th>Role</th><th class="n">CCT</th><th class="n">Rayleigh</th><th>Skyglow seen</th><th class="n">Mie</th><th class="n">mel-DER</th><th class="n">&lt;500 nm</th></tr></thead>
         <tbody></tbody>
       </table></div>
@@ -333,7 +350,10 @@ let DUSK = 0, DAWN = T_END; for (let t = 0; t < T_END; t += 60) { if (DUSK === 0
 // SAFE mode counts from the dark midpoint the node learned from its photocell on the previous clocked night
 const PREV = (() => { let dusk = null, dawn = null; for (let k = 0; k <= 18 * 60; k++) { const lx = skyLux(solarElev(UTC0 - 86400000 + k * 60000)); if (dusk === null && lx < 15) dusk = k + 1; else if (dusk !== null && lx > 40) { dawn = k + 1; break; } } return { dusk, dawn }; })();
 const NIGHT_LEN = (PREV.dawn - PREV.dusk) / 60, LEARNED_MID = (START_HOUR + PREV.dusk / 60 + NIGHT_LEN / 2) % 24;
-const CLO = 0.86 + 0.14 * Math.min(1, 20000 / 100000);   // constant light output factor at 20,000 burn hours
+// constant light output (vdl7.profiles.clo_factor): drive rises from 0.86 new to 1.00 at 100,000 h.
+// The sample fleet has 20,000 burn hours at dusk and keeps counting while lit, as the node's hour meter does.
+const BURN_HOURS0 = 20000;
+function cloFactor(burnHours) { const f = Math.max(0, Math.min(1, burnHours / 100000)); return 0.86 + (1 - 0.86) * f; }
 const STATIC_W = CLASSES.reduce((w, c) => w + N_LIGHTS * MIX_SHARE[c.id] * c.watts / EFF[c.cctToday], 0);
 
 // seeded RNG (mulberry32)
@@ -345,7 +365,7 @@ class Node {
     this.cls = cls; this.i = i; this.id = `${cls.id}-${String(i).padStart(2, '0')}`;
     this.hin = false; this.tunable = !!cls.tunable && i % 4 === 0;
     this.level = 0; this.mode = 'SAFE'; this.lastBackhaul = -1e9; this.lastGateway = -1e9;
-    this.presenceUntil = -1e9; this.carpetUntil = -1e9; this.loop = null; this.events = [];
+    this.presenceUntil = -1e9; this.carpetUntil = -1e9; this.events = []; this.burnHours = BURN_HOURS0;
     this.rtcTrusted = false; this.pcDark = false; this.pcRaw = false; this.pcRawSince = 0;
     this.pcDuskMono = null;
     this.out = null;
@@ -356,9 +376,10 @@ class Node {
     if (want !== this.pcRaw) { this.pcRaw = want; this.pcRawSince = t; }
     if (want !== this.pcDark && t - this.pcRawSince >= 60) { this.pcDark = want; this.pcDuskMono = want ? t : null; }
   }
-  receive(ev, t) { const e = Object.assign({}, ev, { received: t }); const k = this.events.findIndex(x => x.id === e.id); if (k >= 0) this.events[k] = e; else this.events.push(e); if (e.kind === 'loop') this.loop = { v: e.veh15, t }; }
+  receive(ev, t) { const e = Object.assign({}, ev, { received: t }); const k = this.events.findIndex(x => x.id === e.id); if (k >= 0) this.events[k] = e; else this.events.push(e); }
   cancel(id) { for (const e of this.events) if (e.id === id) e.cancelled = true; }
   active(kind, t) { return this.events.filter(e => e.kind === kind && !e.cancelled && t - e.received < e.ttl); }
+  latest(kind, t) { let best = null; for (const e of this.active(kind, t)) if (best === null || e.received > best.received) best = e; return best; }
   safeHour(t) {
     if (this.pcDuskMono !== null) return ((LEARNED_MID - NIGHT_LEN / 2) + (t - this.pcDuskMono) / 3600 + 24) % 24;
     return null;   // no dusk seen since the clock was lost: hold the 22:00 level
@@ -373,11 +394,12 @@ class Node {
     let stormDark = false;   // dark with the sun up: storm darkness keeps the evening level (R-SAF-4)
     if (this.rtcTrusted) { hour = localHour(t); const elev = elevAt(t), astro = elev < -3; lit = astro || this.pcDark; stormDark = this.pcDark && elev >= 0; if (astro && !this.pcDark) reasons.push('PHOTOCELL_VETOED'); if (!astro && this.pcDark) reasons.push('PHOTOCELL_EARLY'); }
     else { lit = this.pcDark; hour = lit ? this.safeHour(t) : null; reasons.push(hour === null ? 'SAFE_NO_ANCHOR' : 'SAFE_CLOCK'); }
-    const phase = hour === null ? 'step' : phaseFor(hour);
+    const phase = hour === null ? 'step' : (stormDark ? 'evening' : phaseFor(hour));   // storm darkness: evening level at any hour
     let base = c.levels[PHASES.indexOf(phase)];
     if (this.active('migration', t).length && MIGRATION_CLASSES.includes(c.id) && !stormDark) { base = Math.min(base, c.levels[1]); reasons.push('MIGRATION'); }
     let a = 0;
-    if ((mode === 'ONLINE' || mode === 'MESH') && this.loop && c.vol && t - this.loop.t <= 900) { a = Math.min(1, Math.max(0, this.loop.v / c.vol)); if (a > 0) reasons.push('LOOP'); }
+    const loop = this.latest('loop', t);   // a loop volume counts for its own TTL, no longer
+    if ((mode === 'ONLINE' || mode === 'MESH') && loop && c.vol) { a = Math.min(1, Math.max(0, loop.veh15 / c.vol)); if (a > 0) reasons.push('LOOP'); }
     const presence = t < this.presenceUntil, carpet = t < this.carpetUntil;
     if (presence || carpet) { a = Math.max(a, c.occ ? 1 : 0.5); reasons.push(presence ? 'PRESENCE' : 'CARPET'); }
     let target = base; if (a > 0) target = Math.max(target, target + (c.cap - target) * a);   // never dims a street
@@ -386,16 +408,19 @@ class Node {
     if (this.active('snow', t).length) reasons.push('SNOW_NO_BOOST');
     const floor = Math.max(c.floor, this.hin ? HIN_FLOOR : 0);
     if (target < floor) { target = floor; reasons.push(this.hin && floor === HIN_FLOOR ? 'FLOOR_HIN' : 'FLOOR'); }
-    const em = this.active('emergency', t)[0];
+    const em = this.latest('emergency', t);
     if (em) { target = 100; reasons.push('EMERGENCY:' + em.id); }
     const ovs = this.active('override', t).sort((x, y) => y.priority - x.priority || y.received - x.received), ov = ovs[0];
     if (ov && (!em || ov.priority >= 3)) { target = ov.level; reasons.push(`OVERRIDE:${ov.id}:p${ov.priority}`); } else if (ov) reasons.push('OVERRIDE_BLOCKED_BY_EMERGENCY');
     if (!lit) target = 0;
     const d = target - this.level; this.level += Math.max(-1 * dt, Math.min(25 * dt, d)); this.level = Math.max(0, Math.min(100, this.level));
     const mix = this.tunable ? ((presence || carpet || em) ? [100, 0] : MIX[phase]) : [100, 0];
-    const relay = lit || this.level > 0.5;
-    const white = relay ? this.level * mix[0] / 100 : 0, amber = relay ? this.level * mix[1] / 100 : 0;
-    this.out = { mode, lit, phase, hour, base, a, target, level: this.level, drive: this.level * CLO, white, amber, reasons };
+    // drive is what the LED driver is asked for (CLO-scaled); the white and amber channels split the drive
+    const clo = cloFactor(this.burnHours), drive = Math.min(100, this.level * clo);
+    const white = drive * mix[0] / 100, amber = drive * mix[1] / 100;
+    const relay = lit || this.level > 0.5;   // let the dawn fade finish
+    if (lit) this.burnHours += dt / 3600;
+    this.out = { mode, lit, phase, hour, base, a, target, level: this.level, drive, clo, white, amber, relay, reasons };
     return this.out;
   }
 }
@@ -410,7 +435,7 @@ function bfs(st, from, maxHops) { const seen = new Map([[from, 0]]), q = [from];
 
 function resetSim() {
   sim.streets = CLASSES.map((cls, s) => { const st = { cls, s, nodes: [], walkers: [], links: null, lastHello: new Array(POLES).fill(-1e9), rnd: rng(100 + s), legacyLevel: 0 }; for (let i = 0; i < POLES; i++) st.nodes.push(new Node(cls, i)); bucketChain(st); return st; });
-  sim.series = []; sim.legacy = []; sim.log = []; sim.t = 0; sim.lastRain = -1e9; sim.fired = new Set();
+  sim.series = []; sim.legacy = []; sim.log = []; sim.t = 0; sim.now = -DT; sim.lastRain = -1e9; sim.fired = new Set();
   sim.metrics = { kwh: 0, lumh: 0, sky: 0, baseLumh: 0, baseKwh: 0, baseSky: 0, acc: CLASSES.map(() => [0, 0]), accLegacy: [0, 0], bucket: 0 };
 }
 function backhaulUp(st, i, t) { if (state.faults.outage && t >= 16200 && t < 41400) return false; if (state.faults.modem && st.cls.id === 'local' && i >= 10) return false; return true; }
@@ -428,7 +453,7 @@ function deliver(st, idx, ev, t, origin) {
 function cmsStep(t) {
   const h = localHour(t);
   if (t % 900 === 0) for (const st of sim.streets) {
-    const ev = st.cls.vol ? { kind: 'loop', id: 'loop', ttl: 900, veh15: pw(TRAFFIC, h) * (st.cls.id === 'arterial' ? 1 : 0.42) * (0.9 + 0.2 * st.rnd()) } : null;
+    const ev = st.cls.vol ? { kind: 'loop', id: 'loop', ttl: 900, veh15: Math.round(10 * pw(TRAFFIC, h) * (st.cls.id === 'arterial' ? 1 : 0.42) * (0.9 + 0.2 * st.rnd())) / 10 } : null;   // the CMS sends 0.1 veh resolution
     for (let i = 0; i < POLES; i++) if (backhaulUp(st, i, t)) { st.nodes[i].hello(t); st.lastHello[i] = t; if (ev) st.nodes[i].receive(ev, t); }
   }
   if (t === 0 && state.migration) { const all = []; for (let i = 0; i < POLES; i++) all.push(i); for (const st of sim.streets) deliver(st, all, { kind: 'migration', id: 'mig', ttl: T_END }, t, null); logLine(t, 'Night Signal: heavy migration forecast. Presence streets hold their 22:00 level; facades and empty offices dark from dusk'); }
@@ -459,10 +484,23 @@ function walkersStep(st, t) {
   }
   st.walkers = alive;
 }
+// Electrical load and delivered light of one node. Watts follow the driver (drive, CLO-scaled);
+// lumens follow the level (% of design lumens), which CLO holds constant as the LEDs age.
+function nodeLoad(st, nd, o) {
+  if (!o || !o.relay) return { watts: 0, lum: 0, ray: 0 };
+  const warm = state.acct.warm, wcct = warm ? (nd.tunable || st.cls.cctTarget === 'PC-Amber' ? '2700K' : st.cls.cctTarget) : st.cls.cctToday;
+  let white = o.white, amber = o.amber;
+  if (warm && st.cls.cctTarget === 'PC-Amber') { amber = white + amber; white = 0; }
+  const watts = st.cls.watts * (white / 100 / EFF[wcct] + amber / 100 / EFF['PC-Amber']);
+  const lum = o.level / 100 * st.cls.watts;
+  const ray = white + amber > 0 ? (white * RAY[wcct] + amber * RAY['PC-Amber']) / (white + amber) : 0;
+  return { watts, lum, ray };
+}
 function step() {
   const t = sim.t, lx = skyLux(elevAt(t)), litToday = elevAt(t) < -3, m = sim.metrics;
+  sim.now = t;
   cmsStep(t);
-  const warm = state.acct.warm, u0 = state.acct.u0, up = u0 ? 0 : 0.03;
+  const up = state.acct.u0 ? 0 : 0.03;
   let legacySum = 0;
   for (const st of sim.streets) {
     walkersStep(st, t);
@@ -472,12 +510,7 @@ function step() {
       const nd = st.nodes[i];
       if (gateways.length && gateways.some(g => bfs(st, g, 12).has(i))) nd.lastGateway = t;
       nd.photocell(lx, t); const o = nd.tick(t, DT, lx);
-      let white = o.white, amber = o.amber;
-      const wcct = warm ? (nd.tunable || st.cls.cctTarget === 'PC-Amber' ? '2700K' : st.cls.cctTarget) : st.cls.cctToday;
-      if (warm && st.cls.cctTarget === 'PC-Amber') { amber = white + amber; white = 0; }
-      const lum = (white + amber) / 100 * st.cls.watts;
-      const watts = st.cls.watts * (white / 100 / EFF[wcct] + amber / 100 / EFF['PC-Amber']);
-      const ray = lum > 0 ? (white * RAY[wcct] + amber * RAY['PC-Amber']) / (white + amber) : 0;
+      const { watts, lum, ray } = nodeLoad(st, nd, o);
       m.kwh += watts * n * hours / 1000; m.lumh += lum * n * hours; m.sky += lum * (up + 0.12) * ray * n * hours;
       if (litToday) { m.baseLumh += st.cls.watts * n * hours; m.baseKwh += st.cls.watts / EFF[st.cls.cctToday] * n * hours / 1000; m.baseSky += st.cls.watts * 0.15 * RAY[st.cls.cctToday] * n * hours; }
       acc[0] += o.level; acc[1]++;
@@ -489,7 +522,9 @@ function step() {
   sim.t += DT;
   if (sim.t - m.bucket >= 300) { sim.series.push({ t: sim.t, v: m.acc.map(a => a[0] / Math.max(1, a[1])) }); sim.legacy.push(m.accLegacy[0] / Math.max(1, m.accLegacy[1])); m.acc = CLASSES.map(() => [0, 0]); m.accLegacy = [0, 0]; m.bucket = sim.t; }
 }
-function simulateTo(t) { if (t < sim.t) resetSim(); while (sim.t < t) step(); }
+// Run every step up to and including the one at time t (rounded down to DT), so an action stamped at
+// the console time takes effect at once, paused or playing. sim.now is the time of the last step run.
+function simulateTo(t) { const target = Math.floor(t / DT) * DT; if (sim.t > target + DT) resetSim(); while (sim.t <= target) step(); }
 function resimulate() { resetSim(); simulateTo(state.t); render(); }
 
 // ------------------------------------------------------------------ render
@@ -533,14 +568,14 @@ function render() {
       lamp.style.opacity = lvl ? (0.25 + 0.75 * lvl).toFixed(2) : '0';
       lamp.style.background = isAmber ? 'var(--amber)' : 'var(--white-light)';
       b.className = 'pole' + (o.mode === 'MESH' ? ' mesh' : o.mode === 'AUTONOMOUS' ? ' auto' : o.mode === 'SAFE' ? ' safe' : '') + (state.sel.s === s && state.sel.p === i ? ' sel' : '');
-      const hasWalker = st.walkers.some(w => w.pole === i), hasCad = nd.active('emergency', sim.t).length > 0;
+      const hasWalker = st.walkers.some(w => w.pole === i), hasCad = nd.active('emergency', sim.now).length > 0;
       let mark = b.querySelector('.mark'); if (!hasWalker && !hasCad) { if (mark) mark.remove(); } else { if (!mark) { mark = document.createElement('span'); b.appendChild(mark); } mark.className = 'mark ' + (hasCad ? 'cad' : 'walker'); }
     }
     outSum += sum; outN += POLES; ui.meta.textContent = `${(sum / POLES).toFixed(0)} %`;
   });
   // KPIs
   const m = sim.metrics, lit = elevAt(t) < -3;
-  let powNow = 0; for (const st of sim.streets) { const n = N_LIGHTS * MIX_SHARE[st.cls.id] / POLES; for (const nd of st.nodes) { const o = nd.out; if (!o) continue; const wcct = state.acct.warm ? (nd.tunable || st.cls.cctTarget === 'PC-Amber' ? '2700K' : st.cls.cctTarget) : st.cls.cctToday; let w = o.white, a = o.amber; if (state.acct.warm && st.cls.cctTarget === 'PC-Amber') { a = w + a; w = 0; } powNow += st.cls.watts * (w / 100 / EFF[wcct] + a / 100 / EFF['PC-Amber']) * n; } }
+  let powNow = 0; for (const st of sim.streets) { const n = N_LIGHTS * MIX_SHARE[st.cls.id] / POLES; for (const nd of st.nodes) powNow += nodeLoad(st, nd, nd.out).watts * n; }
   $('kOut').textContent = outN ? (outSum / outN).toFixed(0) + ' %' : '—';
   $('kPow').textContent = (powNow / 1e6).toFixed(2) + ' MW'; $('kPowS').textContent = `static would be ${(STATIC_W / 1e6 * (lit ? 1 : 0)).toFixed(2)} MW`;
   $('kEn').textContent = (m.kwh / 1000).toFixed(1) + ' MWh'; $('kEnS').textContent = `static so far ${(m.baseKwh / 1000).toFixed(1)} MWh`;
@@ -553,8 +588,8 @@ function render() {
 function renderInspector() {
   const st = sim.streets[state.sel.s], nd = st.nodes[state.sel.p], o = nd.out;
   if (!o) { $('inspector').innerHTML = '<p class="hint">Press Play, then click a pole.</p>'; return; }
-  const evs = nd.events.filter(e => !e.cancelled && sim.t - e.received < e.ttl).map(e => `${e.kind}${e.level !== undefined ? ' ' + e.level + '%' : ''} · ${Math.round((e.ttl - (sim.t - e.received)) / 60)} min left${e.via === 'mesh' ? ' · mesh' : ''}`);
-  const bh = sim.t - nd.lastBackhaul, gw = sim.t - nd.lastGateway;
+  const evs = nd.events.filter(e => !e.cancelled && sim.now - e.received < e.ttl).map(e => `${e.kind}${e.level !== undefined ? ' ' + e.level + '%' : ''} · ${Math.round((e.ttl - (sim.now - e.received)) / 60)} min left${e.via === 'mesh' ? ' · mesh' : ''}`);
+  const bh = sim.now - nd.lastBackhaul, gw = sim.now - nd.lastGateway;
   $('inspector').innerHTML = `
     <div class="row" style="justify-content:space-between;margin-bottom:8px"><strong class="mono">${nd.id}</strong><span class="pill ${o.mode}">${o.mode}</span></div>
     <dl class="kv">
@@ -565,8 +600,8 @@ function renderInspector() {
       <dt>Activity</dt><dd>${o.a.toFixed(2)}</dd>
       <dt>Target</dt><dd>${o.target.toFixed(0)} %</dd>
       <dt>Level</dt><dd>${o.level.toFixed(1)} %</dd>
-      <dt>Drive</dt><dd>${o.drive.toFixed(1)} % (CLO ×${CLO.toFixed(3)} at 20,000 h)</dd>
-      <dt>Channels</dt><dd>white ${o.white.toFixed(0)} · amber ${o.amber.toFixed(0)} % of design</dd>
+      <dt>Drive</dt><dd>${o.drive.toFixed(1)} % (CLO ×${o.clo.toFixed(3)} at ${Math.round(nd.burnHours).toLocaleString('en-US')} h)</dd>
+      <dt>Channels</dt><dd>white ${o.white.toFixed(1)} · amber ${o.amber.toFixed(1)} % drive</dd>
       <dt>Backhaul</dt><dd>${bh > 1e8 ? 'never' : Math.round(bh / 60) + ' min ago'}</dd>
       <dt>Gateway</dt><dd>${gw > 1e8 ? 'none seen' : Math.round(gw / 60) + ' min ago'}</dd>
       <dt>Clock</dt><dd>${nd.rtcTrusted ? 'RTC trusted' : 'lost · SAFE estimate'}</dd>
@@ -586,9 +621,18 @@ function drawChart() {
   const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
   if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-  const padL = 36, padR = 96, padT = 18, padB = 24, pw_ = W - padL - padR, ph_ = H - padT - padB;
-  const x = t => padL + pw_ * t / T_END, y = v => padT + ph_ * (1 - v / 100);
   ctx.font = '11px ' + css('--font-mono'); ctx.textBaseline = 'middle';
+  // the right margin fits the longest end label; on a phone the legacy label is shortened
+  const legacyLab = W < 480 ? 'cloud-dep.' : 'cloud-dependent', tw = s => ctx.measureText(s).width;
+  const endLabs = CLASSES.map(c => c.name.split(' ')[0]).concat(state.faults.legacy ? [legacyLab] : []);
+  const padL = 36, padB = 24, padR = Math.ceil(Math.max(...endLabs.map(tw))) + 14, pw_ = W - padL - padR;
+  const x = t => padL + pw_ * t / T_END;
+  // phase labels: a label that would touch the one before it drops to a second row
+  const PHASE_MARKS = [[14400, 'step'], [18000, 'curfew'], [25200, 'deep'], [39600, 'dawn']], rowEnd = [-Infinity, -Infinity];
+  const phaseRow = PHASE_MARKS.map(([tt, lab]) => { const x0 = x(tt) + 3, r = x0 >= rowEnd[0] + 6 ? 0 : 1; rowEnd[r] = x0 + tw(lab); return r; });
+  const padT = phaseRow.includes(1) ? 32 : 18, ph_ = H - padT - padB, y = v => padT + ph_ * (1 - v / 100);
+  // time ticks every 2 h, or every 4 or 7 h when that would crowd the labels
+  const perHour = pw_ / (T_END / 3600), tickStep = [2, 4, 7].find(st => st * perHour >= tw('00:00') + 12) || 7;
   // fault shading
   ctx.fillStyle = css('--panel-2');
   if (state.faults.outage) ctx.fillRect(x(16200), padT, x(41400) - x(16200), ph_);
@@ -596,19 +640,20 @@ function drawChart() {
   ctx.strokeStyle = css('--line'); ctx.lineWidth = 1; ctx.fillStyle = css('--muted');
   for (const v of [0, 25, 50, 75, 100]) { ctx.beginPath(); ctx.moveTo(padL, y(v)); ctx.lineTo(W - padR, y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(v, padL - 6, y(v)); }
   ctx.textAlign = 'center';
-  for (let h = 0; h <= 14; h += 2) { const tt = h * 3600; ctx.fillText(fmtHM(tt), x(tt), H - padB / 2); }
+  for (let h = 0; h <= 14; h += tickStep) { const tt = h * 3600; ctx.fillText(fmtHM(tt), x(tt), H - padB / 2); }
   ctx.setLineDash([3, 4]); ctx.strokeStyle = css('--faint');
-  for (const [tt, lab] of [[14400, 'step'], [18000, 'curfew'], [25200, 'deep'], [39600, 'dawn']]) { ctx.beginPath(); ctx.moveTo(x(tt), padT); ctx.lineTo(x(tt), padT + ph_); ctx.stroke(); ctx.textAlign = 'left'; ctx.fillText(lab, x(tt) + 3, padT - 8); }
+  PHASE_MARKS.forEach(([tt, lab], k) => { ctx.beginPath(); ctx.moveTo(x(tt), padT); ctx.lineTo(x(tt), padT + ph_); ctx.stroke(); ctx.textAlign = 'left'; ctx.fillText(lab, x(tt) + 3, 9 + 12 * phaseRow[k]); });
   ctx.setLineDash([]);
   // legacy trace
   const pts = sim.series; if (!pts.length) return;
-  if (state.faults.legacy) { ctx.strokeStyle = css('--faint'); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, k) => { const xx = x(p.t), yy = y(sim.legacy[k]); k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }); ctx.stroke(); ctx.fillStyle = css('--muted'); ctx.textAlign = 'left'; ctx.fillText('cloud-dependent', x(pts[pts.length - 1].t) + 6, y(sim.legacy[pts.length - 1])); }
+  const ends = [], last = pts.length - 1, xEnd = x(pts[last].t);
+  if (state.faults.legacy) { ctx.strokeStyle = css('--faint'); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, k) => { const xx = x(p.t), yy = y(sim.legacy[k]); k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }); ctx.stroke(); ends.push({ y0: y(sim.legacy[last]), label: legacyLab, color: css('--faint'), ink: css('--muted') }); }
   // series
-  const ends = [];
-  CLASSES.forEach((cls, s) => { ctx.strokeStyle = css('--c' + cls.series); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, k) => { const xx = x(p.t), yy = y(p.v[s]); k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }); ctx.stroke(); ends.push({ s, yy: y(pts[pts.length - 1].v[s]), xx: x(pts[pts.length - 1].t), label: cls.name.split(' ')[0], color: css('--c' + cls.series) }); });
-  // direct labels, de-collided
+  CLASSES.forEach((cls, s) => { ctx.strokeStyle = css('--c' + cls.series); ctx.lineWidth = 2; ctx.beginPath(); pts.forEach((p, k) => { const xx = x(p.t), yy = y(p.v[s]); k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }); ctx.stroke(); ends.push({ y0: y(pts[last].v[s]), label: cls.name.split(' ')[0], color: css('--c' + cls.series), ink: css('--fg') }); });
+  // direct labels, kept below the phase labels and de-collided (the legacy trace's label too)
+  for (const e of ends) e.yy = Math.max(e.y0, padT + 7);
   ends.sort((a, b) => a.yy - b.yy); for (let k = 1; k < ends.length; k++) if (ends[k].yy - ends[k - 1].yy < 12) ends[k].yy = ends[k - 1].yy + 12;
-  ctx.textAlign = 'left'; for (const e of ends) { ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(e.xx, y(pts[pts.length - 1].v[e.s]), 3, 0, 7); ctx.fill(); ctx.fillStyle = css('--fg'); ctx.fillText(e.label, e.xx + 7, e.yy); }
+  ctx.textAlign = 'left'; for (const e of ends) { ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(xEnd, e.y0, 3, 0, 7); ctx.fill(); ctx.fillStyle = e.ink; ctx.fillText(e.label, xEnd + 7, e.yy); }
   // hover
   if (hoverX !== null) {
     const tt = Math.max(0, Math.min(T_END, (hoverX - padL) / pw_ * T_END)); let k = 0; for (let i = 0; i < pts.length; i++) if (Math.abs(pts[i].t - tt) < Math.abs(pts[k].t - tt)) k = i;
@@ -617,8 +662,10 @@ function drawChart() {
     tip.innerHTML = `<b>${fmtHM(p.t)}</b><br>` + CLASSES.map((c, s) => `${c.name.split(' ')[0]} ${p.v[s].toFixed(0)} %`).join('<br>') + (state.faults.legacy ? `<br>cloud-dep. ${sim.legacy[k].toFixed(0)} %` : '');
   } else tip.style.display = 'none';
 }
-canvas.addEventListener('mousemove', e => { hoverX = e.offsetX; drawChart(); });
-canvas.addEventListener('mouseleave', () => { hoverX = null; drawChart(); });
+canvas.addEventListener('pointermove', e => { hoverX = e.offsetX; drawChart(); });
+canvas.addEventListener('pointerdown', e => { hoverX = e.offsetX; drawChart(); });   // a tap shows the values on touch screens
+canvas.addEventListener('pointerleave', () => { hoverX = null; drawChart(); });
+if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => drawChart());   // web fonts arrive late, if at all
 window.addEventListener('resize', drawChart);
 
 // spectral table
@@ -635,14 +682,29 @@ function setPlaying(p) { state.playing = p; lastReal = null; if (p && !raf) raf 
 $('play').addEventListener('click', () => setPlaying(!state.playing));
 document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { state.speed = +b.dataset.speed; document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('on', x === b)); }));
 $('toEnd').addEventListener('click', () => { setPlaying(false); state.t = T_END; simulateTo(T_END); render(); });
-$('reset').addEventListener('click', () => { setPlaying(false); state.t = 0; state.actions = []; resimulate(); });
-$('scrub').addEventListener('input', e => { setPlaying(false); state.t = +e.target.value; if (state.t < sim.t) resetSim(); simulateTo(state.t); render(); });
+$('reset').addEventListener('click', () => { setPlaying(false); state.t = 0; state.actions = []; ovMessage('', false); resimulate(); });
+$('scrub').addEventListener('input', e => { const v = +e.target.value; state.playing = false; lastReal = null; state.t = v; simulateTo(state.t); render(); });   // read the slider before render() writes it back
 for (const [id, key] of [['fOutage', 'outage'], ['fModem', 'modem'], ['fBreak', 'brk'], ['fLegacy', 'legacy']]) $(id).addEventListener('change', e => { state.faults[key] = e.target.checked; resimulate(); });
 $('weather').addEventListener('change', e => { state.weather = e.target.value; resimulate(); });
 $('fMigration').addEventListener('change', e => { state.migration = e.target.checked; resimulate(); });
 $('aU0').addEventListener('change', e => { state.acct.u0 = e.target.checked; resimulate(); });
 $('aWarm').addEventListener('change', e => { state.acct.warm = e.target.checked; resimulate(); });
-$('ovApply').addEventListener('click', () => { const t = Math.floor(state.t / DT) * DT; state.actions.push({ kind: 'override', s: 0, p: 0, t, level: Math.max(0, Math.min(100, +$('ovLevel').value || 0)), priority: +$('ovPrio').value, key: `ov-${t}-${state.actions.length}` }); resimulate(); });
+// An override needs a level from 0 to 100 %, the rule the node itself applies (vdl7.controller rejects
+// anything else). A blank or out-of-range box is refused here, never sent as 0 % or clamped.
+function overrideLevel() {
+  const el = $('ovLevel'), raw = el.value.trim(), v = Number(raw);
+  return (el.validity.badInput || raw === '' || !Number.isFinite(v) || v < 0 || v > 100) ? null : v;
+}
+function ovMessage(text, bad) { const m = $('ovMsg'); m.textContent = text; m.className = 'msg' + (bad ? ' err' : ''); $('ovLevel').setAttribute('aria-invalid', bad ? 'true' : 'false'); }
+$('ovLevel').addEventListener('input', () => { if ($('ovLevel').getAttribute('aria-invalid') === 'true' && overrideLevel() !== null) ovMessage('', false); });
+$('ovApply').addEventListener('click', () => {
+  const level = overrideLevel();
+  if (level === null) { ovMessage('Refused: the override level must be a number from 0 to 100 %. Nothing was sent.', true); $('ovLevel').focus(); return; }
+  const t = Math.floor(state.t / DT) * DT, priority = +$('ovPrio').value;
+  state.actions.push({ kind: 'override', s: 0, p: 0, t, level, priority, key: `ov-${t}-${state.actions.length}` });
+  ovMessage(`Sent at ${fmtHM(t)}: ${level} % at priority ${priority} to every street for 60 min.`, false);
+  resimulate();
+});
 $('ovCancel').addEventListener('click', () => { const t = Math.floor(state.t / DT) * DT; state.actions.push({ kind: 'cancelov', s: 0, p: 0, t, key: `cancel-${t}-${state.actions.length}` }); resimulate(); });
 
 // boot: open at the curfew with a realistic night already underway
