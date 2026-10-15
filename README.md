@@ -14,6 +14,8 @@ Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the wo
 
 [Do something tonight](#do-something-tonight) · [Quick start](#quick-start) · [Restoration planner](#plan-in-your-browser) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
 
+**First real-world validation:** [One-building field pilot](docs/FIELD_PILOT.md) turns a consenting owner's reversible lighting change into a preregistered target/control experiment, with a manifest checked against the trial fingerprint. No owner has been recruited or physical result claimed in this repository. See [the evidence ladder](docs/CLAIMS.md) for what is modeled, self-reported, or measured.
+
 ## Do something tonight
 
 **The part we can address immediately is unnecessary light on property whose owner can act.** A facade can stop glowing after closing. An occupied office can close its existing blinds. A closing checklist can include the dedicated decorative circuit. The people doing the work need a clear handoff and a way to record exceptions.
@@ -54,6 +56,7 @@ For a real project, use **Start fresh**, record your own observations, and save 
 | Which changes would reach our darkness target? | Choose a portfolio across named owners, observation points and weather scenarios, within a budget and declared service constraints. |
 | What if the target cannot be reached? | Identify a budget shortfall or show that the available actions are insufficient. |
 | Will the plan hold in haze, under snow, or if our numbers are off? | Derive each source's effect from positions, lumens, shielding and the atmosphere; give uncertain values as ranges and plan for their pessimistic end; charge rebounds and synergies to the plans that trigger them. |
+| Can one consenting building produce a defensible measured result? | Follow the [first-site field protocol](docs/FIELD_PILOT.md), preregister the randomized trial, run `nocturne field-check` on declared safety/measurement prerequisites, and analyze calibrated target/control readings. |
 | Which sources contribute to the glow? | Design randomized source-isolation trials and analyze paired target/control observations. |
 | Could existing streetlights use less energy? | Compare a year of electricity, cost and emissions under scheduled and adaptive lighting. |
 | What happens during a network outage? | Simulate a lamp continuing to follow local rules after losing its connection. |
@@ -319,6 +322,8 @@ A practical starting point is **one willing building owner, one avoidable spill 
 
 | Resource | Contents |
 |---|---|
+| [One-building field pilot](docs/FIELD_PILOT.md) | Owner-permitted randomized crossover, calibration, controls, preregistered measurements and report rules. |
+| [Evidence ladder](docs/CLAIMS.md) | Definitions and limits for design, simulated, owner-reported, field-measured and deployed claims. |
 | [DC Tonight](docs/TONIGHT.md) | Same-night owner actions, a coordinated closing routine, official reporting routes, packet format and completion accounting. |
 | [Restoration workflow](docs/RESTORATION.md) | Project schema, units, optimization guarantees, ranges, interactions, physical derivation, trial design and measurement analysis. |
 | [Integration](docs/INTEGRATION.md) | Controller capability profiles, the readiness record and its gates, and reconciling what the CMS loaded. |
@@ -330,7 +335,7 @@ A practical starting point is **one willing building owner, one avoidable spill 
 | [DC inventory notes](data/dc/README.md) | Data source, aggregation and fixture classification. |
 | [Controller](vdl7/controller.py) · [CLI](vdl7/cli.py) · [Tests](tests/) | Implementation and verification. |
 
-To run the existing tests after installing the `dev` extra:
+To run the existing tests after installing the `dev` extra (also checked on pushes and pull requests by GitHub Actions):
 
 ```bash
 python -m pytest -q

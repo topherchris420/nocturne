@@ -30,6 +30,7 @@ Models
     nocturne derive physical.json --out project.json       # coefficients from geometry and atmosphere
     nocturne restore examples/restoration/district.json --report restoration.html
     nocturne experiment --source facades --start 2027-01-04 --seed public-seed --out trial
+    nocturne field-check readiness.json trial/trial.json  # first-site evidence declarations
     nocturne attribute trial/trial.json trial/readings.csv
     nocturne spectral [--spd my_engine=lm79.csv]
     nocturne simulate --out out
@@ -680,6 +681,14 @@ def cmd_experiment(a) -> int:
     return 0
 
 
+def cmd_field_check(a) -> int:
+    from .field import audit
+    from .restore import read_project
+    result = audit(read_project(a.manifest), read_project(a.trial))
+    print(json.dumps(result, indent=2, allow_nan=False))
+    return 0 if result["ready_to_collect"] else 3
+
+
 def cmd_attribute(a) -> int:
     from .restore import read_project
     from .attribution import analyze
@@ -746,6 +755,12 @@ def main(argv=None) -> int:
     ex.add_argument("--control-scale", type=float, default=1.0, help="preregistered additive control coefficient")
     ex.add_argument("--out", required=True, help="new trial directory (will not overwrite)")
     ex.set_defaults(fn=cmd_experiment)
+
+    fg = sub.add_parser("field-check", help="check first-site declarations against a preregistered trial",
+                        epilog="Exit 0: declared preparations recorded; 3: blocked; 2: invalid. This is NOT an operator approval.")
+    fg.add_argument("manifest", help="field pilot readiness.json, with local evidence references")
+    fg.add_argument("trial", help="immutable trial.json created by nocturne experiment")
+    fg.set_defaults(fn=cmd_field_check)
 
     at = sub.add_parser("attribute", help="estimate source-specific effects from a preregistered crossover trial",
                         epilog="Exit 0: all planned pairs analyzed; 3: incomplete/insufficient data; 2: invalid input. Exit 0 does not imply an effect.")

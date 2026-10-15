@@ -1,0 +1,15 @@
+{
+  "schema": "nocturne-field-pilot/1",
+  "site_id": "replace-with-non-identifying-site-slug",
+  "source": "replace-with-trial-source",
+  "trial_sha256": "PASTE_HASH_FROM_TRIAL_JSON",
+  "synthetic": false,
+  "checks": {
+    "owner_permission": {"status": "pending", "evidence": ""},
+    "service_preservation": {"status": "pending", "evidence": ""},
+    "rollback": {"status": "pending", "evidence": ""},
+    "instrument_calibration": {"status": "pending", "evidence": ""},
+    "independent_control": {"status": "pending", "evidence": ""},
+    "preregistration": {"status": "pending", "evidence": ""}
+  }
+}
