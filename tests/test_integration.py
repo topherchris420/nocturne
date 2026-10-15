@@ -142,7 +142,8 @@ def test_without_a_controller_profile_compatibility_blocks_import(tmp_path, caps
     package = export_package(tmp_path, capsys, controller=None)
     approve(package / "readiness.json")
     result = evaluate_readiness(package / "readiness.json")
-    assert result["blockers"] == ["compatibility: no controller capability profile: rerun `nocturne schedule --controller`"]
+    assert result["blockers"] == ["compatibility: no controller compatibility report among the approved files: "
+                                  "rerun `nocturne schedule --controller`"]
 
 
 def test_a_rerun_never_overwrites_recorded_approvals(tmp_path, capsys):
@@ -201,3 +202,100 @@ def test_reconcile_warns_on_brighter_or_remapped_programmes():
     assert result["ok"] and result["matched"] == 2
     assert any("instead of 'local'" in w for w in result["warnings"])
     assert any("not in this wave" in w for w in result["warnings"])
+
+
+def test_a_second_wave_in_the_same_directory_is_not_covered_by_the_first_approval(tmp_path, capsys):
+    package = export_package(tmp_path, capsys)
+    approve(package / "readiness.json")
+    profile = tmp_path / "node.json"
+    assert main(["schedule", "--plan", str(tmp_path / "plan.csv"), "--wave", "2", "--controller", str(profile),
+                 "--out", str(package)]) == 0
+    capsys.readouterr()
+    blockers = evaluate_readiness(package / "readiness.json")["blockers"]
+    assert any("assignments-wave2.csv: in this directory but not covered" in b for b in blockers)
+
+
+def test_compatibility_is_rechecked_from_the_hashed_report_not_the_record(tmp_path, capsys):
+    package = export_package(tmp_path, capsys, controller=None)
+    record = package / "readiness.json"
+    approve(record)
+    doc = json.loads(record.read_text())
+    doc["compatibility_summary"] = doc["compatibility"] = {"checked": True, "compatible": True}
+    record.write_text(json.dumps(doc))
+    assert not evaluate_readiness(record)["ready"]                     # no compatibility.json was ever written
+
+
+def test_dropping_a_file_from_the_record_does_not_hide_an_edit(tmp_path, capsys):
+    package = export_package(tmp_path, capsys)
+    record = package / "readiness.json"
+    approve(record)
+    doc = json.loads(record.read_text())
+    del doc["files"]["programs.json"]
+    record.write_text(json.dumps(doc))
+    programs_file = package / "programs.json"
+    programs_file.write_text(programs_file.read_text().replace('"level": 60', '"level": 5', 1))
+    blockers = evaluate_readiness(record)["blockers"]
+    assert "programs.json is not among the approved files" in blockers
+    assert any("programs.json: in this directory but not covered" in b for b in blockers)
+
+
+def test_a_forged_compatibility_report_is_rechecked_against_the_programmes(tmp_path, capsys):
+    package = export_package(tmp_path, capsys)
+    report = json.loads((package / "compatibility.json").read_text())
+    report["capabilities"]["max_steps_per_program"] = 2              # a profile these programmes do not fit
+    (package / "compatibility.json").write_text(json.dumps(report))
+    record = json.loads((package / "readiness.json").read_text())
+    record["files"]["compatibility.json"] = __import__("vdl7.integration", fromlist=["x"]).sha256_file(package / "compatibility.json")
+    (package / "readiness.json").write_text(json.dumps(record))
+    approve(package / "readiness.json")
+    blockers = evaluate_readiness(package / "readiness.json")["blockers"]
+    assert any(b.startswith("compatibility:") and "the controller holds 2" in b for b in blockers)
+
+
+@pytest.mark.parametrize("edit", [lambda r: r.update(files=["programs.json"]), lambda r: r.update(gates=None),
+                                  lambda r: r["gates"].append(None), lambda r: r.update(files={"programs.json": 7})])
+def test_malformed_records_are_refused_with_a_message(tmp_path, capsys, edit):
+    package = export_package(tmp_path, capsys)
+    record = json.loads((package / "readiness.json").read_text())
+    edit(record)
+    (package / "readiness.json").write_text(json.dumps(record))
+    assert main(["readiness", str(package / "readiness.json")]) == 2
+    assert "nocturne: error:" in capsys.readouterr().err
+
+
+def test_a_daytime_step_that_could_hide_the_dusk_level_is_refused(tmp_path, capsys):
+    package = export_package(tmp_path, capsys)
+
+    def ambiguous(progs):
+        progs["local"]["steps"] = [{"at": "dusk", "level": 10}, {"at": "12:00", "level": 80}] + progs["local"]["steps"][1:]
+
+    assert main(write_readback(tmp_path, package, ambiguous)) == 2
+    assert "could come before or after dusk" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("steps", [[{"at": "dusk", "level": 80}, {"at": 2300, "level": 50}, {"at": "dawn", "level": 0}],
+                                   ["dusk 80", {"at": "dawn", "level": 0}],
+                                   [{"at": "dusk", "level": 80}, {"level": 50}, {"at": "dawn", "level": 0}]])
+def test_malformed_readback_steps_are_refused_with_a_message(tmp_path, capsys, steps):
+    package = export_package(tmp_path, capsys)
+    argv = write_readback(tmp_path, package, lambda progs: progs["local"].update(steps=steps))
+    assert main(argv) == 2
+    assert "nocturne: error:" in capsys.readouterr().err
+
+
+def test_an_empty_or_ragged_assignments_file_is_not_a_pass(tmp_path, capsys):
+    package = export_package(tmp_path, capsys)
+    argv = write_readback(tmp_path, package)
+    empty = tmp_path / "empty.csv"
+    empty.write_text("segment,ward,road_class,lights,program,switch_on\n")
+    argv[argv.index("--assignments") + 1] = str(empty)
+    assert main(argv) == 3
+    assert "lists no segments" in capsys.readouterr().out
+    empty.write_text("segment,ward,road_class,lights,program,switch_on\nS1,1\n")
+    assert main(argv) == 2
+    assert "row 2" in capsys.readouterr().err
+
+
+def test_a_fractional_time_resolution_is_refused():
+    with pytest.raises(ValueError, match="time_resolution_min"):
+        read_capabilities(caps(time_resolution_min=30.0))

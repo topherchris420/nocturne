@@ -534,8 +534,9 @@ def cmd_schedule(a) -> int:
     print("wrote", os.path.join(a.out, "programs.json"), file=sys.stderr)
     record = os.path.join(a.out, "readiness.json")
     if os.path.exists(record):                                 # never overwrite recorded approvals
-        print(f"nocturne: warning: kept the existing {record}; if these files changed, `nocturne readiness` will "
-              "say so; start a new record by moving the old one aside", file=sys.stderr)
+        print(f"nocturne: warning: kept the existing {record}: its approvals cover only the files it lists, and "
+              "`nocturne readiness` will refuse any file changed or added since. Export each wave to its own "
+              "directory, or move the old record aside to start again", file=sys.stderr)
     else:
         with open(record, "w") as f:
             f.write(json.dumps(readiness_record(a.out, files, compatibility), indent=2) + "\n")
@@ -559,13 +560,9 @@ def cmd_readiness(a) -> int:
 
 
 def cmd_reconcile(a) -> int:
-    from .integration import read_programs, read_readback_assignments, reconcile
+    from .integration import read_assignments, read_programs, read_readback_assignments, reconcile
     intended = read_programs(a.programs)
-    with open(a.assignments, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        if "segment" not in (reader.fieldnames or []) or "program" not in (reader.fieldnames or []):
-            raise ValueError(f"{a.assignments}: expected the assignments CSV from `nocturne schedule --plan`")
-        assignments = [(r["segment"].strip(), r["program"].strip()) for r in reader]
+    assignments = read_assignments(a.assignments)
     r = reconcile(intended, assignments, read_programs(a.cms_programs), read_readback_assignments(a.cms_assignments))
     if a.json:
         print(json.dumps(r, indent=2))
@@ -601,11 +598,11 @@ def cmd_check(a) -> int:
     from .derive import read as read_physical
     from .restore import ProjectError, check, read_project
     raw = read_project(a.project)
-    if isinstance(raw, dict) and "schema" in raw:              # a physical district: check its own format
+    if isinstance(raw, dict) and "schema" in raw:              # a physical district: check it, then what it derives
+        from .derive import derive
         try:
             read_physical(raw)
-            report = {"ok": True, "problems": [], "warnings": [],
-                      "note": "physical district: run `nocturne derive` to compute the project"}
+            report = dict(check(derive(raw)), note="physical district: run `nocturne derive` to compute the project")
         except ProjectError as e:
             report = {"ok": False, "problems": [{"path": p, "message": m} for p, m in e.problems], "warnings": []}
     else:

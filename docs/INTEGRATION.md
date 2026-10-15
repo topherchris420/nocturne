@@ -57,7 +57,14 @@ What cannot be adapted that way is **refused** and nothing is written: a level a
 | Rollback | Can every node in the wave return to its previous programme within one night, tested? |
 | Operations | Is a 311 "street too dark" route to an operator override staffed, and the crash brake scheduled? |
 
-For each gate set `status` to `approved` (or `not_applicable`, with the reason as evidence) and fill `approved_by`, `role`, `date` (YYYY-MM-DD, not in the future) and `evidence` (a document or ticket reference). `nocturne readiness` exits 0 only when every gate is recorded, the programmes were checked against a controller profile and fit it, and no file has changed since the record was made. Change a programme after approval and the record fails: regenerate, and approve again.
+For each gate set `status` to `approved` (or `not_applicable`, with the reason as evidence) and fill `approved_by`, `role`, `date` (YYYY-MM-DD, not in the future) and `evidence` (a document or ticket reference). `nocturne readiness` exits 0 only when:
+
+- every gate is recorded;
+- `programs.json` is among the recorded files, and no recorded file has changed or gone missing since;
+- every package file in the directory (`programs.json`, `compatibility.json`, `assignments*.csv`) is covered by the record, so a second wave exported into the same directory is not covered by the first wave's approvals;
+- the recorded `compatibility.json` holds a controller profile, and every programme in `programs.json` is checked against it again, rather than trusting a summary someone could edit.
+
+Change a programme after approval and the record fails: regenerate, and approve again. Export each wave to its own directory.
 
 ## Reconciling the CMS readback
 
@@ -75,4 +82,4 @@ After the import, export what the CMS reports it holds, in two files:
 | Brighter than intended at some hours | Warning: safe, but the saving is smaller |
 | Segments in the readback that are not in this wave | Warning |
 
-`nocturne reconcile` exits 0 only without errors. It compares files; it does not measure light. Spot photometry and the nodes' own metering confirm what the lamps deliver.
+A programme whose fixed-time steps fall between 12:00 and 15:59 is refused as input: such a step could come before or after dusk, so the level from dusk would be ambiguous. An assignments file with no segments is an error, not a pass. `nocturne reconcile` exits 0 only without errors. It compares files; it does not measure light. Spot photometry and the nodes' own metering confirm what the lamps deliver.

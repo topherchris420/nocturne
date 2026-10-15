@@ -231,3 +231,51 @@ def test_reordering_inputs_with_interactions_changes_nothing():
         s["options"].reverse()
     again = solve(shuffled)
     assert again["actions"] == original["actions"] and again["receptors"] == original["receptors"]
+
+
+@pytest.mark.parametrize("when", [{"street": [["shield"]]}, {"street": {"shield": True}}, {"street": []}])
+def test_malformed_interaction_conditions_are_problems_not_crashes(when):
+    project = tiny(interactions=[{"id": "k", "label": "k", "when": when, "delta_mcd_m2": {"s": 0.1}, "evidence": "test"}])
+    with pytest.raises(ProjectError, match="interactions"):
+        solve(project)
+    assert not check(project)["ok"]
+
+
+def test_check_refuses_what_restore_refuses():
+    project = tiny(interactions=[{"id": "too-good", "label": "Impossible", "when": {"sign": "off"},
+                                  "delta_mcd_m2": {"s": -5}, "evidence": "test"}])
+    report = check(project)
+    assert not report["ok"] and "remove more light" in report["problems"][0]["message"]
+
+
+def test_central_values_cannot_sink_a_plan_that_holds_at_the_pessimistic_end():
+    # Shield and sign-off leave 0.1 mcd/m². The synergy's central value (-0.2) would remove more than that,
+    # but the plan is made on the pessimistic end (+0.1), which is valid.
+    project = tiny()
+    project["scenarios"][0]["unmanaged_mcd_m2"] = {"near": 0, "far": 0}
+    project["scenarios"][0]["contributions_mcd_m2"]["street"] = {"near": 0.2, "far": 0.2}
+    project["scenarios"][0]["contributions_mcd_m2"]["sign"] = {"near": 0.05, "far": 0.05}
+    project["interactions"] = [{"id": "k", "label": "k", "when": {"street": "shield", "sign": "off"},
+                                "delta_mcd_m2": {"s": [-0.5, 0.1]}, "evidence": "test"}]
+    assert check(project)["ok"]
+    result = solve(project)
+    assert result["status"] == "feasible"
+    assert result["uncertainty"]["central_plan"]["status"] == "not_computed"
+    assert result["uncertainty"]["cost_of_uncertainty_usd"] is None
+
+
+def test_an_option_that_costs_nothing_and_does_nothing_is_not_an_action():
+    project = tiny()
+    for r in project["receptors"]:
+        r["target_mcd_m2"] = 5                                       # already met
+    project["sources"][0]["options"].append({"id": "add-signage", "label": "Add signage", "cost_usd": 0,
+                                             "service_fraction": 1, "reviewed": True,
+                                             "remaining_fraction": {"s": 1}, "evidence": "test"})
+    assert solve(project)["actions"] == []
+
+
+def test_a_project_too_large_to_search_is_a_check_problem(monkeypatch):
+    import vdl7.restore as restoration
+    monkeypatch.setattr(restoration, "MAX_PORTFOLIOS", 1)
+    report = check(district())
+    assert not report["ok"] and "exact-search limit" in report["problems"][0]["message"]

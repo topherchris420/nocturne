@@ -121,7 +121,7 @@ _D_GRID = [10 ** (1.0 + 4.3 * i / 119) for i in range(120)]          # 10 m .. 2
 _Z_GRID = [0.0] + [0.01 * (160000.0 / 0.01) ** (i / 999) for i in range(1000)]  # 0, 1 cm .. 160 km
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=64)                   # small tables: one per atmosphere a derivation or study uses
 def _kernels(atm: Atmosphere) -> Dict[Tuple[str, str], List[float]]:
     """Zenith luminance (cd/m^2) at distance d per lumen of upward flux, for
     each (emission, scatterer): emission 'lambert' or 'iso', scatterer 'R'

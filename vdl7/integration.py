@@ -38,6 +38,8 @@ READINESS_SCHEMA = "nocturne-readiness/1"
 RESOLUTIONS = (1, 5, 10, 15, 20, 30, 60)
 NIGHT_START = 12 * 60                        # minutes are counted from noon so a night never wraps
 NOMINAL_DUSK, NOMINAL_DAWN = 18 * 60, 31 * 60   # 18:00 and 07:00 next day: weights for choosing merges only
+DAYTIME_END = 16 * 60                        # a fixed step from 12:00 to 15:59 could fall before or after dusk
+PACKAGE_FILE = re.compile(r"(programs\.json|compatibility\.json|assignments(-wave\d+)?\.csv)")
 CAPS_FIELDS = ("schema", "name", "source", "verified", "dusk_dawn", "max_steps_per_program", "time_resolution_min",
                "min_level_pct", "max_level_pct", "level_step_pct", "max_programs")
 
@@ -96,7 +98,8 @@ def read_capabilities(caps):
     integer("max_level_pct", 1, 100)
     integer("level_step_pct", 1, 50)
     integer("max_programs", 1, 100_000)
-    if "time_resolution_min" in caps and caps["time_resolution_min"] not in RESOLUTIONS:
+    if "time_resolution_min" in caps and (type(caps["time_resolution_min"]) is not int
+                                          or caps["time_resolution_min"] not in RESOLUTIONS):
         problems.append(f"time_resolution_min: one of {', '.join(map(str, RESOLUTIONS))}")
     if not problems and caps["min_level_pct"] > caps["max_level_pct"]:
         problems.append("min_level_pct is above max_level_pct")
@@ -109,7 +112,7 @@ def read_capabilities(caps):
 
 def _minute(at):
     """'HH:MM' -> minutes since noon (after-midnight times land the next day)."""
-    m = re.fullmatch(r"(\d{2}):(\d{2})", at)
+    m = re.fullmatch(r"(\d{2}):(\d{2})", at) if isinstance(at, str) else None
     if not m or int(m.group(1)) > 23 or int(m.group(2)) > 59:
         raise ValueError(f"step time {at!r}: expected HH:MM")
     t = int(m.group(1)) * 60 + int(m.group(2))
@@ -122,12 +125,18 @@ def _clock(minute):
 
 
 def _validate_steps(steps, name):
-    if (not isinstance(steps, list) or len(steps) < 2 or steps[0].get("at") != "dusk"
-            or steps[-1] != {"at": "dawn", "level": 0}):
-        raise ValueError(f"{name}: a programme runs from a 'dusk' step to a final {{'at': 'dawn', 'level': 0}}")
+    if (not isinstance(steps, list) or len(steps) < 2
+            or not all(isinstance(s, dict) and "at" in s and "level" in s for s in steps)
+            or steps[0]["at"] != "dusk" or steps[-1]["at"] != "dawn" or steps[-1]["level"] != 0):
+        raise ValueError(f"{name}: a programme is a list of {{'at': 'dusk' | 'HH:MM' | 'dawn', 'level': percent}} "
+                         "steps, from 'dusk' to a final {'at': 'dawn', 'level': 0}")
     times = [_minute(s["at"]) for s in steps[1:-1]]
     if times != sorted(set(times)):
         raise ValueError(f"{name}: fixed-time steps must be in night order without repeats")
+    early = [_clock(t) for t in times if t < DAYTIME_END]
+    if early:
+        raise ValueError(f"{name}: a step at {early[0]} could come before or after dusk, so the dusk level is "
+                         "ambiguous; fixed-time steps run from 16:00 to 11:59")
     for s in steps[:-1]:
         lv = s.get("level")
         if isinstance(lv, bool) or not isinstance(lv, (int, float)) or not 0 < lv <= 100:
@@ -242,7 +251,7 @@ def adapt_programs(programs, caps):
     when an issue cannot be adapted."""
     caps = read_capabilities(caps)
     report = {"controller": caps["name"], "source": caps["source"], "verified": caps["verified"],
-              "programs": {}, "blocking": []}
+              "capabilities": caps, "programs": {}, "blocking": []}
     if len(programs) > caps["max_programs"]:
         report["blocking"].append(f"{len(programs)} programmes; the controller/CMS holds {caps['max_programs']}")
     adapted = {}
@@ -288,45 +297,81 @@ def readiness_record(directory, files, compatibility=None):
                     "and set status to approved, or to not_applicable with the reason as evidence. Do not edit the files "
                     "below after approval: their hashes are checked.",
             "files": {name: sha256_file(directory / name) for name in sorted(files)},
-            "compatibility": compatibility or {"checked": False,
-                                               "detail": "no controller capability profile: rerun `nocturne schedule --controller`"},
+            "compatibility_summary": compatibility or {"checked": False,
+                                                       "detail": "no controller capability profile: rerun `nocturne schedule --controller`"},
             "gates": [{"id": gid, "title": title, "question": question, "status": "pending",
                        "approved_by": "", "role": "", "date": "", "evidence": ""} for gid, title, question in GATES]}
 
 
+def _compatibility(directory, listed, unchanged):
+    """(blocker, passed) from the hashed compatibility report, re-checked against programs.json."""
+    if "compatibility.json" not in listed:
+        return ("compatibility: no controller compatibility report among the approved files: "
+                "rerun `nocturne schedule --controller`", None)
+    if "compatibility.json" not in unchanged or "programs.json" not in unchanged:
+        return None, None                             # a changed, missing or unlisted file is already a blocker
+    try:
+        report = json.loads((directory / "compatibility.json").read_text(encoding="utf-8"))
+        caps = read_capabilities(report["capabilities"])
+        programs = read_programs(directory / "programs.json")
+    except (ValueError, KeyError, TypeError) as e:
+        return f"compatibility.json: not a compatibility report for these programmes ({e})", None
+    problems = [] if report.get("compatible") is True else ["the report records blocking issues"]
+    if len(programs) > caps["max_programs"]:
+        problems.append(f"{len(programs)} programmes; the controller holds {caps['max_programs']}")
+    for name, steps in programs.items():
+        problems.extend(f"{name}: {i['detail']}" for i in check_program(steps, caps))
+    if problems:
+        return "compatibility: " + "; ".join(problems), None
+    return None, (f"compatibility: every programme in programs.json fits {caps['name']}"
+                  + ("" if caps["verified"] else " (profile declared, not yet bench-verified: see the equipment gate)"))
+
+
 def evaluate_readiness(record_path):
-    """READY only if the files are unchanged, the programmes fit a declared
-    controller, and every gate is approved (or not applicable) with a named
-    person, role, date and evidence reference."""
+    """READY only if every package file in the directory is in the record and
+    unchanged, the programmes fit the controller profile in the hashed
+    compatibility report, and every gate is approved (or not applicable) with a
+    named person, role, date and evidence reference."""
     path = Path(record_path)
-    record = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise ValueError(f"{record_path}: not JSON ({e})") from None
     if not isinstance(record, dict) or record.get("schema") != READINESS_SCHEMA:
         raise ValueError(f"{record_path}: not a readiness record ({READINESS_SCHEMA})")
-    blockers, passed = [], []
-    for name, digest in sorted(record.get("files", {}).items()):
+    files, gates = record.get("files"), record.get("gates")
+    if not isinstance(files, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in files.items()):
+        raise ValueError(f"{record_path}: 'files' must map file names to SHA-256 digests")
+    if not isinstance(gates, list) or not all(isinstance(g, dict) for g in gates):
+        raise ValueError(f"{record_path}: 'gates' must be a list of objects")
+    blockers, passed, unchanged = [], [], set()
+    for name, digest in sorted(files.items()):
         target = path.parent / name
-        if not target.exists():
+        if Path(name).name != name or name in ("", ".", ".."):
+            blockers.append(f"file {name!r}: must be a file in the record's own directory")
+        elif not target.is_file():
             blockers.append(f"file {name}: missing")
         elif sha256_file(target) != digest:
             blockers.append(f"file {name}: changed after this record was made; approvals no longer apply to it")
         else:
+            unchanged.add(name)
             passed.append(f"file {name}: unchanged")
-    if not record.get("files"):
-        blockers.append("the record lists no files")
-    compat = record.get("compatibility", {})
-    if not compat.get("checked"):
-        blockers.append("compatibility: " + compat.get("detail", "not checked against a controller profile"))
-    elif not compat.get("compatible"):
-        blockers.append("compatibility: " + "; ".join(compat.get("blocking", [])))
-    else:
-        passed.append(f"compatibility: fits {compat.get('controller')}"
-                      + ("" if compat.get("verified") else " (profile declared, not yet bench-verified: see the equipment gate)"))
-    seen = {g.get("id") for g in record.get("gates", []) if isinstance(g, dict)}
+    if "programs.json" not in files:
+        blockers.append("programs.json is not among the approved files")
+    for other in sorted(p.name for p in path.parent.iterdir() if p.is_file()):
+        if PACKAGE_FILE.fullmatch(other) and other not in files:
+            blockers.append(f"file {other}: in this directory but not covered by this record; approvals do not extend to it")
+    blocker, ok = _compatibility(path.parent, files, unchanged)
+    if blocker:
+        blockers.append(blocker)
+    if ok:
+        passed.append(ok)
+    seen = {g.get("id") for g in gates}
     for gid, title, _ in GATES:
         if gid not in seen:
             blockers.append(f"{title}: gate missing from the record")
-    for g in record.get("gates", []):
-        title = g.get("title", g.get("id", "gate"))
+    for g in gates:
+        title = str(g.get("title") or g.get("id") or "gate")
         status = g.get("status")
         if status not in GATE_STATUSES:
             blockers.append(f"{title}: status must be one of {', '.join(GATE_STATUSES)}")
@@ -361,6 +406,8 @@ def reconcile(programs, assignments, readback_programs, readback_assignments):
     hold, or any minute darker than intended is an error; brighter is a warning
     (light kept, saving lost)."""
     errors, warnings, ok = [], [], 0
+    if not assignments:
+        errors.append("the assignments file lists no segments: nothing was reconciled")
     intended_segments = set()
     darker_at = {}                                # (held, intended) -> first darker minute, computed once per pair
     for segment, intended in assignments:
@@ -395,6 +442,23 @@ def reconcile(programs, assignments, readback_programs, readback_assignments):
     return {"matched": ok, "errors": errors, "warnings": warnings, "ok": not errors}
 
 
+def read_assignments(path):
+    """[(segment, programme)] from the assignments CSV that `nocturne schedule --plan` wrote."""
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        missing = [c for c in ("segment", "program") if c not in (reader.fieldnames or [])]
+        if missing:
+            raise ValueError(f"{path}: expected the assignments CSV from `nocturne schedule --plan` "
+                             f"(missing {', '.join(missing)})")
+        out = []
+        for n, row in enumerate(reader, start=2):
+            seg, prog = (row.get("segment") or "").strip(), (row.get("program") or "").strip()
+            if not seg or not prog:
+                raise ValueError(f"{path}, row {n}: segment and program are required")
+            out.append((seg, prog))
+    return out
+
+
 def read_readback_assignments(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -403,7 +467,7 @@ def read_readback_assignments(path):
             raise ValueError(f"{path}: needs the columns segment,program (missing {', '.join(missing)})")
         out = {}
         for n, row in enumerate(reader, start=2):
-            seg, prog = (row["segment"] or "").strip(), (row["program"] or "").strip()
+            seg, prog = (row.get("segment") or "").strip(), (row.get("program") or "").strip()
             if not seg or not prog:
                 raise ValueError(f"{path}, row {n}: segment and program are required")
             if seg in out and out[seg] != prog:
@@ -414,7 +478,10 @@ def read_readback_assignments(path):
 
 def read_programs(path):
     """{name: steps} from a programs.json (or a CMS readback in the same shape)."""
-    doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise ValueError(f"{path}: not JSON ({e})") from None
     progs = doc.get("programs", doc) if isinstance(doc, dict) else None
     if not isinstance(progs, dict) or not progs:
         raise ValueError(f"{path}: expected {{'programs': {{name: {{'steps': [...]}}}}}}")

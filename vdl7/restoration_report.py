@@ -65,6 +65,8 @@ def render(result):
             lines.append(f"On central values the cheapest plan would cost ${central['cost_usd']:,.2f}. Planning for the "
                          f"pessimistic case costs ${uncertainty['cost_of_uncertainty_usd']:,.2f} more: that is what better "
                          "measurement of the largest remaining terms could save.")
+        elif central.get("status") == "not_computed":
+            lines.append(f"No plan was computed on central values: {central.get('reason', '')}")
         elif central:
             lines.append(f"On central values alone the planner's status would be: {central.get('status', 'unknown').replace('_', ' ')}.")
         sections.append("<h2>What uncertainty costs</h2>" + "".join(f"<p>{e(x)}</p>" for x in lines))

@@ -174,3 +174,14 @@ console.log(JSON.stringify(out));
     assert out[15] == {"value": 2400.5} and "error" in out[16]
     assert out[17] == "0.3 – 0.5" and out[18] == "0.3"
     assert out[19] == "office-windows-2" and out[20] == "keep-2"
+
+
+def test_saving_keeps_the_files_permissions(served, tmp_path):
+    import os
+    import stat
+    path = tmp_path / "plan.json"
+    shutil.copy(ROOT / "examples/restoration/district.json", path)
+    os.chmod(path, 0o664)
+    call, _, _ = served(path)
+    assert call("POST", "/api/save", {"project": district()})[0] == 200
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o664

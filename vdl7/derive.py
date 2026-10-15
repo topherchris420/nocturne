@@ -162,11 +162,24 @@ def read(physical):
         options = s.get("options", _MISSING)
         if options is not _MISSING and (not isinstance(options, list) or not options):
             ck.add(f"{path}.options", "expected a nonempty list of options")
+        seen = set()
         for o in options if isinstance(options, list) else []:
             oid = o.get("id") if isinstance(o, dict) else None
             opath = f"{path}.options[{oid}]"
             if not ck.fields(o, ("id", "label", "cost_usd", "service_fraction", "reviewed", "evidence", "change"), (), opath):
                 continue
+            # The same checks `restore` applies to the derived option, reported here before any computing.
+            if ck.text(o["id"], f"{opath}.id") is not None:
+                if oid == "keep":
+                    ck.add(opath, "option id 'keep' is reserved for the unchanged baseline")
+                elif oid in seen:
+                    ck.add(opath, f"duplicate id {oid!r}")
+                seen.add(oid)
+            ck.text(o["label"], f"{opath}.label")
+            ck.text(o["evidence"], f"{opath}.evidence")
+            ck.cents(o["cost_usd"], f"{opath}.cost_usd")
+            ck.number(o["service_fraction"], f"{opath}.service_fraction", high=1)
+            ck.flag(o["reviewed"], f"{opath}.reviewed")
             change = o["change"]
             if not ck.fields(change, (), CHANGE_FIELDS, f"{opath}.change"):
                 continue
@@ -235,9 +248,16 @@ def derive(physical):
     def calibrated(v):
         return _round(v * low) if low == high else [_round(v * low), _round(v * central), _round(v * high)]
 
-    before = {(sid, cid, rid): luminance_mcd(s["emitters"], s["spectrum"], d["conditions"][cid],
-                                             d["receptors"][rid]["at"], d["coordinates"])
-              for sid, s in d["sources"].items() for cid in cids for rid in rids}
+    # Conditions outermost: each atmosphere's scattering kernels are computed once and reused while hot.
+    before, after = {}, {}
+    for cid in cids:
+        c = d["conditions"][cid]
+        for sid, s in d["sources"].items():
+            for rid in rids:
+                at = d["receptors"][rid]["at"]
+                before[sid, cid, rid] = luminance_mcd(s["emitters"], s["spectrum"], c, at, d["coordinates"])
+                for n, o in enumerate(s["options"]):
+                    after[sid, n, cid, rid] = luminance_mcd(s["emitters"], s["spectrum"], c, at, d["coordinates"], o["change"])
     scenarios, sources, problems = [], [], []
     for cid in cids:
         unmanaged = d["conditions"][cid]["unmanaged"]
@@ -247,15 +267,13 @@ def derive(physical):
                                                    for sid in sorted(d["sources"])}})
     for sid, s in sorted(d["sources"].items()):
         options = []
-        for o in s["options"]:
+        for n, o in enumerate(s["options"]):
             fractions = {}
             for cid in cids:
                 fractions[cid] = {}
                 for rid in rids:
-                    after = luminance_mcd(s["emitters"], s["spectrum"], d["conditions"][cid], d["receptors"][rid]["at"],
-                                          d["coordinates"], o["change"])
                     b = before[sid, cid, rid]
-                    f = after / b if b > 1e-12 else 1.0
+                    f = after[sid, n, cid, rid] / b if b > 1e-12 else 1.0
                     if f > FRACTION_MAX_V2:
                         problems.append((f"sources[{sid}].options[{o['raw']['id']}].change",
                                          f"multiplies the light at {rid} under {cid} by {f:.1f}, more than {FRACTION_MAX_V2:g}x"))

@@ -156,3 +156,27 @@ def test_luminance_is_zero_without_light():
                  "reflectance_multiplier": 1.0}
     emitter = {"at": (0, 0), "radius_m": 50, "lumens": 0, "uplight": 0.5, "reflectance": 0.2}
     assert luminance_mcd([emitter], "3000K", condition, (100, 0), "local_m") == 0
+
+
+def test_check_on_a_physical_district_reports_option_errors(tmp_path, capsys):
+    physical = one_emitter()
+    option = physical["sources"][0]["options"][0]
+    option.update(cost_usd="1,200", reviewed="yes")
+    physical["sources"][0]["options"].append(dict(option))
+    path = tmp_path / "physical.json"
+    path.write_text(json.dumps(physical))
+    assert main(["check", str(path)]) == 2
+    out = capsys.readouterr().out
+    assert "cost_usd" in out and "reviewed" in out and "duplicate id" in out
+    with pytest.raises(ProjectError, match="duplicate"):
+        read(physical)
+
+
+def test_many_conditions_reuse_each_atmosphere(monkeypatch):
+    import vdl7.skyglow as skyglow
+    physical = one_emitter({"uplight_fraction": 0.0})
+    physical["conditions"] = [{"id": f"c{i}", "label": f"C{i}", "aod_550": 0.05 + 0.04 * i, "unmanaged_mcd_m2": 0.2}
+                              for i in range(12)]
+    skyglow._kernels.cache_clear()
+    derive(physical)
+    assert skyglow._kernels.cache_info().misses == 12               # one kernel table per atmosphere, never rebuilt

@@ -363,11 +363,17 @@ def validate(project):
                     ck.add(f"{path}.when", f"unknown source {sid!r}")
                     continue
                 wanted = wanted if isinstance(wanted, list) else [wanted]
+                if not all(isinstance(w, str) for w in wanted):
+                    ck.add(f"{path}.when.{sid}", "expected an option id, or a list of option ids")
+                    continue
                 listed = sources[sid].get("options")
                 known = {"keep", *(o.get("id") for o in (listed if isinstance(listed, list) else []) if isinstance(o, dict))}
                 bad = [w for w in wanted if w not in known]
-                if not wanted or bad:
-                    ck.add(f"{path}.when.{sid}", f"unknown option {', '.join(map(repr, bad)) or '(none given)'}; "
+                if not wanted:
+                    ck.add(f"{path}.when.{sid}", "name at least one option (or 'keep'), or leave this source out of the condition")
+                    continue
+                if bad:
+                    ck.add(f"{path}.when.{sid}", f"unknown option {', '.join(map(repr, bad))}; "
                                                  f"known: {', '.join(sorted(map(str, known)))}")
                     continue
                 conditions[sid] = frozenset(wanted)
@@ -400,6 +406,15 @@ def check(project):
         m = validate(project)
     except ProjectError as e:
         return {"ok": False, "problems": [{"path": p, "message": msg} for p, msg in e.problems], "warnings": []}
+    try:                                             # what `restore` would refuse, `check` refuses too
+        if any(v[HIGH] < 0 for k in m["interactions"] for d in k["delta"].values() for v in d.values()):
+            _search(m, 2 ** 62, HIGH)                # a synergy might remove more light than exists: look
+        else:
+            _search(m, 2 ** 62, HIGH, enumerate_portfolios=False)
+    except ProjectError as e:
+        return {"ok": False, "problems": [{"path": p, "message": msg} for p, msg in e.problems], "warnings": []}
+    except ValueError as e:
+        return {"ok": False, "problems": [{"path": "sources", "message": str(e)}], "warnings": []}
     warnings = []
 
     def warn(path, message):
@@ -485,7 +500,13 @@ def _total(terms, n):
     return out
 
 
-def _search(m, budget, case):
+def _rank(choice):
+    return (choice["option"] != "keep", choice["option"])
+
+
+def _search(m, budget, case, enumerate_portfolios=True):
+    """The best portfolio for one case of the values. With enumerate_portfolios
+    False, stop after the size check (for `check`)."""
     axes = _axes(m)
     n = len(axes)
     targets = [m["receptors"][rid]["target"] for _, rid in axes]
@@ -504,12 +525,13 @@ def _search(m, budget, case):
             choices.append({"source": sid, "option": oid, "cost_cents": cost, "remaining": remaining})
         floor = [v + min(o["remaining"][i] for o in choices) for i, v in enumerate(floor)]
         if sid not in interacting:
-            # Drop strictly dominated options after eligibility, retaining stable IDs on exact ties.
+            # Drop strictly dominated options after eligibility. On an exact tie "keep" wins (a change
+            # that costs nothing and does nothing is not an action), then the lower ID.
             # A source in an interaction keeps every option: a dearer, brighter one may unlock a synergy.
             choices = [o for o in choices if not any(
                 p is not o and p["cost_cents"] <= o["cost_cents"]
                 and all(a <= b for a, b in zip(p["remaining"], o["remaining"]))
-                and (p["cost_cents"] < o["cost_cents"] or p["remaining"] != o["remaining"] or p["option"] < o["option"])
+                and (p["cost_cents"] < o["cost_cents"] or p["remaining"] != o["remaining"] or _rank(p) < _rank(o))
                 for p in choices)]
         groups.append(choices)
     deltas = []
@@ -521,6 +543,8 @@ def _search(m, budget, case):
     if combinations > MAX_PORTFOLIOS:
         raise ValueError(f"{combinations:,} portfolios exceeds exact-search limit {MAX_PORTFOLIOS:,}; "
                          "combine sources into reviewed packages or reduce alternatives; no approximate result was produced")
+    if not enumerate_portfolios:
+        return {"combinations": combinations}
     best, best_key, count, cheapest_feasible = None, None, 0, None
     for portfolio in itertools.product(*groups):
         cost = sum(o["cost_cents"] for o in portfolio)
@@ -543,7 +567,7 @@ def _search(m, budget, case):
         progress = min(1.0 if b <= t + EPS else max(0.0, min(1.0, (b - v) / (b - t)))
                        for b, v, t in zip(baseline, remaining, targets))
         key = (0 if feasible else 1, cost if feasible else -progress, sum(remaining), cost,
-               tuple(o["option"] for o in portfolio))
+               tuple(_rank(o) for o in portfolio))
         if best_key is None or key < best_key:
             best_key = key
             best = (portfolio, cost, remaining, feasible, progress)
@@ -573,7 +597,12 @@ also reports what the cheapest plan would be on central values.
     m = validate(project)
     budget = m["budget_cents"] if budget_usd is None else cents(budget_usd, "budget_usd")
     plan = _search(m, budget, HIGH)
-    central = _search(m, budget, CENTRAL) if m["ranged"] else None
+    central, central_problem = None, None
+    if m["ranged"]:
+        try:
+            central = _search(m, budget, CENTRAL)
+        except ProjectError as e:                    # informational only: the plan stands on pessimistic values
+            central_problem = "; ".join(msg for _, msg in e.problems)
     axes, n, selection = plan["axes"], len(plan["axes"]), plan["selection"]
     terms_low = _terms(m, axes, selection, LOW)
     terms_high = _terms(m, axes, selection, HIGH)
@@ -598,6 +627,9 @@ also reports what the cheapest plan would be on central values.
                 "evidence": sources[sid]["options"][oid]["evidence"]}
                for sid, oid in sorted(selection.items()) if oid != "keep"]
     uncertainty = {"ranged_values": m["ranged"], "planning_case": "pessimistic end of every range"}
+    if central_problem:
+        uncertainty["central_plan"] = {"status": "not_computed", "reason": central_problem}
+        uncertainty["cost_of_uncertainty_usd"] = None
     if central is not None:
         uncertainty["central_plan"] = {
             "status": central["status"], "cost_usd": central["cost"] / 100,

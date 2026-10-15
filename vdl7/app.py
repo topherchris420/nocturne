@@ -20,6 +20,7 @@ import json
 import os
 import secrets
 import shutil
+import stat
 import sys
 import tempfile
 import threading
@@ -85,6 +86,8 @@ def save_atomically(path, project):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(text)
+        # mkstemp makes the file private (0600); the saved project keeps the original's permissions.
+        os.chmod(tmp, stat.S_IMODE(os.stat(path).st_mode) if path.exists() else 0o644)
         backup = None
         if path.exists():
             backup = path.with_name(path.name + ".bak")

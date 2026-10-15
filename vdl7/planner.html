@@ -249,7 +249,7 @@ function valueField(obj, key, path, label, opts) {
     input.classList.toggle("bad", !!parsed.error);
     input.title = parsed.error || o.title || "";
     if (parsed.error) input.dataset.localError = "1"; else delete input.dataset.localError;
-    if (!parsed.error) { obj[key] = parsed.value; changed(false); }
+    if (!parsed.error) { obj[key] = parsed.value; if (o.onvalue) o.onvalue(parsed.value); else changed(false); }
   });
   input.addEventListener("blur", () => { if (!input.classList.contains("bad")) input.value = o.money ? String(obj[key]) : formatValue(obj[key]); });
   if (o.paste) input.addEventListener("paste", (e) => o.paste(e, input));
@@ -476,14 +476,14 @@ function viewOption(s, o) {
 
 function pasteGrid(sc, rowKeys, colKeys, rowIndex, colIndex) {
   return (e, input) => {
-    const text = e.clipboardData.getData("text/plain");
-    if (!/[\t\n]/.test(text.trim())) return;
+    const text = e.clipboardData.getData("text/plain").replace(/(\r?\n)+$/, "");   // keep leading tabs: they are blank cells
+    if (!/[\t\n]/.test(text)) return;
     e.preventDefault();
-    const rows = text.trim().split(/\r?\n/).map((line) => line.split("\t"));
+    const rows = text.split(/\r?\n/).map((line) => line.split("\t"));
     const errors = [];
     rows.forEach((cells, i) => cells.forEach((cell, j) => {
       const rk = rowKeys[rowIndex + i], ck = colKeys[colIndex + j];
-      if (!rk || !ck) return;
+      if (!rk || !ck || cell.trim() === "") return;                               // a blank cell leaves the value as it is
       const parsed = parseValue(cell);
       if (parsed.error) { errors.push(`${cell.trim() || "(blank)"}`); return; }
       const target = rk === "__unmanaged" ? sc.unmanaged_mcd_m2 : sc.contributions_mcd_m2[rk];
@@ -524,15 +524,26 @@ function viewInteractions() {
       return h("div", { class: "card" },
         h("div", { class: "row" }, textField(k, "label", `${base}.label`, "What happens", { wide: true }), h("span", { class: "id", text: k.id }),
           h("button", { class: "danger", onclick: () => { list.splice(n, 1); changed(true); }, text: "Remove" })),
-        h("p", { class: "hint", text: "It happens when all of these are chosen:" }),
+        h("p", { class: "hint", text: "It happens when every source below is in one of its ticked states:" }),
         Object.entries(k.when).map(([sid, w]) => {
+          // Any of the ticked options triggers it; one tick is stored as one ID, several as a list.
           const s = sources().find((x) => x.id === sid);
-          const select = h("select", { "aria-label": "Option of " + sid, dataset: { path: `${base}.when.${sid}` },
-            onchange: (e) => { k.when[sid] = e.target.value; changed(false); } },
-            ["keep"].concat(s ? ids(s.options) : []).map((oid) => h("option", { value: oid, text: oid === "keep" ? "kept as it is" : (s.options.find((o) => o.id === oid) || {}).label || oid })));
-          select.value = [].concat(w)[0] || "keep";
-          return h("div", { class: "row" }, h("span", { text: s ? s.label : sid }), select,
-            h("button", { class: "link", onclick: () => { delete k.when[sid]; changed(true); }, text: "remove" }));
+          const chosen = new Set([].concat(w));
+          const boxes = ["keep"].concat(s ? ids(s.options) : []).map((oid) => {
+            const box = h("input", { type: "checkbox", onchange: (e) => {
+              if (e.target.checked) chosen.add(oid); else chosen.delete(oid);
+              const list = [...chosen];
+              k.when[sid] = list.length === 1 ? list[0] : list;
+              changed(false);
+            } });
+            box.checked = chosen.has(oid);
+            const name = oid === "keep" ? "kept as it is" : ((s.options.find((o) => o.id === oid) || {}).label || oid);
+            return h("label", { class: "check" }, box, name);
+          });
+          return h("div", { class: "card sub", dataset: { path: `${base}.when.${sid}` } },
+            h("div", { class: "head" }, h("strong", { text: (s ? s.label : sid) + " is…" }),
+              h("button", { class: "link", onclick: () => { delete k.when[sid]; changed(true); }, text: "remove" })),
+            h("div", { class: "row" }, boxes));
         }),
         (() => {
           const free = sources().filter((s) => !(s.id in k.when));
@@ -567,8 +578,9 @@ function viewPlan() {
   const out = [h("h1", { text: "Plan" }),
     h("p", { class: "lead", text: "The planner tries every combination of eligible options and keeps the cheapest that meets every target in every condition. If none does, it shows the best affordable partial plan and says why." }),
     h("div", { class: "card row" },
-      valueField(budget, "v", "", "Budget for this run (USD; the project keeps its own)", { money: true }),
-      h("button", { class: "primary", disabled: !ready, onclick: () => { state.budget = budget.v; solveNow(); },
+      valueField(budget, "v", "", "Budget for this run (USD; the project keeps its own)",
+        { money: true, onvalue: (v) => { state.budget = v; } }),          // a what-if, not an edit to the project
+      h("button", { class: "primary", disabled: !ready, onclick: solveNow,
         text: ready ? "Find the plan" : "Fix the problems first" }))];
   const r = state.result;
   if (!r) return out;
