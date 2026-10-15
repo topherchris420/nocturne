@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nocturne Planner</title>
+<link rel="icon" href="data:,">
+<style>
+/* A working tool for one engineer at a desk: tabs for the inputs in the order
+   they are usually gathered, a check panel that is always visible, and the plan
+   one click away. System fonts only: it must work offline. */
+:root {
+  --bg: #0a0f1c; --panel: #111a2c; --panel-2: #172238; --line: #27344d;
+  --fg: #e8ebf3; --muted: #94a0bb; --faint: #5f6b85;
+  --accent: #73d5c8; --accent-ink: #062320;
+  --good: #3fbf6b; --warn: #f0b454; --bad: #ff8a80; --bad-bg: #3a1c22; --warn-bg: #3a2e14;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f4f7; --panel: #ffffff; --panel-2: #eef1f6; --line: #d3d8e3;
+    --fg: #121826; --muted: #4f5b73; --faint: #8a94a8;
+    --accent: #0f7b6f; --accent-ink: #ffffff;
+    --good: #1f7a3f; --warn: #8a5a00; --bad: #b42318; --bad-bg: #fde8e6; --warn-bg: #fdf3dc;
+    color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 16px;
+  border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+.brand { font-weight: 650; letter-spacing: .02em; }
+.brand b { color: var(--accent); font-weight: 650; }
+.file { color: var(--muted); font-family: var(--mono); font-size: 13px; flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+.file .dirty { color: var(--warn); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+.actions select { flex: 1 1 160px; min-width: 0; max-width: 100%; }
+.btn, button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover, button:hover { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; }
+button.danger { color: var(--bad); }
+select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+.notice { margin: 12px 16px 0; padding: 10px 14px; border-left: 3px solid var(--warn); background: var(--warn-bg); border-radius: 4px; }
+.tabs { display: flex; gap: 4px; padding: 10px 16px 0; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.tabs button { border-radius: 8px 8px 0 0; border-bottom: none; background: transparent; color: var(--muted); white-space: nowrap; }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--fg); border-color: var(--line); }
+.tabs button .count { font-size: 12px; color: var(--bad); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+section[role="tabpanel"] { min-width: 0; }
+h1 { font-size: 22px; margin: 0 0 6px; font-weight: 650; }
+h2 { font-size: 17px; margin: 22px 0 8px; }
+h3 { font-size: 15px; margin: 0; }
+.lead { color: var(--muted); max-width: 760px; margin: 0 0 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0 0 12px; }
+.card.sub { background: var(--panel-2); }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 120px; }
+label.field.wide { flex: 1 1 280px; }
+label.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+input[type="text"], input:not([type]), textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 8px; width: 100%; color: var(--fg); }
+textarea { min-height: 64px; resize: vertical; }
+input:focus, textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bad { border-color: var(--bad) !important; background: var(--bad-bg) !important; }
+.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--warn); } to { box-shadow: 0 0 0 0 transparent; } }
+.id { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.scroll { overflow-x: auto; }
+table.grid { border-collapse: collapse; min-width: 100%; }
+table.grid th, table.grid td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: middle; }
+table.grid th { font-size: 13px; color: var(--muted); font-weight: 600; }
+table.grid td input { min-width: 92px; font-family: var(--mono); font-size: 13px; }
+table.grid tr.unmanaged td:first-child { color: var(--muted); font-style: italic; }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+aside { position: sticky; top: 112px; }
+@media (max-width: 960px) { aside { position: static; } }
+.status { font-weight: 650; margin: 0 0 8px; }
+.status.ok { color: var(--good); } .status.no { color: var(--bad); }
+.issues { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
+.issues li { margin: 0 0 8px; font-size: 13px; }
+.issues li button { text-align: left; display: block; width: 100%; background: transparent; border: 1px solid var(--line); }
+.issues li.problem button { border-left: 3px solid var(--bad); }
+.issues li.warning button { border-left: 3px solid var(--warn); }
+.issues .where { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; }
+.verdict { font-size: 26px; margin: 4px 0 10px; font-weight: 650; }
+.stats { display: flex; flex-wrap: wrap; gap: 28px; margin: 6px 0 16px; }
+.stats div { font-size: 13px; color: var(--muted); } .stats strong { display: block; font-size: 22px; color: var(--fg); }
+.targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.target { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.target.uncertain { border-color: var(--warn); } .target.not_met { border-color: var(--bad); }
+.target .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.bar { position: relative; height: 10px; border-radius: 5px; background: var(--line); margin: 8px 0; }
+.bar span { position: absolute; left: 0; top: 0; height: 100%; border-radius: 5px; background: var(--accent); }
+.bar i { position: absolute; top: 0; height: 100%; background: repeating-linear-gradient(45deg, rgba(255,255,255,.45) 0 3px, transparent 3px 6px); }
+.bar b { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--fg); }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.pill.met { background: var(--good); color: #fff; } .pill.uncertain { background: var(--warn); color: #1b1300; } .pill.not_met { background: var(--bad); color: #fff; }
+details summary { cursor: pointer; color: var(--muted); }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); font-style: italic; }
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--accent);
+  padding: 10px 16px; border-radius: 8px; z-index: 10; max-width: 90vw; }
+.steps { margin: 0; padding-left: 20px; } .steps li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Nocturne <b>Planner</b></div>
+  <div class="file" id="file" aria-live="polite">Loading…</div>
+  <div class="actions">
+    <select id="examples" aria-label="Open an example or a blank project"><option value="">New or example…</option></select>
+    <label class="btn">Open file…<input type="file" id="open" accept=".json,application/json" hidden></label>
+    <button id="save" title="Save back to the file this session was started with">Save</button>
+    <button id="download">Download project</button>
+  </div>
+</header>
+<div id="notice" class="notice" hidden></div>
+<nav class="tabs" role="tablist" aria-label="Project sections" id="tabs"></nav>
+<div class="layout">
+  <section role="tabpanel" id="panel" aria-live="polite"></section>
+  <aside class="card" aria-label="Checks">
+    <p class="status" id="status">Checking…</p>
+    <ul class="issues" id="issues"></ul>
+    <p class="hint">Checked as you type, with the same rules the command line uses. Click an item to go to the field.</p>
+  </aside>
+</div>
+<script>
+"use strict";
+// ---------------------------------------------------------------- values
+// <values> (exercised by tests/test_app.py through Node)
+function fmtNumber(x) { return String(Number(Number(x).toPrecision(6))); }
+function formatValue(v) { return Array.isArray(v) ? v.map(fmtNumber).join(" – ") : (v === undefined || v === null ? "" : fmtNumber(v)); }
+function parseValue(text, opts) {
+  const o = Object.assign({ range: true, negative: false }, opts || {});
+  const t = String(text).trim().replace(/−/g, "-");
+  const usage = o.range ? "use a number like 0.4, or a range like 0.3 – 0.5" : "use a number like 0.4";
+  if (t === "") return { error: "enter a value: " + usage };
+  const num = (s) => /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s) ? Number(s) : NaN;
+  const hyphen = t.match(/^(\d*\.?\d+)\s*-\s*(\d*\.?\d+)$/);
+  const parts = hyphen ? [hyphen[1], hyphen[2]] : t.split(/\s*(?:–|—|\.\.|\bto\b|;|\/)\s*/i).filter((p) => p !== "");
+  const values = parts.map(num);
+  if (!values.length || values.some((v) => !isFinite(v))) return { error: usage };
+  if (!o.negative && values.some((v) => v < 0)) return { error: "cannot be negative" };
+  if (values.length === 1) return { value: values[0] };
+  if (!o.range) return { error: "a single number here (" + usage + ")" };
+  if (values.length > 3) return { error: "a range is low – high, or low – central – high" };
+  for (let i = 1; i < values.length; i++) if (values[i] < values[i - 1]) return { error: "a range runs from low to high" };
+  if (values[0] === values[values.length - 1]) return { value: values[0] };
+  return { value: values };
+}
+function parseMoney(text) {
+  const t = String(text).trim().replace(/[$,\s]/g, "");
+  if (!/^(\d+\.?\d{0,2}|\.\d{1,2})$/.test(t)) return { error: "a dollar amount like 2400 or 2400.50" };
+  return { value: Number(t) };
+}
+function slug(text, taken) {
+  const base = String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "item";
+  let id = base, n = 2;
+  while (taken.includes(id) || id === "keep") id = base + "-" + n++;
+  return id;
+}
+// </values>
+
+// ---------------------------------------------------------------- state
+const token = new URLSearchParams(location.hash.slice(1)).get("token") || sessionStorage.getItem("nocturne-token") || "";
+if (token) { sessionStorage.setItem("nocturne-token", token); history.replaceState(null, "", location.pathname); }
+const state = { project: null, file: "", writable: false, fromFile: false, dirty: false, tab: "project",
+                check: { problems: [], warnings: [] }, result: null, budget: null };
+const TABS = [["project", "Project"], ["places", "Places & targets"], ["conditions", "Conditions"],
+              ["sources", "Sources & options"], ["light", "Light contributions"], ["interactions", "Interactions"], ["plan", "Plan"]];
+
+async function api(method, route, body) {
+  const res = await fetch(route, { method, headers: Object.assign({ "X-Nocturne-Token": token },
+    body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined });
+  const type = res.headers.get("Content-Type") || "";
+  const data = type.startsWith("application/json") ? await res.json() : await res.text();
+  if (!res.ok) { const err = new Error((data && data.error) || res.statusText); err.data = data; err.status = res.status; throw err; }
+  return data;
+}
+
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "text") el.textContent = v;
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat(Infinity)) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : String(c));
+  return el;
+}
+function toast(text) {
+  const t = h("div", { class: "toast", role: "status", text });
+  document.body.append(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+const P = () => state.project;
+const ids = (list) => list.map((x) => x.id);
+const receptors = () => P().receptors || [];
+const scenarios = () => P().scenarios || [];
+const sources = () => P().sources || [];
+
+function changed(structural) {
+  state.dirty = true; state.result = null;
+  ensureVersion();
+  renderFile();
+  scheduleCheck();
+  if (structural) render();
+}
+function ensureVersion() {
+  // Ranges, per-place effects and interactions need schema 2; a version 1 file is upgraded only when one is used.
+  const p = P();
+  if (p.schema_version === 2) return;
+  const hasRange = (v) => Array.isArray(v) || (v !== null && typeof v === "object" && Object.values(v).some(hasRange));
+  const ranged = (p.scenarios || []).some((sc) => hasRange(sc.unmanaged_mcd_m2) || hasRange(sc.contributions_mcd_m2)) ||
+                 (p.sources || []).some((s) => (s.options || []).some((o) => hasRange(o.remaining_fraction)));
+  const perPlace = (p.sources || []).some((s) => (s.options || []).some((o) => Object.values(o.remaining_fraction || {}).some((v) => v && typeof v === "object" && !Array.isArray(v))));
+  if (ranged || perPlace || (p.interactions && p.interactions.length)) {
+    p.schema_version = 2;
+    toast("Upgraded to project format 2 to hold ranges, per-place effects or interactions.");
+  }
+}
+
+// ---------------------------------------------------------------- fields
+function textField(obj, key, path, label, opts) {
+  const o = opts || {};
+  const input = h(o.multiline ? "textarea" : "input", { "aria-label": label, dataset: { path }, placeholder: o.placeholder,
+    oninput: (e) => { obj[key] = e.target.value; changed(false); if (o.after) o.after(); } });
+  input.value = obj[key] === undefined ? "" : obj[key];
+  return o.bare ? input : h("label", { class: "field" + (o.wide ? " wide" : "") }, label, input);
+}
+function valueField(obj, key, path, label, opts) {
+  const o = opts || {};
+  const input = h("input", { "aria-label": label, dataset: { path }, inputmode: "decimal", title: o.title });
+  input.value = o.money ? (obj[key] === undefined ? "" : String(obj[key])) : formatValue(obj[key]);
+  input.addEventListener("input", () => {
+    let parsed = o.money ? parseMoney(input.value) : parseValue(input.value, o);
+    if (!parsed.error && o.max !== undefined && [].concat(parsed.value).some((v) => v > o.max)) parsed = { error: "at most " + o.max };
+    input.classList.toggle("bad", !!parsed.error);
+    input.title = parsed.error || o.title || "";
+    if (parsed.error) input.dataset.localError = "1"; else delete input.dataset.localError;
+    if (!parsed.error) { obj[key] = parsed.value; if (o.onvalue) o.onvalue(parsed.value); else changed(false); }
+  });
+  input.addEventListener("blur", () => { if (!input.classList.contains("bad")) input.value = o.money ? String(obj[key]) : formatValue(obj[key]); });
+  if (o.paste) input.addEventListener("paste", (e) => o.paste(e, input));
+  return o.bare ? input : h("label", { class: "field" }, label, input);
+}
+function checkField(obj, key, path, label) {
+  const input = h("input", { type: "checkbox", dataset: { path }, onchange: (e) => { obj[key] = e.target.checked; changed(false); } });
+  input.checked = !!obj[key];
+  return h("label", { class: "check" }, input, label);
+}
+
+// ---------------------------------------------------------------- structure edits
+function addReceptor() {
+  const id = slug("place-" + (receptors().length + 1), ids(receptors()));
+  receptors().push({ id, label: "Observation point " + (receptors().length + 1), target_mcd_m2: 1 });
+  for (const sc of scenarios()) {
+    sc.unmanaged_mcd_m2[id] = 0;
+    for (const s of sources()) (sc.contributions_mcd_m2[s.id] = sc.contributions_mcd_m2[s.id] || {})[id] = 0;
+  }
+  for (const s of sources()) for (const o of s.options) for (const v of Object.values(o.remaining_fraction)) if (isPerPlace(v)) v[id] = 1;
+  for (const k of P().interactions || []) for (const v of Object.values(k.delta_mcd_m2)) if (isPerPlace(v)) v[id] = 0;
+  changed(true);
+}
+function removeReceptor(id) {
+  if (receptors().length < 2) return toast("A project needs at least one observation point.");
+  P().receptors = receptors().filter((r) => r.id !== id);
+  for (const sc of scenarios()) { delete sc.unmanaged_mcd_m2[id]; for (const row of Object.values(sc.contributions_mcd_m2)) delete row[id]; }
+  for (const s of sources()) for (const o of s.options) for (const v of Object.values(o.remaining_fraction)) if (isPerPlace(v)) delete v[id];
+  for (const k of P().interactions || []) for (const v of Object.values(k.delta_mcd_m2)) if (isPerPlace(v)) delete v[id];
+  changed(true);
+}
+function addScenario() {
+  const first = scenarios()[0];
+  const id = slug("condition-" + (scenarios().length + 1), ids(scenarios()));
+  const copy = JSON.parse(JSON.stringify(first || { unmanaged_mcd_m2: {}, contributions_mcd_m2: {} }));
+  scenarios().push({ id, label: first ? "Copy of " + first.label : "Condition " + (scenarios().length + 1),
+                     unmanaged_mcd_m2: copy.unmanaged_mcd_m2, contributions_mcd_m2: copy.contributions_mcd_m2 });
+  for (const s of sources()) for (const o of s.options) o.remaining_fraction[id] = JSON.parse(JSON.stringify(first ? o.remaining_fraction[first.id] : 1));
+  for (const k of P().interactions || []) k.delta_mcd_m2[id] = JSON.parse(JSON.stringify(first ? k.delta_mcd_m2[first.id] : 0));
+  changed(true);
+}
+function removeScenario(id) {
+  if (scenarios().length < 2) return toast("A project needs at least one condition.");
+  P().scenarios = scenarios().filter((s) => s.id !== id);
+  for (const s of sources()) for (const o of s.options) delete o.remaining_fraction[id];
+  for (const k of P().interactions || []) delete k.delta_mcd_m2[id];
+  changed(true);
+}
+function newOption(taken) {
+  const fractions = {};
+  for (const sc of scenarios()) fractions[sc.id] = 1;
+  return { id: slug("option-" + (taken.length + 1), taken), label: "New option", cost_usd: 0, service_fraction: 1, reviewed: false,
+           remaining_fraction: fractions, evidence: "Describe the measurement or calculation behind this effect." };
+}
+function addSource() {
+  const id = slug("source-" + (sources().length + 1), ids(sources()));
+  sources().push({ id, label: "New source", owner: "Owner to be confirmed", authorized: false, minimum_service_fraction: 1, options: [newOption([])] });
+  for (const sc of scenarios()) { sc.contributions_mcd_m2[id] = {}; for (const r of receptors()) sc.contributions_mcd_m2[id][r.id] = 0; }
+  changed(true);
+}
+function removeSource(id) {
+  if (sources().length < 2) return toast("A project needs at least one source.");
+  if (!confirm("Remove this source, its options and its light contributions?")) return;
+  P().sources = sources().filter((s) => s.id !== id);
+  for (const sc of scenarios()) delete sc.contributions_mcd_m2[id];
+  if (P().interactions) P().interactions = P().interactions.filter((k) => !(id in k.when));
+  changed(true);
+}
+function addOption(s) { s.options.push(newOption(ids(s.options))); changed(true); }
+function removeOption(s, oid) {
+  if (s.options.length < 2) return toast("A source needs at least one option; remove the source instead.");
+  s.options = s.options.filter((o) => o.id !== oid);
+  for (const k of P().interactions || []) {
+    const w = k.when[s.id];
+    if (w !== undefined) k.when[s.id] = [].concat(w).filter((x) => x !== oid);
+  }
+  changed(true);
+}
+function addInteraction() {
+  P().interactions = P().interactions || [];
+  const s = sources()[0];
+  const delta = {};
+  for (const sc of scenarios()) delta[sc.id] = 0;
+  P().interactions.push({ id: slug("interaction-" + (P().interactions.length + 1), ids(P().interactions)),
+    label: "New interaction", when: { [s.id]: s.options[0].id }, delta_mcd_m2: delta,
+    evidence: "Describe the observation behind this effect." });
+  changed(true);
+}
+function isPerPlace(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
+function upper(v) { return Array.isArray(v) ? v[v.length - 1] : v; }
+function togglePerPlace(obj, key) {
+  const v = obj[key];
+  if (isPerPlace(v)) {
+    const values = Object.values(v);
+    const same = values.every((x) => JSON.stringify(x) === JSON.stringify(values[0]));
+    if (!same && !confirm("Use the highest value for every place? (The conservative choice.)")) return;
+    obj[key] = values.reduce((a, b) => (upper(b) > upper(a) ? b : a));
+  } else {
+    obj[key] = {};
+    for (const r of receptors()) obj[key][r.id] = JSON.parse(JSON.stringify(v));
+  }
+  changed(true);
+}
+
+// ---------------------------------------------------------------- tabs
+function renderTabs() {
+  const nav = document.getElementById("tabs");
+  const left = nav.scrollLeft;
+  nav.replaceChildren(...TABS.map(([id, label]) => {
+    const n = state.check.problems.filter((p) => tabFor(p.path) === id).length;
+    return h("button", { role: "tab", "aria-selected": String(state.tab === id),
+      onclick: () => { state.tab = id; render(); } }, label, n ? h("span", { class: "count", text: " " + n }) : null);
+  }));
+  nav.scrollLeft = left;                     // on a phone the bar scrolls: keep the chosen tab in view
+  const chosen = nav.querySelector('[aria-selected="true"]');
+  if (chosen && (chosen.offsetLeft < nav.scrollLeft || chosen.offsetLeft + chosen.offsetWidth > nav.scrollLeft + nav.clientWidth))
+    nav.scrollLeft = chosen.offsetLeft - 16;
+}
+function tabFor(path) {
+  if (!path || /^(title|evidence|budget_usd|synthetic|schema_version|project|provenance)/.test(path)) return "project";
+  if (path.startsWith("receptors")) return "places";
+  if (/^scenarios\[[^\]]*\]\.(unmanaged|contributions)/.test(path)) return "light";
+  if (path.startsWith("scenarios")) return "conditions";
+  if (path.startsWith("sources")) return "sources";
+  if (path.startsWith("interactions")) return "interactions";
+  return "project";
+}
+function render() {
+  renderTabs();
+  const panel = document.getElementById("panel");
+  if (!P()) { panel.replaceChildren(h("p", { class: "empty", text: "Open a project, an example or a blank project to begin." })); return; }
+  const views = { project: viewProject, places: viewPlaces, conditions: viewConditions, sources: viewSources,
+                  light: viewLight, interactions: viewInteractions, plan: viewPlan };
+  panel.replaceChildren(...[views[state.tab]()].flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false));
+  markProblems();
+}
+
+function viewProject() {
+  const p = P();
+  return [
+    h("h1", { text: "Project" }),
+    h("p", { class: "lead", text: "Work backward from a darker sky: say which places must reach which brightness, what light reaches them, " +
+      "and which complete changes each owner could make. The planner finds the cheapest set of changes that meets every target in every condition." }),
+    h("div", { class: "card" },
+      h("div", { class: "row" }, textField(p, "title", "title", "Title", { wide: true }),
+        valueField(p, "budget_usd", "budget_usd", "Budget (USD)", { money: true })),
+      h("div", { class: "row", style: "margin-top:10px" }, textField(p, "evidence", "evidence", "Where the numbers come from", { multiline: true, wide: true })),
+      h("p", { style: "margin-top:10px" }, checkField(p, "synthetic", "synthetic", "These numbers are invented (a demonstration, not a plan)"))),
+    p.provenance && p.provenance.derived_by ? h("div", { class: "card sub" }, h("h3", { text: "Derived coefficients" }),
+      h("p", { class: "hint", text: p.provenance.derived_by + ": " + (p.provenance.method || "") }),
+      h("ul", {}, (p.provenance.limits || []).map((x) => h("li", { class: "hint", text: x })))) : null,
+    h("h2", { text: "How to use this" }),
+    h("ol", { class: "steps" },
+      h("li", { text: "Places & targets: the observation points to protect, and the most artificial sky brightness each may have." }),
+      h("li", { text: "Conditions: the nights to plan for (clear, hazy, snow…). Every target must hold in each one." }),
+      h("li", { text: "Sources & options: who owns each kind of light, and the complete changes they could make, with cost and effect." }),
+      h("li", { text: "Light contributions: how much each source adds at each place in each condition, from measurements or `nocturne derive`." }),
+      h("li", { text: "Plan: find the cheapest set of changes, then open the printable brief for the people who decide." })),
+    h("p", { class: "hint", text: "Values may be ranges (type 0.3 – 0.5): the plan must then work at the pessimistic end. Nothing here controls a light." })];
+}
+
+function viewPlaces() {
+  return [
+    h("div", { class: "head" }, h("h1", { text: "Places & targets" }), h("button", { onclick: addReceptor, text: "+ Add observation point" })),
+    h("p", { class: "lead", text: "Each target is the most artificial zenith sky brightness allowed at that place, in mcd/m² (thousandths of a candela per square metre), natural sky excluded. Lower is darker." }),
+    h("div", { class: "card scroll" }, h("table", { class: "grid" },
+      h("thead", {}, h("tr", {}, h("th", { text: "Observation point" }), h("th", { text: "Target (mcd/m²)" }), h("th", { text: "" }))),
+      h("tbody", {}, receptors().map((r) => h("tr", {},
+        h("td", {}, textField(r, "label", `receptors[${r.id}].label`, "Name of " + r.id, { bare: true }), h("span", { class: "id", text: r.id })),
+        h("td", {}, valueField(r, "target_mcd_m2", `receptors[${r.id}].target_mcd_m2`, "Target at " + r.label, { bare: true, range: false })),
+        h("td", {}, h("button", { class: "danger", onclick: () => removeReceptor(r.id), "aria-label": "Remove " + r.label, text: "Remove" })))))))];
+}
+
+function viewConditions() {
+  const prov = (P().provenance || {}).conditions || {};
+  return [
+    h("div", { class: "head" }, h("h1", { text: "Conditions" }), h("button", { onclick: addScenario, text: "+ Add condition" })),
+    h("p", { class: "lead", text: "The nights the plan must work on: a clear reference, haze, snow cover, a different time of night. They are stress cases, not probabilities: every target must hold in each. A new condition starts as a copy of the first; then change its light contributions." }),
+    scenarios().map((sc) => h("div", { class: "card" }, h("div", { class: "row" },
+      textField(sc, "label", `scenarios[${sc.id}].label`, "Name", { wide: true }),
+      h("span", { class: "id", text: sc.id }),
+      h("button", { class: "danger", onclick: () => removeScenario(sc.id), text: "Remove" })),
+      prov[sc.id] ? h("p", { class: "hint", text: "Derived with: " + Object.entries(prov[sc.id]).map(([k, v]) => k + " " + v).join(", ") }) : null))];
+}
+
+function viewSources() {
+  return [
+    h("div", { class: "head" }, h("h1", { text: "Sources & options" }), h("button", { onclick: addSource, text: "+ Add source" })),
+    h("p", { class: "lead", text: "A source is one owner's group of lights. Each option is a complete change (blinds plus zoning, shielding plus a schedule) with its cost, the share of useful lighting it keeps, and the share of the source's sky glow it leaves. The planner picks at most one option per source, or leaves it as it is." }),
+    sources().map((s) => h("div", { class: "card" },
+      h("div", { class: "row" },
+        textField(s, "label", `sources[${s.id}].label`, "Source", { wide: true }),
+        textField(s, "owner", `sources[${s.id}].owner`, "Owner", { wide: true }),
+        valueField(s, "minimum_service_fraction", `sources[${s.id}].minimum_service_fraction`, "Minimum service kept (0–1)", { range: false, max: 1 }),
+        h("span", { class: "id", text: s.id }),
+        h("button", { class: "danger", onclick: () => removeSource(s.id), text: "Remove source" })),
+      h("p", {}, checkField(s, "authorized", `sources[${s.id}].authorized`, "The owner has authorized changes (otherwise its light still counts, but its options are not used)")),
+      s.options.map((o) => viewOption(s, o)),
+      h("button", { onclick: () => addOption(s), text: "+ Add option" })))];
+}
+function viewOption(s, o) {
+  const base = `sources[${s.id}].options[${o.id}]`;
+  return h("div", { class: "card sub" },
+    h("div", { class: "row" },
+      textField(o, "label", `${base}.label`, "Option", { wide: true }),
+      valueField(o, "cost_usd", `${base}.cost_usd`, "Cost (USD)", { money: true }),
+      valueField(o, "service_fraction", `${base}.service_fraction`, "Service kept (0–1)", { range: false, max: 1 }),
+      h("span", { class: "id", text: o.id }),
+      h("button", { class: "danger", onclick: () => removeOption(s, o.id), text: "Remove option" })),
+    h("p", {}, checkField(o, "reviewed", `${base}.reviewed`, "Reviewed by the responsible engineer (unreviewed options are not used)")),
+    h("div", { class: "row" }, textField(o, "evidence", `${base}.evidence`, "Evidence for its cost and effect", { wide: true })),
+    h("p", { class: "hint", text: "Light left after the change, as a share of this source's sky glow (0 = all removed, 1 = no change, above 1 = more light toward that place)." }),
+    h("div", { class: "scroll" }, h("table", { class: "grid" }, h("tbody", {}, scenarios().map((sc) => {
+      const v = o.remaining_fraction[sc.id];
+      const cells = isPerPlace(v)
+        ? receptors().map((r) => h("label", { class: "field" }, r.label,
+            valueField(v, r.id, `${base}.remaining_fraction.${sc.id}.${r.id}`, `Light left at ${r.label}, ${sc.label}`, { bare: true, max: 10 })))
+        : [valueField(o.remaining_fraction, sc.id, `${base}.remaining_fraction.${sc.id}`, `Light left, ${sc.label}`, { bare: true, max: 10 })];
+      return h("tr", {}, h("th", { text: sc.label }), h("td", {}, h("div", { class: "row" }, cells)),
+        h("td", {}, h("button", { class: "link", onclick: () => togglePerPlace(o.remaining_fraction, sc.id),
+          text: isPerPlace(v) ? "Same at every place" : "Differs by place" })));
+    })))));
+}
+
+function pasteGrid(sc, rowKeys, colKeys, rowIndex, colIndex) {
+  return (e, input) => {
+    const text = e.clipboardData.getData("text/plain").replace(/(\r?\n)+$/, "");   // keep leading tabs: they are blank cells
+    if (!/[\t\n]/.test(text)) return;
+    e.preventDefault();
+    const rows = text.split(/\r?\n/).map((line) => line.split("\t"));
+    const errors = [];
+    rows.forEach((cells, i) => cells.forEach((cell, j) => {
+      const rk = rowKeys[rowIndex + i], ck = colKeys[colIndex + j];
+      if (!rk || !ck || cell.trim() === "") return;                               // a blank cell leaves the value as it is
+      const parsed = parseValue(cell);
+      if (parsed.error) { errors.push(`${cell.trim() || "(blank)"}`); return; }
+      const target = rk === "__unmanaged" ? sc.unmanaged_mcd_m2 : sc.contributions_mcd_m2[rk];
+      target[ck] = parsed.value;
+    }));
+    changed(true);
+    toast(errors.length ? `Pasted; ${errors.length} cell(s) skipped: ${errors.slice(0, 3).join(", ")}` : "Pasted from the spreadsheet.");
+  };
+}
+function viewLight() {
+  return [
+    h("h1", { text: "Light contributions" }),
+    h("p", { class: "lead", text: "Artificial zenith sky brightness each source adds at each place, in mcd/m², before any change. The last row is light no listed owner controls; it stays in every plan. Rows must not double count. You can paste a block of cells from a spreadsheet; ranges such as 0.3 – 0.5 are allowed." }),
+    scenarios().map((sc) => {
+      const rowKeys = sources().map((s) => s.id).concat(["__unmanaged"]);
+      const colKeys = ids(receptors());
+      return h("div", { class: "card" }, h("h2", { style: "margin-top:0", text: sc.label }), h("div", { class: "scroll" }, h("table", { class: "grid" },
+        h("thead", {}, h("tr", {}, h("th", { text: "Source" }), receptors().map((r) => h("th", { text: r.label })))),
+        h("tbody", {}, rowKeys.map((rk, i) => {
+          const unmanaged = rk === "__unmanaged";
+          const row = unmanaged ? sc.unmanaged_mcd_m2 : (sc.contributions_mcd_m2[rk] = sc.contributions_mcd_m2[rk] || {});
+          const label = unmanaged ? "Light no listed owner controls" : sources()[i].label;
+          const path = unmanaged ? `scenarios[${sc.id}].unmanaged_mcd_m2` : `scenarios[${sc.id}].contributions_mcd_m2.${rk}`;
+          return h("tr", { class: unmanaged ? "unmanaged" : "" }, h("td", { text: label }),
+            colKeys.map((ck, j) => h("td", {}, valueField(row, ck, `${path}.${ck}`, `${label} at ${receptors()[j].label}, ${sc.label}`,
+              { bare: true, paste: pasteGrid(sc, rowKeys, colKeys, i, j) }))));
+        })))));
+    })];
+}
+
+function viewInteractions() {
+  const list = P().interactions || [];
+  return [
+    h("div", { class: "head" }, h("h1", { text: "Interactions" }), h("button", { onclick: addInteraction, text: "+ Add interaction" })),
+    h("p", { class: "lead", text: "Within one condition, light from separate sources adds exactly. People and surfaces do not always: when the street dims, a shop may add floodlights (a rebound, positive); two changes may darken a shared wall (a synergy, negative). Declare such effects here and the planner charges them to the plans that trigger them." }),
+    list.length ? list.map((k, n) => {
+      const base = `interactions[${k.id}]`;
+      return h("div", { class: "card" },
+        h("div", { class: "row" }, textField(k, "label", `${base}.label`, "What happens", { wide: true }), h("span", { class: "id", text: k.id }),
+          h("button", { class: "danger", onclick: () => { list.splice(n, 1); changed(true); }, text: "Remove" })),
+        h("p", { class: "hint", text: "It happens when every source below is in one of its ticked states:" }),
+        Object.entries(k.when).map(([sid, w]) => {
+          // Any of the ticked options triggers it; one tick is stored as one ID, several as a list.
+          const s = sources().find((x) => x.id === sid);
+          const chosen = new Set([].concat(w));
+          const boxes = ["keep"].concat(s ? ids(s.options) : []).map((oid) => {
+            const box = h("input", { type: "checkbox", onchange: (e) => {
+              if (e.target.checked) chosen.add(oid); else chosen.delete(oid);
+              const list = [...chosen];
+              k.when[sid] = list.length === 1 ? list[0] : list;
+              changed(false);
+            } });
+            box.checked = chosen.has(oid);
+            const name = oid === "keep" ? "kept as it is" : ((s.options.find((o) => o.id === oid) || {}).label || oid);
+            return h("label", { class: "check" }, box, name);
+          });
+          return h("div", { class: "card sub", dataset: { path: `${base}.when.${sid}` } },
+            h("div", { class: "head" }, h("strong", { text: (s ? s.label : sid) + " is…" }),
+              h("button", { class: "link", onclick: () => { delete k.when[sid]; changed(true); }, text: "remove" })),
+            h("div", { class: "row" }, boxes));
+        }),
+        (() => {
+          const free = sources().filter((s) => !(s.id in k.when));
+          if (!free.length) return null;
+          const pick = h("select", { "aria-label": "Add a source to the condition" }, h("option", { value: "", text: "+ and when…" }),
+            free.map((s) => h("option", { value: s.id, text: s.label })));
+          pick.addEventListener("change", () => { if (pick.value) { const s = sources().find((x) => x.id === pick.value); k.when[s.id] = s.options[0].id; changed(true); } });
+          return h("p", {}, pick);
+        })(),
+        h("p", { class: "hint", text: "Change in sky brightness (mcd/m²) it causes; negative for a synergy:" }),
+        h("table", { class: "grid" }, h("tbody", {}, scenarios().map((sc) => {
+          const v = k.delta_mcd_m2[sc.id];
+          const cells = isPerPlace(v)
+            ? receptors().map((r) => h("label", { class: "field" }, r.label, valueField(v, r.id, `${base}.delta_mcd_m2.${sc.id}.${r.id}`, `Change at ${r.label}, ${sc.label}`, { bare: true, negative: true })))
+            : [valueField(k.delta_mcd_m2, sc.id, `${base}.delta_mcd_m2.${sc.id}`, `Change, ${sc.label}`, { bare: true, negative: true })];
+          return h("tr", {}, h("th", { text: sc.label }), h("td", {}, h("div", { class: "row" }, cells)),
+            h("td", {}, h("button", { class: "link", onclick: () => togglePerPlace(k.delta_mcd_m2, sc.id), text: isPerPlace(v) ? "Same at every place" : "Differs by place" })));
+        }))),
+        h("div", { class: "row" }, textField(k, "evidence", `${base}.evidence`, "Evidence", { wide: true })));
+    }) : h("p", { class: "empty", text: "No interactions declared: every source's effect adds independently." })];
+}
+
+// ---------------------------------------------------------------- the plan
+const VERDICT = { feasible: "Every target can be met.", budget_shortfall: "The targets need a larger budget.",
+                  outside_available_actions: "The targets need more actions or participants." };
+const STATUS = { met: "Met", uncertain: "Uncertain", not_met: "Not met" };
+function viewPlan() {
+  const p = P();
+  if (state.budget === null) state.budget = p.budget_usd;
+  const budget = { v: state.budget };
+  const ready = !state.check.problems.length;
+  const out = [h("h1", { text: "Plan" }),
+    h("p", { class: "lead", text: "The planner tries every combination of eligible options and keeps the cheapest that meets every target in every condition. If none does, it shows the best affordable partial plan and says why." }),
+    h("div", { class: "card row" },
+      valueField(budget, "v", "", "Budget for this run (USD; the project keeps its own)",
+        { money: true, onvalue: (v) => { state.budget = v; } }),          // a what-if, not an edit to the project
+      h("button", { class: "primary", disabled: !ready, onclick: solveNow,
+        text: ready ? "Find the plan" : "Fix the problems first" }))];
+  const r = state.result;
+  if (!r) return out;
+  const labels = r.source_labels || {};
+  const term = (t) => t === "unmanaged" ? "light no listed owner controls" : t.startsWith("interaction:") ? "interaction " + t.slice(12) : (labels[t] || t);
+  const met = r.receptors.filter((x) => x.target_status === "met").length;
+  out.push(
+    h("p", { class: "verdict", text: VERDICT[r.status] }),
+    h("div", { class: "stats" },
+      h("div", {}, h("strong", { text: "$" + r.cost_usd.toLocaleString() }), "selected cost"),
+      h("div", {}, h("strong", { text: "$" + r.budget_usd.toLocaleString() }), "budget"),
+      h("div", {}, h("strong", { text: r.minimum_feasible_cost_usd === null ? "—" : "$" + r.minimum_feasible_cost_usd.toLocaleString() }), "least cost to meet every target"),
+      h("div", {}, h("strong", { text: `${met} of ${r.receptors.length}` }), "targets met")),
+    h("div", { class: "row" },
+      h("button", { onclick: () => openReport(false), text: "Open printable brief" }),
+      h("button", { onclick: () => openReport(true), text: "Download brief (.html)" }),
+      h("button", { onclick: () => download(JSON.stringify(r, null, 2), fileBase() + "-plan.json", "application/json"), text: "Download result (.json)" })),
+    h("h2", { text: "Changes to make" }),
+    r.actions.length ? h("div", { class: "scroll" }, h("table", { class: "grid" },
+      h("thead", {}, h("tr", {}, h("th", { text: "Owner" }), h("th", { text: "Change" }), h("th", { text: "Cost" }))),
+      h("tbody", {}, r.actions.map((a) => h("tr", {}, h("td", {}, a.source_label, h("div", { class: "id", text: a.owner })),
+        h("td", { text: a.label }), h("td", { text: "$" + a.cost_usd.toLocaleString() }))))))
+      : h("p", { class: "empty", text: "No change selected: keep current operation." }),
+    h("h2", { text: "Every place, in every condition" }),
+    h("div", { class: "targets" }, r.receptors.map((x) => {
+      const b = x.baseline_mcd_m2 || 1, pct = (v) => Math.max(0, Math.min(100, 100 * v / b)).toFixed(2) + "%";
+      const [lo, hi] = x.remaining_range_mcd_m2;
+      return h("div", { class: "target " + x.target_status },
+        h("div", { class: "tag", text: x.scenario }), h("strong", { text: x.label }),
+        h("div", { class: "bar", role: "img", "aria-label": `${x.remaining_mcd_m2.toFixed(3)} of ${x.baseline_mcd_m2.toFixed(3)} remaining, target ${x.target_mcd_m2}` },
+          h("span", { style: "width:" + pct(x.remaining_mcd_m2) }),
+          hi - lo > 1e-9 ? h("i", { style: `left:${pct(lo)};width:calc(${pct(hi)} - ${pct(lo)})` }) : null,
+          h("b", { style: "left:" + pct(x.target_mcd_m2) })),
+        h("div", {}, h("span", { class: "pill " + x.target_status, text: STATUS[x.target_status] }),
+          ` ${x.remaining_mcd_m2.toFixed(3)} of target ${x.target_mcd_m2}` + (hi - lo > 1e-9 ? ` (range ${lo.toFixed(3)}–${hi.toFixed(3)})` : "")),
+        h("div", { class: "muted", text: (x.target_status === "met" && x.headroom_fraction !== null ? `${Math.round(100 * x.headroom_fraction)}% headroom · ` : "") + "largest remaining: " + term(x.dominant_term.term) }));
+    })));
+  const u = r.uncertainty || {};
+  if (u.ranged_values) {
+    out.push(h("h2", { text: "What uncertainty costs" }),
+      h("p", { text: `${u.ranged_values} value(s) are ranges; every target is checked at the pessimistic end.` + (
+        u.cost_of_uncertainty_usd > 0
+          ? ` On central values the cheapest plan costs $${u.central_plan.cost_usd.toLocaleString()}: planning for the pessimistic case costs $${u.cost_of_uncertainty_usd.toLocaleString()} more. Measuring the largest remaining terms is how to recover it.`
+          : u.cost_of_uncertainty_usd === 0 ? " The ranges do not change the price: central values give a plan of the same cost." : "") }));
+  }
+  if ((r.interactions || []).length) out.push(h("h2", { text: "Interactions" }), h("ul", {}, r.interactions.map((k) => h("li", { text: (k.active ? "In effect: " : "Not triggered: ") + k.label }))));
+  if (r.excluded_options.length) out.push(h("h2", { text: "Options the planner could not use" }),
+    h("ul", {}, r.excluded_options.map((x) => h("li", { text: `${labels[x.source] || x.source} / ${x.option}: ${x.reasons.join("; ")}` }))));
+  out.push(h("details", {}, h("summary", { text: "Limits of this result" }), h("ul", {}, r.limits.map((x) => h("li", { class: "hint", text: x })))));
+  return out;
+}
+async function solveNow() {
+  try {
+    state.result = await api("POST", "/api/solve", { project: P(), budget_usd: state.budget });
+  } catch (err) {
+    state.result = null;
+    if (err.data && err.data.problems) { state.check.problems = err.data.problems; renderChecks(); }
+    toast("Could not plan: " + err.message);
+  }
+  render();
+}
+async function openReport(save) {
+  const win = save ? null : window.open("", "_blank");
+  try {
+    const html = await api("POST", "/api/report", { project: P(), budget_usd: state.budget });
+    if (save) return download(html, fileBase() + "-brief.html", "text/html");
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    if (win) win.location = url; else location.assign(url);
+  } catch (err) { if (win) win.close(); toast("Could not write the brief: " + err.message); }
+}
+
+// ---------------------------------------------------------------- checks
+let checkTimer = null, checkSeq = 0;
+function scheduleCheck() { clearTimeout(checkTimer); checkTimer = setTimeout(runCheck, 250); }
+async function runCheck() {
+  const seq = ++checkSeq;
+  try {
+    const result = await api("POST", "/api/check", { project: P() });
+    if (seq !== checkSeq) return;
+    state.check = result;
+  } catch (err) {
+    state.check = { problems: [{ path: "", message: err.message }], warnings: [] };
+  }
+  renderChecks(); renderTabs(); markProblems();
+  if (state.tab === "plan" && !state.result) render();
+}
+function renderChecks() {
+  const { problems, warnings } = state.check;
+  const status = document.getElementById("status");
+  status.className = "status " + (problems.length ? "no" : "ok");
+  status.textContent = problems.length ? `${problems.length} problem${problems.length > 1 ? "s" : ""} to fix before planning` : "Ready to plan";
+  const item = (kind) => (x) => h("li", { class: kind }, h("button", { onclick: () => goTo(x.path) },
+    h("span", { text: x.message }), h("span", { class: "where", text: x.path || "project" })));
+  document.getElementById("issues").replaceChildren(...problems.map(item("problem")), ...warnings.map(item("warning")));
+}
+function markProblems() {
+  const paths = state.check.problems.map((x) => x.path).filter(Boolean);
+  for (const el of document.querySelectorAll("[data-path]")) {
+    const p = el.dataset.path;
+    if (!p) continue;
+    const hit = paths.some((q) => q === p || q.startsWith(p + "[") || q.startsWith(p + ".") || p.startsWith(q + ".") || p.startsWith(q + "["));
+    el.classList.toggle("bad", hit || el.dataset.localError === "1");
+  }
+}
+function goTo(path) {
+  state.tab = tabFor(path); render();
+  const all = [...document.querySelectorAll("[data-path]")];
+  const el = all.find((e) => e.dataset.path === path) || all.find((e) => e.dataset.path.startsWith(path)) ||
+             all.filter((e) => path.startsWith(e.dataset.path)).sort((a, b) => b.dataset.path.length - a.dataset.path.length)[0];
+  if (el) { el.scrollIntoView({ block: "center" }); el.focus(); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1300); }
+}
+
+// ---------------------------------------------------------------- files
+function fileBase() { return (state.file || P().title || "nocturne-project").replace(/\.json$/i, "").replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 60); }
+function download(text, name, type) {
+  const a = h("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  document.body.append(a); a.click(); a.remove();
+}
+function renderFile() {
+  const el = document.getElementById("file");
+  el.replaceChildren(state.fromFile && state.file ? state.file : (P() ? (P().title || "Untitled") + " (not saved to a file)" : ""),
+    state.dirty ? h("span", { class: "dirty", text: " · unsaved changes" }) : "");
+  const save = document.getElementById("save");
+  save.disabled = !state.writable;
+  save.title = state.writable ? "Save to " + state.file + " (the previous version is kept as .bak)" : "Start with `nocturne app FILE.json` to save to a file; or download the project.";
+}
+function load(project, fromFile, notice) {
+  state.project = project; state.fromFile = fromFile; state.dirty = false; state.result = null; state.budget = null;
+  const n = document.getElementById("notice");
+  n.hidden = !notice; n.textContent = notice || "";
+  renderFile(); render(); runCheck();
+}
+function leaving() { return !state.dirty || confirm("Discard unsaved changes?"); }
+document.getElementById("save").addEventListener("click", async () => {
+  if (!state.fromFile && !confirm(`Replace ${state.file} with this project?`)) return;
+  try {
+    const r = await api("POST", "/api/save", { project: P() });
+    state.dirty = false; state.fromFile = true; renderFile();
+    toast(`Saved ${r.saved}` + (r.backup ? ` (previous version kept as ${r.backup})` : ""));
+  } catch (err) { toast("Could not save: " + err.message); }
+});
+document.getElementById("download").addEventListener("click", () => {
+  if (!P()) return;
+  download(JSON.stringify(P(), null, 2) + "\n", fileBase() + ".json", "application/json");
+  toast("Downloaded. Run it from the command line with: nocturne restore " + fileBase() + ".json");
+});
+document.getElementById("examples").addEventListener("change", async (e) => {
+  const id = e.target.value; e.target.value = "";
+  if (!id || !leaving()) return;
+  try { load(await api("GET", "/api/example/" + id), false, ""); } catch (err) { toast("Could not open the example: " + err.message); }
+});
+document.getElementById("open").addEventListener("change", async (e) => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file || !leaving()) return;
+  let data;
+  try { data = JSON.parse(await file.text()); } catch (err) { return toast(file.name + " is not valid JSON: " + err.message); }
+  try {
+    if (data && data.schema) load(await api("POST", "/api/derive", { physical: data }), false,
+      file.name + " is a physical district: its coefficients were derived from geometry and atmosphere. Download the result to keep it.");
+    else load(data, false, "Opened " + file.name + " from your computer. Download to keep changes" + (state.writable ? `, or Save to replace ${state.file}.` : "."));
+  } catch (err) {
+    const problems = (err.data && err.data.problems) || [];
+    toast("Could not open " + file.name + ": " + (problems.length ? problems.length + " problem(s), e.g. " + problems[0].path + ": " + problems[0].message : err.message));
+  }
+});
+window.addEventListener("beforeunload", (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+(async function start() {
+  if (!token) { document.getElementById("panel").replaceChildren(h("p", { text: "Open the address printed by `nocturne app`, including its #token part." })); return; }
+  try {
+    const s = await api("GET", "/api/session");
+    state.file = s.file; state.writable = s.writable;
+    const select = document.getElementById("examples");
+    for (const x of s.examples) select.append(h("option", { value: x.id, text: x.title }));
+    if (s.project) load(s.project, true, s.notice);
+    else load(await api("GET", "/api/example/" + (s.examples.some((x) => x.id === "district") ? "district" : "blank")), false,
+      "This is an example with invented numbers. Choose “New or example…” for a blank project, or open your own file.");
+  } catch (err) {
+    document.getElementById("panel").replaceChildren(h("p", { text: "Could not reach the planner: " + err.message + ". Is `nocturne app` still running?" }));
+  }
+})();
+</script>
+</body>
+</html>

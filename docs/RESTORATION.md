@@ -19,10 +19,14 @@ These ideas build on existing lighting practice; they are not claims that shield
 After the installation in the README:
 
 ```bash
+nocturne app                                         # the same planner in your browser, on this computer only
+nocturne check examples/restoration/district.json    # every problem with its path, then warnings
 nocturne restore examples/restoration/district.json
 nocturne restore examples/restoration/district.json --json
 nocturne restore examples/restoration/district.json --report my-restoration.html
 nocturne restore examples/restoration/district.json --budget 1000
+nocturne derive examples/restoration/physical-district.json --out my-derived.json
+nocturne restore my-derived.json
 nocturne attribute examples/restoration/trial.json examples/restoration/synthetic-readings.csv
 ```
 
@@ -70,6 +74,8 @@ The full input is [district.json](../examples/restoration/district.json). Fields
 
 All sky values use **mcd/m²**, one thousandth of a candela per square metre. They do not use lux, lumens, watts, satellite radiance, or magnitudes. Never mix those units. The source matrix must partition the artificial baseline: the unmanaged term must not also contain sources already listed. Contributions must refer to the same observation direction, spectral band, period of the night and weather case.
 
+Both schema versions are accepted. Version 1 is the format above. Version 2 adds per-place effects, ranges, interactions and a provenance block ([below](#beyond-fixed-fractions-schema-version-2)); a version 1 file that uses them is refused with a message saying so. `nocturne check` lists every problem at once, each with the path of the field (for example `sources[offices].options[blinds].remaining_fraction.hazy`), and suggests the intended name for a misspelt field.
+
 An option describes the **whole package for its source**. If shielding and dimming are combined, supply a single validated package; the optimizer does not add their claimed percentages. Exactly one option, or an implicit “keep”, is selected per source. Different sources must not overlap physical assets. Dependencies across sources should be represented as one jointly reviewed source/package; arbitrary cross-source dependencies are not modeled.
 
 `service_fraction` is a screening declaration, not a calculated photometric metric. Before real use, an engineer must validate illuminance, luminance, uniformity, glare, pedestrian visibility, transitions, emergency operation and applicable local requirements, then describe that evidence in the option. An unchecked flag or an invented “60%” does not establish safety. Only the responsible owner can authorize an implementation.
@@ -79,12 +85,12 @@ An option describes the **whole package for its source**. If shielding and dimmi
 For scenario $s$, receptor $r$, source $i$, and the selected complete option $a_i$, the model is:
 
 $$
-L_{sr}(a) = U_{sr} + \sum_i C_{sir} f_{sia_i}.
+L_{sr}(a) = U_{sr} + \sum_i C_{sir} f_{sir a_i} + \sum_k \Delta_{ksr}\,[\text{interaction } k \text{ triggered by } a].
 $$
 
-$U$ is unmanaged artificial luminance; $C$ is the source contribution; $f$ is the remaining fraction. The planner minimizes total package cost subject to $L_{sr} \le T_r$ for **every** scenario and receptor, the budget, and declared service/authorization constraints. The fraction for a source/scenario is shared across its receptors. If an optical change redistributes light differently by direction, use a conservative fraction that bounds the residual at every receptor, or extend the model to receptor-specific effects before relying on it. The current schema accepts only packages whose source contribution does not increase in any modeled case.
+$U$ is unmanaged artificial luminance; $C$ is the source contribution; $f$ is the remaining fraction; $\Delta$ is a declared interaction. Where any of them is a range, the planner uses its **pessimistic (upper) end**: because every term is either nonnegative and multiplied by nonnegative terms, or added, that is exactly the worst case of the declared ranges. The planner minimizes total package cost subject to $L_{sr} \le T_r$ for **every** scenario and receptor, the budget, and declared service/authorization constraints. In schema 1 a fraction is shared across a source's receptors and cannot exceed 1; in schema 2 it may differ by receptor and reach 10, for packages that redirect light towards one place.
 
-The implementation prunes dominated options and enumerates the remaining portfolios. It uses integer cents for cost. It stops with an error above **1,000,000 combinations** instead of quietly returning a heuristic optimum. This is intended for a district-level set of source groups, not millions of individual lamps. Real city-scale optimization is future work.
+The implementation prunes dominated options and enumerates the remaining portfolios. A source named in an interaction keeps all its options, because a dearer, brighter option may trigger a synergy; pruning the others stays exact (tested against a brute-force oracle on 450 random projects with ranges, per-place effects and interactions). It uses integer cents for cost. It stops with an error above **1,000,000 combinations** instead of quietly returning a heuristic optimum. This is intended for a district-level set of source groups, not millions of individual lamps. Real city-scale optimization is future work.
 
 | Result | Meaning |
 |---|---|
@@ -96,7 +102,60 @@ When infeasible, the selected affordable package maximizes the **least completed
 
 The optimistic floor removes as much light as each eligible source could possibly remove in each individual case, ignoring budget. It is a lower bound, not necessarily a jointly achievable portfolio. If that floor already exceeds a target, no amount of spending on the current action set can solve that case. A new owner, new optics, a regional agreement, or a revised target is needed. Reducing the assumed background merely to make the result pass is not a solution.
 
-Scenarios have no probabilities. Meeting all of them is a bounded stress test, not a confidence statement and not protection against conditions absent from the input. Effects are assumed additive; interactions and changes in atmospheric transport require a better model. Target selection is a public/engineering decision, not a threshold supplied by this software.
+Scenarios have no probabilities. Meeting all of them is a bounded stress test, not a confidence statement and not protection against conditions absent from the input. Ranges have no probabilities either: the plan holds across the box they describe, not with a stated confidence. Target selection is a public/engineering decision, not a threshold supplied by this software.
+
+## Beyond fixed fractions (schema version 2)
+
+**Why contributions still add.** For one atmosphere and one set of reflecting surfaces, sky luminance is linear in the light emitted: radiative transfer is linear in its sources. So the contributions of separate sources add exactly *within a scenario*, provided each contribution includes every path its light takes (direct uplight and reflections). A single fixed fraction per source is the weak assumption, not additivity. Schema 2 replaces it where it fails:
+
+| What changes in reality | How schema 2 represents it |
+|---|---|
+| The atmosphere and surfaces (haze, snow, a wet street) | One scenario per condition, each with its own contributions and fractions; `nocturne derive` computes them from aerosol optical depth and reflectance |
+| Shielding and aiming redirect light, so one package removes different shares at different places | `remaining_fraction.<scenario>` may be `{receptor: value}`, and above 1 where light is redirected towards a place |
+| Owners respond to each other, or packages share a surface (a merchant adds floodlights when a street dims; two changes darken one wall) | `interactions`: a change in luminance charged whenever a named combination of options is chosen; positive for a rebound, negative for a synergy |
+| Coefficients are uncertain | Any luminance, fraction or interaction value may be `[low, high]` or `[low, central, high]` |
+
+```json
+"remaining_fraction": {"clear": {"park": 0.47, "neighborhood": 0.46, "river": [0.40, 0.52]}, "snow": 0.57},
+"interactions": [{"id": "sign-rebound", "label": "Merchants leave security floodlights on after the sign curfew",
+                  "when": {"signs": "curfew"},
+                  "delta_mcd_m2": {"clear": {"park": 0, "neighborhood": 0.05, "river": 0}, "snow": 0.09},
+                  "evidence": "Where this number comes from"}]
+```
+
+`when` maps each source to an option ID, a list of option IDs (any of them), or `"keep"`. `delta_mcd_m2` names every scenario, with one value for every place or one per place. An interaction that would make any luminance negative is refused: a synergy cannot remove more light than its sources emit.
+
+For each place and scenario the result adds:
+
+| Field | Meaning |
+|---|---|
+| `target_status` | `met` at the pessimistic end; `uncertain` if met only at the optimistic end; `not_met` otherwise |
+| `remaining_range_mcd_m2`, `baseline_range_mcd_m2` | Optimistic and pessimistic values for the selected plan and for doing nothing |
+| `headroom_fraction` | How much brighter all remaining light could be and still meet the target |
+| `dominant_term` | The largest remaining term (a source, the unmanaged light or an interaction): what to measure first |
+
+With ranges, `uncertainty.central_plan` gives the cheapest plan on central values and `uncertainty.cost_of_uncertainty_usd` the extra cost of planning for the pessimistic case: what narrowing the ranges by measurement could save. Interactions are not discovered by the software. They must be declared from evidence, such as a source-isolation trial with the other owners' lighting logged.
+
+## Derive coefficients from geometry and atmosphere
+
+`nocturne derive` computes contributions and per-place remaining fractions from a physical description, using the same single-scattering model as `nocturne sky` (Rayleigh and aerosol scattering, extinction on both legs, direct uplight emitted evenly over the upper hemisphere, reflected light as a Lambertian surface):
+
+```bash
+nocturne derive examples/restoration/physical-district.json --out my-derived.json
+```
+
+| Physical input (`schema: nocturne-physical/1`) | Meaning |
+|---|---|
+| `coordinates` | `local_m` (`x_m`, `y_m` in metres) or `latlon` (`lat`, `lon`) for every receptor and emitter |
+| `conditions[]` | `aod_550` (aerosol optical depth), optional `aerosol_scale_height_m`, `single_scattering_albedo`, `asymmetry`, `reflectance_multiplier` (snow), and `unmanaged_mcd_m2` |
+| `sources[].emitters[]` | Position, `radius_m` of the lit area, `lumens` emitted in the assessed window, `uplight_fraction` (direct upward share; from the luminaire's IES file via `nocturne bug`), `reflectance` of what the rest lands on |
+| `sources[].spectrum` | A CCT such as `3000K`, or `PC-Amber` |
+| `options[].change` | What physically changes: `output_factor` (dimming, curfew, booking), `uplight_fraction` (shielding, aiming), `reflectance` (surfaces), `spectrum` |
+| `calibration_factor` | A number or range scaling every derived contribution: the model's absolute calibration, ideally from a sky-quality-meter measurement |
+
+In the invented example, the same top-shield-and-schedule package leaves 46–47 % of the streets' sky glow on a clear night, 42–45 % in haze, and 56–57 % under snow, when surfaces reflect more and the shielded uplight is a smaller share; dimming alone leaves exactly its output factor everywhere. In clear air, shielding helps distant places more than near ones; in heavy haze that advantage fades because long low paths are extinguished. A fixed fraction cannot say either.
+
+The derived project carries a `provenance` block with the method, parameters and limits: single scattering without Earth curvature (significant beyond about 30 km), no terrain or building obstruction, idealized angular distributions, and an absolute scale that needs calibration. Before/after ratios are far less sensitive to these than absolute values are. Replace derived contributions with measured ones wherever a trial provides them.
 
 ## Find out which source matters
 
@@ -159,4 +218,4 @@ Then rerun `restore`, implement an owner-reviewed pilot through the existing sch
 - [FHWA, design criteria for adaptive roadway lighting](https://www.fhwa.dot.gov/publications/research/safety/14051/005.cfm): adaptive lighting must account for the visual task and design criteria. The scalar service gate here is not a substitute for that review.
 - [SciPy's reference description of paired permutation tests](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.permutation_test.html): independent within-pair label swaps and conservative Monte Carlo counting. No SciPy dependency is required by this implementation.
 
-See also [EVIDENCE.md](EVIDENCE.md), [TECHNOLOGY.md](TECHNOLOGY.md) and [PLAYBOOK.md](PLAYBOOK.md). The planning model is original project code; its policy targets and field effectiveness remain to be established by actual participants and measurements.
+See also [EVIDENCE.md](EVIDENCE.md), [TECHNOLOGY.md](TECHNOLOGY.md), [PLAYBOOK.md](PLAYBOOK.md) and [INTEGRATION.md](INTEGRATION.md). The planning model is original project code; its policy targets and field effectiveness remain to be established by actual participants and measurements.

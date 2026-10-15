@@ -45,12 +45,17 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
 | Step | What | Tool |
 |---|---|---|
 | 1 | Agree the class schedule and the unsensed floor (default 50 %) with DDOT's lighting engineers; adopt the firmware floors as policy | `vdl7/profiles.py`, `--floor` |
-| 2 | Confirm, under the streetlight programme's contract, who may change schedules and how savings are counted | contract |
-| 3 | Publish the seed text, then draw the waves | `nocturne pilot --seed "…" --out plan.csv` |
-| 4 | Load wave 1's programmes into the central system: per-class steps at dusk, fixed local times and dawn, with dusk and dawn from the node's own astronomical clock | `nocturne schedule --plan plan.csv --wave 1`, CMS import |
-| 5 | Open a 311 category ("street too dark at night") that routes to an operator override for that segment | `Priority.OPERATOR` override, audit trail |
-| 6 | Before each wave: night-time crashes by segment, switched vs not yet switched within each period; pause and revert on a signal | `nocturne brake --plan plan.csv --crashes … --through …` |
-| 7 | Switch the next wave; report energy from the nodes' own 15-minute metering | node metering outbox |
+| 2 | Confirm, under the streetlight programme's contract, who may change schedules and how savings are counted; agree import and readback terms with the CMS operator | contract |
+| 3 | For each node family on the poles, write its capability profile from the datasheet and confirm it on the bench (steps, time resolution, minimum stable level, level granularity, dusk/dawn source, behaviour on network loss, metered delivered level) | `examples/controllers/` as a template |
+| 4 | Publish the seed text, then draw the waves | `nocturne pilot --seed "…" --out plan.csv` |
+| 5 | Export wave 1's programmes against the node profile: they are adapted brighter-only where the node is coarser, or refused | `nocturne schedule --plan plan.csv --wave 1 --controller node.json --out phase0` |
+| 6 | Record each gate in `phase0/readiness.json`: contract authority, CMS access, equipment test, photometric review, High-Injury Network assignment, rollback, operations. Approvals are bound to the files' hashes | `nocturne readiness phase0/readiness.json` (exit 0 only when every gate is recorded) |
+| 7 | Translate into the CMS's import format and load; then read back what the CMS holds and compare. Any segment missing or darker than intended is an error | CMS import, `nocturne reconcile` |
+| 8 | Open a 311 category ("street too dark at night") that routes to an operator override for that segment | `Priority.OPERATOR` override, audit trail |
+| 9 | Before each wave: night-time crashes by segment, switched vs not yet switched within each period; pause and revert on a signal | `nocturne brake --plan plan.csv --crashes … --through …` |
+| 10 | Switch the next wave; report energy from the nodes' own 15-minute metering | node metering outbox |
+
+A registered node in the inventory is not evidence that steps 2, 3 and 6 are done. Nocturne does not connect to the CMS; it checks the files and records the people who decided.
 
 **What would make the saving smaller:**
 - The baseline assumes lights run at their commissioned maximum all night. If DDOT already runs a dimming schedule, Phase 0 saves that much less.

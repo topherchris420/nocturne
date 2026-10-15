@@ -1,0 +1,418 @@
+{
+  "schema_version": 2,
+  "project_schema_version": 2,
+  "title": "An invented district, derived from geometry and atmosphere",
+  "synthetic": true,
+  "project_sha256": "4f48d512d326427f6ce897a677e298975f169a9633d526f15317d185cdeaa8da",
+  "status": "feasible",
+  "solver": "exact enumeration after dominance pruning",
+  "candidate_portfolios": 144,
+  "portfolios_within_budget": 140,
+  "budget_usd": 8000.0,
+  "cost_usd": 4950.0,
+  "minimum_feasible_cost_usd": 4950.0,
+  "worst_target_completion": 1.0,
+  "receptors": [
+    {
+      "scenario": "clear",
+      "receptor": "neighborhood",
+      "label": "Neighborhood observation point",
+      "baseline_mcd_m2": 4.5001619,
+      "remaining_mcd_m2": 1.4982556,
+      "target_mcd_m2": 3.6,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.6670662893261684,
+      "optimistic_floor_without_budget_mcd_m2": 1.323410317725,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        3.0060994999999995,
+        4.5001619
+      ],
+      "remaining_range_mcd_m2": [
+        1.1028829,
+        1.4982555999999998
+      ],
+      "target_status": "met",
+      "headroom_fraction": 1.402794289572487,
+      "dominant_term": {
+        "term": "streets",
+        "mcd_m2": 0.5059277999999999
+      }
+    },
+    {
+      "scenario": "clear",
+      "receptor": "park",
+      "label": "Park observation point",
+      "baseline_mcd_m2": 1.3239107,
+      "remaining_mcd_m2": 0.930719963,
+      "target_mcd_m2": 1.8,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.29699188699056517,
+      "optimistic_floor_without_budget_mcd_m2": 0.8850112408399999,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        0.9553024700000001,
+        1.3239107
+      ],
+      "remaining_range_mcd_m2": [
+        0.703660239,
+        0.9307199629999999
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.9339866679103346,
+      "dominant_term": {
+        "term": "monument",
+        "mcd_m2": 0.391679
+      }
+    },
+    {
+      "scenario": "clear",
+      "receptor": "river",
+      "label": "River observation point",
+      "baseline_mcd_m2": 1.03176478,
+      "remaining_mcd_m2": 0.5525359510000001,
+      "target_mcd_m2": 1.5,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.46447488641742546,
+      "optimistic_floor_without_budget_mcd_m2": 0.53458323057742,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        0.804330367,
+        1.03176478
+      ],
+      "remaining_range_mcd_m2": [
+        0.49762322600000003,
+        0.552535951
+      ],
+      "target_status": "met",
+      "headroom_fraction": 1.7147554784177288,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.4
+      }
+    },
+    {
+      "scenario": "hazy",
+      "receptor": "neighborhood",
+      "label": "Neighborhood observation point",
+      "baseline_mcd_m2": 8.020731,
+      "remaining_mcd_m2": 2.3683251000000003,
+      "target_mcd_m2": 3.6,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.7047245319659766,
+      "optimistic_floor_without_budget_mcd_m2": 2.0509337639400003,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        5.2952653000000005,
+        8.020731
+      ],
+      "remaining_range_mcd_m2": [
+        1.6765286700000002,
+        2.3683251
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.5200615827615895,
+      "dominant_term": {
+        "term": "streets",
+        "mcd_m2": 0.75732
+      }
+    },
+    {
+      "scenario": "hazy",
+      "receptor": "park",
+      "label": "Park observation point",
+      "baseline_mcd_m2": 1.7417893800000002,
+      "remaining_mcd_m2": 1.269024167,
+      "target_mcd_m2": 1.8,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.2714250175299611,
+      "optimistic_floor_without_budget_mcd_m2": 1.1975225385105002,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        1.25874481,
+        1.7417893800000002
+      ],
+      "remaining_range_mcd_m2": [
+        0.956175289,
+        1.2690241670000004
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.41841270387721474,
+      "dominant_term": {
+        "term": "monument",
+        "mcd_m2": 0.570941
+      }
+    },
+    {
+      "scenario": "hazy",
+      "receptor": "river",
+      "label": "River observation point",
+      "baseline_mcd_m2": 1.2957405300000002,
+      "remaining_mcd_m2": 0.7014350340000001,
+      "target_mcd_m2": 1.5,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.45866088328656357,
+      "optimistic_floor_without_budget_mcd_m2": 0.68023184385312,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        1.027274449,
+        1.2957405300000002
+      ],
+      "remaining_range_mcd_m2": [
+        0.6469184659999999,
+        0.7014350340000001
+      ],
+      "target_status": "met",
+      "headroom_fraction": 1.1384731689920122,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.55
+      }
+    },
+    {
+      "scenario": "snow",
+      "receptor": "neighborhood",
+      "label": "Neighborhood observation point",
+      "baseline_mcd_m2": 9.808469,
+      "remaining_mcd_m2": 3.53212045,
+      "target_mcd_m2": 3.6,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.6398907464559453,
+      "optimistic_floor_without_budget_mcd_m2": 3.36234806795,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        6.511427100000001,
+        9.808469
+      ],
+      "remaining_range_mcd_m2": [
+        2.52695855,
+        3.53212045
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.019217790265334767,
+      "dominant_term": {
+        "term": "streets",
+        "mcd_m2": 1.516818
+      }
+    },
+    {
+      "scenario": "snow",
+      "receptor": "park",
+      "label": "Park observation point",
+      "baseline_mcd_m2": 2.67353711,
+      "remaining_mcd_m2": 1.788569235,
+      "target_mcd_m2": 1.8,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.33101013323880885,
+      "optimistic_floor_without_budget_mcd_m2": 1.75721882422442,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        1.90906267,
+        2.67353711
+      ],
+      "remaining_range_mcd_m2": [
+        1.342684073,
+        1.7885692349999998
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.006391010633703509,
+      "dominant_term": {
+        "term": "streets",
+        "mcd_m2": 0.601284
+      }
+    },
+    {
+      "scenario": "snow",
+      "receptor": "river",
+      "label": "River observation point",
+      "baseline_mcd_m2": 2.3115590800000003,
+      "remaining_mcd_m2": 1.075585839,
+      "target_mcd_m2": 1.5,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.5346924730126301,
+      "optimistic_floor_without_budget_mcd_m2": 1.06284232146896,
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        1.7313979899999998,
+        2.3115590800000003
+      ],
+      "remaining_range_mcd_m2": [
+        0.9403752449999999,
+        1.075585839
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.39458883299782843,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.7
+      }
+    }
+  ],
+  "excluded_options": [
+    {
+      "source": "crossing",
+      "option": "dim",
+      "reasons": [
+        "below declared service floor"
+      ]
+    },
+    {
+      "source": "monument",
+      "option": "curfew",
+      "reasons": [
+        "owner authorization missing"
+      ]
+    },
+    {
+      "source": "offices",
+      "option": "all-off",
+      "reasons": [
+        "below declared service floor"
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "source": "facades",
+      "source_label": "Decorative building facades",
+      "owner": "Example building consortium",
+      "option": "closing-time",
+      "label": "Switch decorative uplights off after closing",
+      "cost_usd": 500.0,
+      "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+    },
+    {
+      "source": "offices",
+      "source_label": "Office windows",
+      "owner": "Example office cooperative",
+      "option": "blinds-and-zoning",
+      "label": "Blinds plus vacancy zoning",
+      "cost_usd": 2200.0,
+      "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+    },
+    {
+      "source": "signs",
+      "source_label": "Commercial signs",
+      "owner": "Example merchants association",
+      "option": "curfew",
+      "label": "Apply the shared curfew to nonessential signs",
+      "cost_usd": 250.0,
+      "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+    },
+    {
+      "source": "sports",
+      "source_label": "Sports field floodlights",
+      "owner": "Example recreation department",
+      "option": "booking",
+      "label": "Tie field lights to bookings and shutdown checks",
+      "cost_usd": 1200.0,
+      "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+    },
+    {
+      "source": "streets",
+      "source_label": "Residential streets",
+      "owner": "Example transport department",
+      "option": "schedule",
+      "label": "Reviewed late-night schedule",
+      "cost_usd": 800.0,
+      "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+    }
+  ],
+  "source_labels": {
+    "crossing": "Pedestrian crossing",
+    "facades": "Decorative building facades",
+    "monument": "Neighboring monument",
+    "offices": "Office windows",
+    "signs": "Commercial signs",
+    "sports": "Sports field floodlights",
+    "streets": "Residential streets"
+  },
+  "uncertainty": {
+    "ranged_values": 64,
+    "planning_case": "pessimistic end of every range",
+    "central_plan": {
+      "status": "feasible",
+      "cost_usd": 4550.0,
+      "actions": [
+        {
+          "source": "facades",
+          "option": "closing-time"
+        },
+        {
+          "source": "offices",
+          "option": "blinds"
+        },
+        {
+          "source": "signs",
+          "option": "curfew"
+        },
+        {
+          "source": "sports",
+          "option": "booking"
+        },
+        {
+          "source": "streets",
+          "option": "schedule"
+        }
+      ]
+    },
+    "cost_of_uncertainty_usd": 400.0
+  },
+  "interactions": [
+    {
+      "id": "sign-rebound",
+      "label": "Merchants leave security floodlights on after the sign curfew",
+      "evidence": "INVENTED rebound; a source-isolation trial with the floodlights logged would measure it.",
+      "active": true
+    }
+  ],
+  "provenance": {
+    "derived_by": "nocturne derive",
+    "input_schema": "nocturne-physical/1",
+    "input_sha256": "e6ec89f3eb94ca733992e24131884f31233015a1ed459ea7c181a112954b868d",
+    "method": "single-scattering zenith luminance (vdl7.skyglow kernels), photopic SQM-like band",
+    "calibration_factor": [
+      0.8,
+      1.0,
+      1.25
+    ],
+    "conditions": {
+      "clear": {
+        "aod_550": 0.1,
+        "aerosol_scale_height_m": 1500.0,
+        "single_scattering_albedo": 0.9,
+        "asymmetry": 0.7,
+        "reflectance_multiplier": 1.0
+      },
+      "hazy": {
+        "aod_550": 0.45,
+        "aerosol_scale_height_m": 1500.0,
+        "single_scattering_albedo": 0.9,
+        "asymmetry": 0.7,
+        "reflectance_multiplier": 1.0
+      },
+      "snow": {
+        "aod_550": 0.12,
+        "aerosol_scale_height_m": 1500.0,
+        "single_scattering_albedo": 0.9,
+        "asymmetry": 0.7,
+        "reflectance_multiplier": 3.5
+      }
+    },
+    "limits": [
+      "Single scattering in a plane-parallel atmosphere: no multiple scattering or Earth curvature (significant beyond about 30 km), no terrain or building obstruction.",
+      "Direct uplight is emitted evenly over the upper hemisphere and reflected light as a Lambertian surface; real luminaires and facades have their own distributions.",
+      "Absolute contributions carry the calibration factor; before/after ratios are far less sensitive to it. Calibrate against measured zenith brightness before relying on absolute values.",
+      "Lumens are those emitted during the assessed window; a curfew or booking schedule enters as an output factor."
+    ]
+  },
+  "limits": [
+    "Planning result only. No commands are sent to lights.",
+    "Every result is conditional on the supplied contributions and complete action packages.",
+    "Contributions add exactly within one scenario (radiative transfer is linear in its sources); the approximations are the scenario set, the supplied coefficients and the declared interactions.",
+    "Scenarios are stress cases, not statistical confidence intervals; ranges are checked at their pessimistic end, not given probabilities.",
+    "Service fractions and review flags are declarations, not a photometric safety certification.",
+    "Artificial zenith luminance is not a measure of glare, window trespass, or habitat illuminance.",
+    "Unmanaged light remains in every portfolio; no energy savings or star counts are inferred."
+  ]
+}

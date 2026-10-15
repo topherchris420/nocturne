@@ -23,6 +23,15 @@ nightsignal  the signed public curfew feed for every light in the city
 observe      the Moon, sky-quality-meter logs, curfew-step verification
 pilot        randomised stepped-wedge rollout with a safety brake
 demand       traffic and pedestrian curves (Section 6.4)
+schedule     Phase 0 programmes for the networked nodes a city already has
+integration  controller capability checks (brighter-only), the readiness record, CMS readback
+
+Restoration
+-----------
+restore      least-cost multi-owner plans against sky-brightness targets: ranges, per-place effects, interactions
+derive       a project's coefficients from emitter geometry, atmosphere and surfaces
+attribution  preregistered source-isolation trials and their analysis
+app          the planner in a local browser page (`nocturne app`)
 """
 
 __version__ = "1.0.0"

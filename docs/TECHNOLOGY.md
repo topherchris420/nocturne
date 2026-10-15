@@ -308,11 +308,13 @@ Done carelessly, though, the conversion can brighten the sky (1.2). Every conver
 
 **How it cuts light pollution.** It removes full output from the hours when the fewest people are out.
 
-**Readiness.** Commercial (TRL 9) wherever networked nodes exist. DC's are already installed: 97 % of its 72,512 active streetlights are LED, and 69,550 of the 72,068 dimmable lights carry a registered networked node ([inventory notes](../data/dc/README.md)).
+**Readiness.** The technique is commercial (TRL 9) where a CMS can push time-of-night programmes to its nodes. For DC, integration is **unverified**: 69,550 of the 72,068 dimmable lights carry a node the inventory records as registered ([inventory notes](../data/dc/README.md)), but a registration record is not evidence that DC's CMS will import these programmes or that its node families can hold them.
 
-**Cost and barriers.** The cost is integration and policy, not hardware. In the business case, Phase 0 pays back within three years if integration costs less than $1.92 million. The barriers are:
-- translating the programmes into the CMS vendor's import format;
-- confirming, under the streetlight contract, who may change schedules;
+**Cost and barriers.** The cost is integration and policy, not hardware. In the business case, Phase 0 pays back within three years if integration costs less than $1.92 million. The barriers, each a gate in `nocturne readiness`:
+- confirming, under the streetlight contract, who may change schedules, and the CMS operator's terms for import and readback;
+- the node families' real limits (steps per programme, time resolution, minimum stable level, level granularity, dusk/dawn source). `nocturne schedule --controller` checks the programmes against a declared profile and adapts them brighter-only, or refuses; a bench test confirms the profile;
+- translating the programmes into the CMS vendor's import format, then reading back what was loaded (`nocturne reconcile`);
+- a photometric review of each dimmed level by a licensed engineer, the High-Injury Network assignment, and a tested rollback;
 - public concern about safety.
 
 **Impact in DC (2027, `nocturne business-case`).**

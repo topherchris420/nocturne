@@ -36,6 +36,15 @@ given). `trimmed_kw` multiplies each pole by its commissioned maximum output
 at full output today, so they are the baseline the business case uses.
 
 **What the data says about DC today.** 97 % of active lights are LED, most of
-them already 2700K; 96 % carry a registered networked node, so DC's lights
-are already dimmable from a central system; and almost none are recorded with
-a house-side shield.
+them already 2700K; 96 % carry a networked node recorded as registered
+(`CLIGHT_SCAN_SUCCESS_1` = "Successful Registration"); and almost none are
+recorded with a house-side shield.
+
+**What the data does not say.** A registration record shows that a node was
+scanned into the asset system. It does not show that DDOT's central
+management system will import Nocturne's programmes, which node families and
+firmware are installed and what schedules they can hold, who may change
+schedules under the streetlight contract, or that a dimmed level is safe on a
+given street. Those are established by the integrator and DDOT's engineers,
+and recorded per wave with `nocturne schedule --controller` and
+`nocturne readiness` (see [PLAYBOOK.md](../../docs/PLAYBOOK.md)).

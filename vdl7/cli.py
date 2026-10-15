@@ -8,7 +8,10 @@ The node
 
 The city
     nocturne business-case [--site dc] [--price 0.13] [--co2 0.30]     # a year, DC's real fleet
-    nocturne schedule --plan plan.csv --wave 1 --out phase0/           # Phase 0 programmes for the CMS
+    nocturne schedule --plan plan.csv --wave 1 --controller node.json --out phase0/   # Phase 0 programmes + readiness record
+    nocturne readiness phase0/readiness.json               # are the import gates recorded?
+    nocturne reconcile --programs phase0/programs.json --assignments phase0/assignments-wave1.csv \\
+                       --cms-programs cms.json --cms-assignments cms.csv                  # what did the CMS load?
     nocturne sky [--share 0.15] [--measured rock-creek=18.4] [--retrofits 10]
     nocturne bug fixture.ies                               # TM-15 BUG rating and uplight
     nocturne trespass fixture.ies --height 9 --setback 10 --window 5 --road local
@@ -19,6 +22,9 @@ The city
     nocturne brake --plan plan.csv --crashes night_crashes.csv --through 2027-02-28   # before each wave
 
 Models
+    nocturne app [project.json]                            # the planner in your browser (local only)
+    nocturne check project.json                            # every problem in a project, with its path
+    nocturne derive physical.json --out project.json       # coefficients from geometry and atmosphere
     nocturne restore examples/restoration/district.json --report restoration.html
     nocturne experiment --source facades --start 2027-01-04 --seed public-seed --out trial
     nocturne attribute trial/trial.json trial/readings.csv
@@ -461,11 +467,19 @@ def cmd_brake(a) -> int:
 
 
 def cmd_schedule(a) -> int:
+    from .integration import adapt_programs, readiness_record
     from .pilot import load_plan
     from .schedule import export, programs
     if a.wave is not None and not a.plan:
         raise ValueError("--wave picks segments from a plan: give the plan with --plan plan.csv")
     plan_rows = load_plan(a.plan) if a.plan else None          # check the plan before writing anything
+    caps = None
+    if a.controller:                                           # and the controller profile
+        with open(a.controller, encoding="utf-8") as f:
+            try:
+                caps = json.load(f)
+            except ValueError as e:
+                raise ValueError(f"--controller {a.controller}: not JSON ({e})") from None
     bundle = default_bundle(version=a.version)
     if a.zones:
         bundle.zones = _zones_from(a.zones)
@@ -473,26 +487,94 @@ def cmd_schedule(a) -> int:
     if errs:
         print("refusing to export an invalid bundle:\n  " + "\n  ".join(errs), file=sys.stderr)
         return 1
+    progs = programs(bundle, a.floor)
+    doc = json.loads(export(bundle, tz=site(a.site).tz, unsensed_floor=a.floor))
+    doc["approval"] = ("none in this file: import only after `nocturne readiness` passes on readiness.json in this "
+                       "directory. Registered nodes are not evidence that the CMS accepts these programmes.")
+    compatibility = None
+    if caps is not None:
+        progs, report = adapt_programs(progs, caps)
+        if not report["compatible"]:
+            print(f"refusing to export: the programmes do not fit {report['controller']} without losing light:\n  "
+                  + "\n  ".join(report["blocking"]), file=sys.stderr)
+            return 1
+        doc["programs"] = progs
+        doc["controller"] = {"name": report["controller"], "source": report["source"], "verified": report["verified"]}
+        compatibility = {"checked": True, **{k: report[k] for k in ("controller", "source", "verified", "compatible", "blocking")},
+                         "adapted": sorted(n for n, e in report["programs"].items() if e["adapted"])}
     os.makedirs(a.out, exist_ok=True)
+    files = ["programs.json"]
     with open(os.path.join(a.out, "programs.json"), "w") as f:
-        f.write(export(bundle, tz=site(a.site).tz, unsensed_floor=a.floor))
-    for name, prog in programs(bundle, a.floor).items():
-        print(f"{name:28s} " + "  ".join(f"{st['at']} {st['level']}%" for st in prog["steps"]))
+        f.write(json.dumps(doc, indent=2) + "\n")
+    if compatibility is not None:
+        files.append("compatibility.json")
+        with open(os.path.join(a.out, "compatibility.json"), "w") as f:
+            f.write(json.dumps(report, indent=2) + "\n")
+    for name, prog in progs.items():
+        mark = "*" if "original_steps" in prog else " "
+        print(f"{name:27s}{mark} " + "  ".join(f"{st['at']} {st['level']}%" for st in prog["steps"]))
+    if compatibility and compatibility["adapted"]:
+        print(f"* adapted to {compatibility['controller']}: never darker than exported, so the business case's "
+              f"Phase 0 saving is an upper bound (see compatibility.json)")
     if plan_rows is not None:
         rows = [r for r in plan_rows if a.wave is None or int(r["wave"]) == a.wave]
         if not rows:
             waves = sorted({int(r["wave"]) for r in plan_rows})
             print(f"nocturne: warning: no segments in {a.plan}" + (f" for wave {a.wave}" if a.wave is not None else "")
                   + (f" (its waves: {', '.join(map(str, waves))})" if waves else ""), file=sys.stderr)
-        out = os.path.join(a.out, f"assignments{'' if a.wave is None else '-wave' + str(a.wave)}.csv")
+        name = f"assignments{'' if a.wave is None else '-wave' + str(a.wave)}.csv"
+        out = os.path.join(a.out, name)
         with open(out, "w", newline="") as f:
             w = csv.writer(f, lineterminator="\n")
             w.writerow(["segment", "ward", "road_class", "lights", "program", "switch_on"])
             for r in rows:
                 w.writerow([r["segment"], r["ward"], r["road_class"], r["lights"], r["road_class"], r["switch_on"]])
+        files.append(name)
         print(f"wrote {out}: {len(rows):,} segments", file=sys.stderr)
     print("wrote", os.path.join(a.out, "programs.json"), file=sys.stderr)
+    record = os.path.join(a.out, "readiness.json")
+    if os.path.exists(record):                                 # never overwrite recorded approvals
+        print(f"nocturne: warning: kept the existing {record}: its approvals cover only the files it lists, and "
+              "`nocturne readiness` will refuse any file changed or added since. Export each wave to its own "
+              "directory, or move the old record aside to start again", file=sys.stderr)
+    else:
+        with open(record, "w") as f:
+            f.write(json.dumps(readiness_record(a.out, files, compatibility), indent=2) + "\n")
+        print(f"wrote {record}: every gate pending; nothing here is approved for import", file=sys.stderr)
     return 0
+
+
+def cmd_readiness(a) -> int:
+    from .integration import evaluate_readiness
+    r = evaluate_readiness(a.record)
+    if a.json:
+        print(json.dumps(r, indent=2))
+    else:
+        print("READY for import: every gate recorded" if r["ready"] else
+              f"NOT READY for import: {len(r['blockers'])} blocker{'s' if len(r['blockers']) != 1 else ''}")
+        for b in r["blockers"]:
+            print("  ✗ " + b)
+        for p in r["passed"]:
+            print("  ✓ " + p)
+    return 0 if r["ready"] else 3
+
+
+def cmd_reconcile(a) -> int:
+    from .integration import read_assignments, read_programs, read_readback_assignments, reconcile
+    intended = read_programs(a.programs)
+    assignments = read_assignments(a.assignments)
+    r = reconcile(intended, assignments, read_programs(a.cms_programs), read_readback_assignments(a.cms_assignments))
+    if a.json:
+        print(json.dumps(r, indent=2))
+    else:
+        print(f"{r['matched']:,} of {len(assignments):,} segments hold a programme at least as bright as intended")
+        for e in r["errors"][:50]:
+            print("  ✗ " + e)
+        if len(r["errors"]) > 50:
+            print(f"  ... and {len(r['errors']) - 50} more errors")
+        for w in r["warnings"][:20]:
+            print("  ! " + w)
+    return 0 if r["ok"] else 3
 
 
 def cmd_restore(a) -> int:
@@ -500,11 +582,61 @@ def cmd_restore(a) -> int:
     result = solve(read_project(a.project), a.budget)
     if a.report:
         from .restoration_report import render
-        with open(a.report, "x", encoding="utf-8") as stream:
-            stream.write(render(result))
-        print(f"wrote {a.report}", file=sys.stderr)
+        _write_new(a.report, render(result))
     print(json.dumps(result, indent=2, allow_nan=False) if a.json else format_plan(result))
     return 0 if result["status"] == "feasible" else 3
+
+
+def _write_new(path, text):
+    """Write a new file; never overwrite one (planning artefacts are evidence)."""
+    with open(path, "x", encoding="utf-8") as stream:
+        stream.write(text)
+    print(f"wrote {path}", file=sys.stderr)
+
+
+def cmd_check(a) -> int:
+    from .derive import read as read_physical
+    from .restore import ProjectError, check, read_project
+    raw = read_project(a.project)
+    if isinstance(raw, dict) and "schema" in raw:              # a physical district: check it, then what it derives
+        from .derive import derive
+        try:
+            read_physical(raw)
+            report = dict(check(derive(raw)), note="physical district: run `nocturne derive` to compute the project")
+        except ProjectError as e:
+            report = {"ok": False, "problems": [{"path": p, "message": m} for p, m in e.problems], "warnings": []}
+    else:
+        report = check(raw)
+    if a.json:
+        print(json.dumps(report, indent=2))
+        return 0 if report["ok"] else 2
+    if report["ok"]:
+        print(f"{a.project}: ready to plan" + (f" ({report['note']})" if report.get("note") else ""))
+    else:
+        print(f"{a.project}: {len(report['problems'])} problem{'s' if len(report['problems']) != 1 else ''} to fix")
+        for p in report["problems"]:
+            print(f"  ✗ {p['path'] or 'project'}: {p['message']}")
+    for w in report["warnings"]:
+        print(f"  ! {w['path'] or 'project'}: {w['message']}")
+    return 0 if report["ok"] else 2
+
+
+def cmd_app(a) -> int:
+    from .app import run
+    return run(a.project, port=a.port, open_browser=not a.no_browser)
+
+
+def cmd_derive(a) -> int:
+    from .derive import derive, format_derivation
+    from .restore import read_project
+    project = derive(read_project(a.physical))
+    text = json.dumps(project, indent=2, allow_nan=False) + "\n"
+    if a.out:
+        _write_new(a.out, text)
+        print(format_derivation(project))
+    else:
+        sys.stdout.write(text)
+    return 0
 
 
 def cmd_experiment(a) -> int:
@@ -540,6 +672,26 @@ def main(argv=None) -> int:
     rp.add_argument("--report", help="write a portable HTML brief (new file only)")
     rp.add_argument("--json", action="store_true")
     rp.set_defaults(fn=cmd_restore)
+
+    ap_ = sub.add_parser("app", help="open the restoration planner in your browser (this computer only)",
+                         epilog="Edit places, conditions, sources and options in forms; check as you type; find the plan; "
+                                "print the brief. Saves only to the file given here, keeping a .bak. Ctrl+C stops it.")
+    ap_.add_argument("project", nargs="?", help="project JSON to open and save to (created on first save if missing)")
+    ap_.add_argument("--port", type=_nonneg_int, default=0, help="local port (default: any free port)")
+    ap_.add_argument("--no-browser", action="store_true", help="print the address instead of opening a browser")
+    ap_.set_defaults(fn=cmd_app)
+
+    ck = sub.add_parser("check", help="list every problem in a restoration project, with warnings to read",
+                        epilog="Exit 0: ready to plan (warnings may remain); 2: problems to fix.")
+    ck.add_argument("project", help="restoration project JSON (or a physical district for `derive`)")
+    ck.add_argument("--json", action="store_true")
+    ck.set_defaults(fn=cmd_check)
+
+    dv = sub.add_parser("derive", help="compute a project's contributions from geometry, emitters and atmosphere",
+                        epilog="Writes a schema-2 project for `nocturne restore`. Coefficients are modelled, not measured.")
+    dv.add_argument("physical", help="physical district JSON (schema nocturne-physical/1)")
+    dv.add_argument("--out", help="write the project here (new file only) and print a summary; default: JSON to stdout")
+    dv.set_defaults(fn=cmd_derive)
 
     ex = sub.add_parser("experiment", help="preregister randomized source-isolation windows; no actuation")
     ex.add_argument("--source", action="append", required=True, help="consenting source group ID; repeat for several groups")
@@ -618,7 +770,24 @@ def main(argv=None) -> int:
     sc.add_argument("--wave", type=_positive_int, help="only this wave's segments (needs --plan)")
     sc.add_argument("--site", default="dc", choices=sorted(SITES))
     sc.add_argument("--version", type=int, default=1, help="bundle version the programmes come from")
+    sc.add_argument("--controller", help="controller capability profile JSON: check the programmes against it and "
+                                         "adapt them (brighter only) where they exceed it")
     sc.set_defaults(fn=cmd_schedule)
+
+    rd = sub.add_parser("readiness", help="is an exported schedule package approved for CMS import?",
+                        epilog="Exit 0: every gate recorded and the files unchanged; 3: not ready; 2: invalid input.")
+    rd.add_argument("record", help="readiness.json written by `nocturne schedule`")
+    rd.add_argument("--json", action="store_true")
+    rd.set_defaults(fn=cmd_readiness)
+
+    rc = sub.add_parser("reconcile", help="compare the CMS's readback with the intended programmes and assignments",
+                        epilog="Exit 0: every segment held at least as bright as intended; 3: errors; 2: invalid input.")
+    rc.add_argument("--programs", required=True, help="programs.json from `nocturne schedule`")
+    rc.add_argument("--assignments", required=True, help="assignments CSV from `nocturne schedule --plan`")
+    rc.add_argument("--cms-programs", required=True, help="programmes the CMS reports holding, in programs.json form")
+    rc.add_argument("--cms-assignments", required=True, help="CSV segment,program as the CMS reports them")
+    rc.add_argument("--json", action="store_true")
+    rc.set_defaults(fn=cmd_reconcile)
 
     sk = sub.add_parser("sky", help="zenith sky brightness and stars at DC's dark places")
     sk.add_argument("--share", type=float, default=0.15, help="streetlights' share of artificial light (Tucson prior)")

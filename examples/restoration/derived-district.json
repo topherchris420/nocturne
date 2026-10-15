@@ -1,0 +1,743 @@
+{
+  "schema_version": 2,
+  "title": "An invented district, derived from geometry and atmosphere",
+  "synthetic": true,
+  "evidence": "SYNTHETIC. Emitter positions, lumens, uplight, reflectance, costs, rebound and atmospheres are invented.",
+  "budget_usd": 8000,
+  "receptors": [
+    {
+      "id": "neighborhood",
+      "label": "Neighborhood observation point",
+      "target_mcd_m2": 3.6
+    },
+    {
+      "id": "park",
+      "label": "Park observation point",
+      "target_mcd_m2": 1.8
+    },
+    {
+      "id": "river",
+      "label": "River observation point",
+      "target_mcd_m2": 1.5
+    }
+  ],
+  "sources": [
+    {
+      "id": "crossing",
+      "label": "Pedestrian crossing",
+      "owner": "Example transport department",
+      "authorized": true,
+      "minimum_service_fraction": 0.9,
+      "options": [
+        {
+          "id": "dim",
+          "label": "Deep-dim the crossing",
+          "cost_usd": 100,
+          "service_fraction": 0.2,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.2,
+            "hazy": 0.2,
+            "snow": 0.2
+          }
+        },
+        {
+          "id": "shield",
+          "label": "Shield crossing while retaining task illumination",
+          "cost_usd": 2000,
+          "service_fraction": 1,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": {
+              "neighborhood": 0.818021,
+              "park": 0.776825,
+              "river": 0.763579
+            },
+            "hazy": {
+              "neighborhood": 0.790815,
+              "park": 0.713375,
+              "river": 0.699244
+            },
+            "snow": {
+              "neighborhood": 0.971744,
+              "park": 0.953202,
+              "river": 0.947252
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "facades",
+      "label": "Decorative building facades",
+      "owner": "Example building consortium",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "closing-time",
+          "label": "Switch decorative uplights off after closing",
+          "cost_usd": 500,
+          "service_fraction": 0,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.1,
+            "hazy": 0.1,
+            "snow": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "monument",
+      "label": "Neighboring monument",
+      "owner": "Nonparticipating owner",
+      "authorized": false,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "curfew",
+          "label": "Request a monument-lighting curfew",
+          "cost_usd": 600,
+          "service_fraction": 0,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.05,
+            "hazy": 0.05,
+            "snow": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "id": "offices",
+      "label": "Office windows",
+      "owner": "Example office cooperative",
+      "authorized": true,
+      "minimum_service_fraction": 1,
+      "options": [
+        {
+          "id": "blinds",
+          "label": "Close blinds while preserving indoor task light",
+          "cost_usd": 1800,
+          "service_fraction": 1,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.3,
+            "hazy": 0.3,
+            "snow": 0.3
+          }
+        },
+        {
+          "id": "blinds-and-zoning",
+          "label": "Blinds plus vacancy zoning",
+          "cost_usd": 2200,
+          "service_fraction": 1,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.18,
+            "hazy": 0.18,
+            "snow": 0.18
+          }
+        },
+        {
+          "id": "all-off",
+          "label": "Switch all interior lighting off",
+          "cost_usd": 100,
+          "service_fraction": 0,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.05,
+            "hazy": 0.05,
+            "snow": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "id": "signs",
+      "label": "Commercial signs",
+      "owner": "Example merchants association",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "curfew",
+          "label": "Apply the shared curfew to nonessential signs",
+          "cost_usd": 250,
+          "service_fraction": 0,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.05,
+            "hazy": 0.05,
+            "snow": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "id": "sports",
+      "label": "Sports field floodlights",
+      "owner": "Example recreation department",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "booking",
+          "label": "Tie field lights to bookings and shutdown checks",
+          "cost_usd": 1200,
+          "service_fraction": 0,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.1,
+            "hazy": 0.1,
+            "snow": 0.1
+          }
+        },
+        {
+          "id": "optics",
+          "label": "Replace floodlight optics (full cutoff, same field lighting)",
+          "cost_usd": 4000,
+          "service_fraction": 1,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": {
+              "neighborhood": 0.790607,
+              "park": 0.767411,
+              "river": 0.806267
+            },
+            "hazy": {
+              "neighborhood": 0.725155,
+              "park": 0.706065,
+              "river": 0.749513
+            },
+            "snow": {
+              "neighborhood": 0.983719,
+              "park": 0.972414,
+              "river": 0.991396
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "streets",
+      "label": "Residential streets",
+      "owner": "Example transport department",
+      "authorized": true,
+      "minimum_service_fraction": 0.6,
+      "options": [
+        {
+          "id": "schedule",
+          "label": "Reviewed late-night schedule",
+          "cost_usd": 800,
+          "service_fraction": 0.6,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": 0.6,
+            "hazy": 0.6,
+            "snow": 0.6
+          }
+        },
+        {
+          "id": "shield-and-schedule",
+          "label": "Top shields on globes plus reviewed schedule",
+          "cost_usd": 2400,
+          "service_fraction": 0.8,
+          "reviewed": true,
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review.",
+          "remaining_fraction": {
+            "clear": {
+              "neighborhood": 0.474958,
+              "park": 0.468034,
+              "river": 0.456783
+            },
+            "hazy": {
+              "neighborhood": 0.447428,
+              "park": 0.436138,
+              "river": 0.420301
+            },
+            "snow": {
+              "neighborhood": 0.572161,
+              "park": 0.569075,
+              "river": 0.564008
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "clear",
+      "label": "Clear night (AOD 0.10)",
+      "unmanaged_mcd_m2": {
+        "park": 0.3,
+        "neighborhood": 0.35,
+        "river": 0.4
+      },
+      "contributions_mcd_m2": {
+        "crossing": {
+          "neighborhood": [
+            0.0682567,
+            0.0853209,
+            0.106651
+          ],
+          "park": [
+            0.00170957,
+            0.00213696,
+            0.0026712
+          ],
+          "river": [
+            0.000820467,
+            0.00102558,
+            0.00128198
+          ]
+        },
+        "facades": {
+          "neighborhood": [
+            0.646315,
+            0.807894,
+            1.00987
+          ],
+          "park": [
+            0.0942849,
+            0.117856,
+            0.14732
+          ],
+          "river": [
+            0.0306273,
+            0.0382841,
+            0.0478551
+          ]
+        },
+        "monument": {
+          "neighborhood": [
+            0.0560121,
+            0.0700152,
+            0.0875189
+          ],
+          "park": [
+            0.250674,
+            0.313343,
+            0.391679
+          ],
+          "river": [
+            0.0179325,
+            0.0224156,
+            0.0280195
+          ]
+        },
+        "offices": {
+          "neighborhood": [
+            0.910801,
+            1.1385,
+            1.42313
+          ],
+          "park": [
+            0.0363278,
+            0.0454097,
+            0.0567621
+          ],
+          "river": [
+            0.0239633,
+            0.0299541,
+            0.0374427
+          ]
+        },
+        "signs": {
+          "neighborhood": [
+            0.345221,
+            0.431527,
+            0.539408
+          ],
+          "park": [
+            0.0262689,
+            0.0328361,
+            0.0410451
+          ],
+          "river": [
+            0.0208099,
+            0.0260124,
+            0.0325155
+          ]
+        },
+        "sports": {
+          "neighborhood": [
+            0.0898377,
+            0.112297,
+            0.140371
+          ],
+          "park": [
+            0.0272533,
+            0.0340666,
+            0.0425833
+          ],
+          "river": [
+            0.231305,
+            0.289131,
+            0.361413
+          ]
+        },
+        "streets": {
+          "neighborhood": [
+            0.539656,
+            0.67457,
+            0.843213
+          ],
+          "park": [
+            0.218784,
+            0.27348,
+            0.34185
+          ],
+          "river": [
+            0.0788719,
+            0.0985898,
+            0.123237
+          ]
+        }
+      }
+    },
+    {
+      "id": "hazy",
+      "label": "Hazy night (AOD 0.45)",
+      "unmanaged_mcd_m2": {
+        "park": 0.4,
+        "neighborhood": 0.45,
+        "river": 0.55
+      },
+      "contributions_mcd_m2": {
+        "crossing": {
+          "neighborhood": [
+            0.137111,
+            0.171389,
+            0.214236
+          ],
+          "park": [
+            0.00184651,
+            0.00230814,
+            0.00288518
+          ],
+          "river": [
+            0.000724949,
+            0.000906186,
+            0.00113273
+          ]
+        },
+        "facades": {
+          "neighborhood": [
+            1.20164,
+            1.50206,
+            1.87757
+          ],
+          "park": [
+            0.1218,
+            0.15225,
+            0.190313
+          ],
+          "river": [
+            0.0288114,
+            0.0360142,
+            0.0450178
+          ]
+        },
+        "monument": {
+          "neighborhood": [
+            0.0546976,
+            0.068372,
+            0.085465
+          ],
+          "park": [
+            0.365402,
+            0.456753,
+            0.570941
+          ],
+          "river": [
+            0.0117745,
+            0.0147181,
+            0.0183976
+          ]
+        },
+        "offices": {
+          "neighborhood": [
+            1.86766,
+            2.33458,
+            2.91822
+          ],
+          "park": [
+            0.0414198,
+            0.0517747,
+            0.0647184
+          ],
+          "river": [
+            0.0242469,
+            0.0303086,
+            0.0378858
+          ]
+        },
+        "signs": {
+          "neighborhood": [
+            0.678868,
+            0.848585,
+            1.06073
+          ],
+          "park": [
+            0.0310887,
+            0.0388608,
+            0.0485761
+          ],
+          "river": [
+            0.0229847,
+            0.0287309,
+            0.0359136
+          ]
+        },
+        "sports": {
+          "neighborhood": [
+            0.0974787,
+            0.121848,
+            0.15231
+          ],
+          "park": [
+            0.0211518,
+            0.0264398,
+            0.0330497
+          ],
+          "river": [
+            0.31443,
+            0.393037,
+            0.491296
+          ]
+        },
+        "streets": {
+          "neighborhood": [
+            0.80781,
+            1.00976,
+            1.2622
+          ],
+          "park": [
+            0.276036,
+            0.345045,
+            0.431306
+          ],
+          "river": [
+            0.074302,
+            0.0928776,
+            0.116097
+          ]
+        }
+      }
+    },
+    {
+      "id": "snow",
+      "label": "Snow cover (AOD 0.12, surfaces reflect 3.5x)",
+      "unmanaged_mcd_m2": {
+        "park": 0.55,
+        "neighborhood": 0.65,
+        "river": 0.7
+      },
+      "contributions_mcd_m2": {
+        "crossing": {
+          "neighborhood": [
+            0.212787,
+            0.265984,
+            0.33248
+          ],
+          "park": [
+            0.00491277,
+            0.00614096,
+            0.00767621
+          ],
+          "river": [
+            0.00230239,
+            0.00287798,
+            0.00359748
+          ]
+        },
+        "facades": {
+          "neighborhood": [
+            1.25646,
+            1.57058,
+            1.96322
+          ],
+          "park": [
+            0.171616,
+            0.214521,
+            0.268151
+          ],
+          "river": [
+            0.0531439,
+            0.0664299,
+            0.0830374
+          ]
+        },
+        "monument": {
+          "neighborhood": [
+            0.0773151,
+            0.0966439,
+            0.120805
+          ],
+          "park": [
+            0.364301,
+            0.455376,
+            0.56922
+          ],
+          "river": [
+            0.0237022,
+            0.0296277,
+            0.0370346
+          ]
+        },
+        "offices": {
+          "neighborhood": [
+            1.94795,
+            2.43493,
+            3.04366
+          ],
+          "park": [
+            0.0695846,
+            0.0869807,
+            0.108726
+          ],
+          "river": [
+            0.045053,
+            0.0563162,
+            0.0703953
+          ]
+        },
+        "signs": {
+          "neighborhood": [
+            0.501641,
+            0.627052,
+            0.783815
+          ],
+          "park": [
+            0.0353171,
+            0.0441464,
+            0.0551829
+          ],
+          "river": [
+            0.0277385,
+            0.0346731,
+            0.0433413
+          ]
+        },
+        "sports": {
+          "neighborhood": [
+            0.247334,
+            0.309167,
+            0.386459
+          ],
+          "park": [
+            0.0719622,
+            0.0899527,
+            0.112441
+          ],
+          "river": [
+            0.65623,
+            0.820288,
+            1.02536
+          ]
+        },
+        "streets": {
+          "neighborhood": [
+            1.61794,
+            2.02242,
+            2.52803
+          ],
+          "park": [
+            0.641369,
+            0.801711,
+            1.00214
+          ],
+          "river": [
+            0.223228,
+            0.279034,
+            0.348793
+          ]
+        }
+      }
+    }
+  ],
+  "provenance": {
+    "derived_by": "nocturne derive",
+    "input_schema": "nocturne-physical/1",
+    "input_sha256": "e6ec89f3eb94ca733992e24131884f31233015a1ed459ea7c181a112954b868d",
+    "method": "single-scattering zenith luminance (vdl7.skyglow kernels), photopic SQM-like band",
+    "calibration_factor": [
+      0.8,
+      1.0,
+      1.25
+    ],
+    "conditions": {
+      "clear": {
+        "aod_550": 0.1,
+        "aerosol_scale_height_m": 1500.0,
+        "single_scattering_albedo": 0.9,
+        "asymmetry": 0.7,
+        "reflectance_multiplier": 1.0
+      },
+      "hazy": {
+        "aod_550": 0.45,
+        "aerosol_scale_height_m": 1500.0,
+        "single_scattering_albedo": 0.9,
+        "asymmetry": 0.7,
+        "reflectance_multiplier": 1.0
+      },
+      "snow": {
+        "aod_550": 0.12,
+        "aerosol_scale_height_m": 1500.0,
+        "single_scattering_albedo": 0.9,
+        "asymmetry": 0.7,
+        "reflectance_multiplier": 3.5
+      }
+    },
+    "limits": [
+      "Single scattering in a plane-parallel atmosphere: no multiple scattering or Earth curvature (significant beyond about 30 km), no terrain or building obstruction.",
+      "Direct uplight is emitted evenly over the upper hemisphere and reflected light as a Lambertian surface; real luminaires and facades have their own distributions.",
+      "Absolute contributions carry the calibration factor; before/after ratios are far less sensitive to it. Calibrate against measured zenith brightness before relying on absolute values.",
+      "Lumens are those emitted during the assessed window; a curfew or booking schedule enters as an output factor."
+    ]
+  },
+  "interactions": [
+    {
+      "id": "sign-rebound",
+      "label": "Merchants leave security floodlights on after the sign curfew",
+      "when": {
+        "signs": "curfew"
+      },
+      "delta_mcd_m2": {
+        "clear": {
+          "park": 0,
+          "neighborhood": 0.05,
+          "river": 0
+        },
+        "hazy": {
+          "park": 0,
+          "neighborhood": [
+            0.05,
+            0.08
+          ],
+          "river": 0
+        },
+        "snow": {
+          "park": 0,
+          "neighborhood": 0.09,
+          "river": 0
+        }
+      },
+      "evidence": "INVENTED rebound; a source-isolation trial with the floodlights logged would measure it."
+    }
+  ]
+}

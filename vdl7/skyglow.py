@@ -121,7 +121,7 @@ _D_GRID = [10 ** (1.0 + 4.3 * i / 119) for i in range(120)]          # 10 m .. 2
 _Z_GRID = [0.0] + [0.01 * (160000.0 / 0.01) ** (i / 999) for i in range(1000)]  # 0, 1 cm .. 160 km
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=64)                   # small tables: one per atmosphere a derivation or study uses
 def _kernels(atm: Atmosphere) -> Dict[Tuple[str, str], List[float]]:
     """Zenith luminance (cd/m^2) at distance d per lumen of upward flux, for
     each (emission, scatterer): emission 'lambert' or 'iso', scatterer 'R'
@@ -200,27 +200,34 @@ def _disk_mean(d_key: int, radius_m: float, emission: str, scatterer: str, atm: 
 _NEAR_RADII = 6.0
 
 
-@lru_cache(maxsize=64)
-def _edge_excess(emission: str, scatterer: str, atm: Atmosphere) -> float:
-    edge = _NEAR_RADII * CELL_RADIUS_M
+@lru_cache(maxsize=256)
+def _edge_excess(emission: str, scatterer: str, atm: Atmosphere, radius_m: float = CELL_RADIUS_M) -> float:
+    edge = _NEAR_RADII * radius_m
     k = int(round(edge / _DISK_STEP_M))
-    return _disk_mean(k, CELL_RADIUS_M, emission, scatterer, atm) / kernel(k * _DISK_STEP_M, emission, scatterer, atm) - 1.0
+    return _disk_mean(k, radius_m, emission, scatterer, atm) / kernel(k * _DISK_STEP_M, emission, scatterer, atm) - 1.0
 
 
-def _cell_kernel(d: float, emission: str, scatterer: str, atm: Atmosphere) -> float:
-    """A cell's kernel at distance d: the mean over the cell's area within
-    six cell radii (interpolated between 5 m steps), and beyond that the
-    point kernel with the disk's second-order excess, which falls as 1/d^2.
-    Continuous everywhere, so a place moving past a cell edge sees no step."""
-    edge = _NEAR_RADII * CELL_RADIUS_M
+def area_kernel(d: float, radius_m: float, emission: str, scatterer: str, atm: Atmosphere = Atmosphere()) -> float:
+    """Zenith luminance (cd/m^2) per upward lumen spread evenly over a disk
+    of `radius_m` whose centre is `d` metres from the observer: the mean over
+    the disk within six radii (interpolated between 5 m steps), and beyond
+    that the point kernel with the disk's second-order excess, which falls
+    as 1/d^2. Continuous everywhere, so a place moving past the edge sees
+    no step."""
+    edge = _NEAR_RADII * radius_m
     if d < edge:
         x = d / _DISK_STEP_M
         k = int(math.floor(x))
         f = x - k
-        a = _disk_mean(k, CELL_RADIUS_M, emission, scatterer, atm)
-        b = _disk_mean(k + 1, CELL_RADIUS_M, emission, scatterer, atm)
+        a = _disk_mean(k, radius_m, emission, scatterer, atm)
+        b = _disk_mean(k + 1, radius_m, emission, scatterer, atm)
         return a + f * (b - a)
-    return kernel(d, emission, scatterer, atm) * (1.0 + _edge_excess(emission, scatterer, atm) * (edge / d) ** 2)
+    return kernel(d, emission, scatterer, atm) * (1.0 + _edge_excess(emission, scatterer, atm, radius_m) * (edge / d) ** 2)
+
+
+def _cell_kernel(d: float, emission: str, scatterer: str, atm: Atmosphere) -> float:
+    """A grid cell's kernel at distance d (a disk of the cell's area)."""
+    return area_kernel(d, CELL_RADIUS_M, emission, scatterer, atm)
 
 
 # ------------------------------------------------------------------ grid

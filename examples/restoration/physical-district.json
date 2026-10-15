@@ -1,0 +1,390 @@
+{
+  "schema": "nocturne-physical/1",
+  "title": "An invented district, derived from geometry and atmosphere",
+  "synthetic": true,
+  "evidence": "SYNTHETIC. Emitter positions, lumens, uplight, reflectance, costs, rebound and atmospheres are invented.",
+  "budget_usd": 8000,
+  "coordinates": "local_m",
+  "calibration_factor": [
+    0.8,
+    1.0,
+    1.25
+  ],
+  "receptors": [
+    {
+      "id": "park",
+      "label": "Park observation point",
+      "target_mcd_m2": 1.8,
+      "x_m": -1600,
+      "y_m": 900
+    },
+    {
+      "id": "neighborhood",
+      "label": "Neighborhood observation point",
+      "target_mcd_m2": 3.6,
+      "x_m": 0,
+      "y_m": 0
+    },
+    {
+      "id": "river",
+      "label": "River observation point",
+      "target_mcd_m2": 1.5,
+      "x_m": 2200,
+      "y_m": -1500
+    }
+  ],
+  "conditions": [
+    {
+      "id": "clear",
+      "label": "Clear night (AOD 0.10)",
+      "aod_550": 0.1,
+      "unmanaged_mcd_m2": {
+        "park": 0.3,
+        "neighborhood": 0.35,
+        "river": 0.4
+      }
+    },
+    {
+      "id": "hazy",
+      "label": "Hazy night (AOD 0.45)",
+      "aod_550": 0.45,
+      "unmanaged_mcd_m2": {
+        "park": 0.4,
+        "neighborhood": 0.45,
+        "river": 0.55
+      }
+    },
+    {
+      "id": "snow",
+      "label": "Snow cover (AOD 0.12, surfaces reflect 3.5x)",
+      "aod_550": 0.12,
+      "reflectance_multiplier": 3.5,
+      "unmanaged_mcd_m2": {
+        "park": 0.55,
+        "neighborhood": 0.65,
+        "river": 0.7
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "streets",
+      "label": "Residential streets",
+      "owner": "Example transport department",
+      "authorized": true,
+      "minimum_service_fraction": 0.6,
+      "spectrum": "3000K",
+      "emitters": [
+        {
+          "x_m": -800,
+          "y_m": 300,
+          "radius_m": 600,
+          "lumens": 4000000.0,
+          "uplight_fraction": 0.04,
+          "reflectance": 0.12
+        },
+        {
+          "x_m": 700,
+          "y_m": -200,
+          "radius_m": 600,
+          "lumens": 4000000.0,
+          "uplight_fraction": 0.04,
+          "reflectance": 0.12
+        },
+        {
+          "x_m": 0,
+          "y_m": 900,
+          "radius_m": 600,
+          "lumens": 3000000.0,
+          "uplight_fraction": 0.04,
+          "reflectance": 0.12
+        }
+      ],
+      "options": [
+        {
+          "id": "schedule",
+          "label": "Reviewed late-night schedule",
+          "cost_usd": 800,
+          "service_fraction": 0.6,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.6
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        },
+        {
+          "id": "shield-and-schedule",
+          "label": "Top shields on globes plus reviewed schedule",
+          "cost_usd": 2400,
+          "service_fraction": 0.8,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.6,
+            "uplight_fraction": 0.0
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    },
+    {
+      "id": "facades",
+      "label": "Decorative building facades",
+      "owner": "Example building consortium",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "spectrum": "3000K",
+      "emitters": [
+        {
+          "x_m": -300,
+          "y_m": 200,
+          "radius_m": 200,
+          "lumens": 1500000.0,
+          "uplight_fraction": 0.35,
+          "reflectance": 0.3
+        }
+      ],
+      "options": [
+        {
+          "id": "closing-time",
+          "label": "Switch decorative uplights off after closing",
+          "cost_usd": 500,
+          "service_fraction": 0,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.1
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    },
+    {
+      "id": "offices",
+      "label": "Office windows",
+      "owner": "Example office cooperative",
+      "authorized": true,
+      "minimum_service_fraction": 1,
+      "spectrum": "4000K",
+      "emitters": [
+        {
+          "x_m": 200,
+          "y_m": 100,
+          "radius_m": 250,
+          "lumens": 2000000.0,
+          "uplight_fraction": 0.15,
+          "reflectance": 0.1
+        }
+      ],
+      "options": [
+        {
+          "id": "blinds",
+          "label": "Close blinds while preserving indoor task light",
+          "cost_usd": 1800,
+          "service_fraction": 1,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.3
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        },
+        {
+          "id": "blinds-and-zoning",
+          "label": "Blinds plus vacancy zoning",
+          "cost_usd": 2200,
+          "service_fraction": 1,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.18
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        },
+        {
+          "id": "all-off",
+          "label": "Switch all interior lighting off",
+          "cost_usd": 100,
+          "service_fraction": 0,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.05
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    },
+    {
+      "id": "signs",
+      "label": "Commercial signs",
+      "owner": "Example merchants association",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "spectrum": "4000K",
+      "emitters": [
+        {
+          "x_m": 100,
+          "y_m": -300,
+          "radius_m": 200,
+          "lumens": 800000.0,
+          "uplight_fraction": 0.4,
+          "reflectance": 0.1
+        }
+      ],
+      "options": [
+        {
+          "id": "curfew",
+          "label": "Apply the shared curfew to nonessential signs",
+          "cost_usd": 250,
+          "service_fraction": 0,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.05
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    },
+    {
+      "id": "sports",
+      "label": "Sports field floodlights",
+      "owner": "Example recreation department",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "spectrum": "4000K",
+      "emitters": [
+        {
+          "x_m": 1500,
+          "y_m": -900,
+          "radius_m": 120,
+          "lumens": 3000000.0,
+          "uplight_fraction": 0.1,
+          "reflectance": 0.25
+        }
+      ],
+      "options": [
+        {
+          "id": "booking",
+          "label": "Tie field lights to bookings and shutdown checks",
+          "cost_usd": 1200,
+          "service_fraction": 0,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.1
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        },
+        {
+          "id": "optics",
+          "label": "Replace floodlight optics (full cutoff, same field lighting)",
+          "cost_usd": 4000,
+          "service_fraction": 1,
+          "reviewed": true,
+          "change": {
+            "uplight_fraction": 0.01
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    },
+    {
+      "id": "crossing",
+      "label": "Pedestrian crossing",
+      "owner": "Example transport department",
+      "authorized": true,
+      "minimum_service_fraction": 0.9,
+      "spectrum": "3000K",
+      "emitters": [
+        {
+          "x_m": -100,
+          "y_m": 0,
+          "radius_m": 30,
+          "lumens": 100000.0,
+          "uplight_fraction": 0.05,
+          "reflectance": 0.15
+        }
+      ],
+      "options": [
+        {
+          "id": "dim",
+          "label": "Deep-dim the crossing",
+          "cost_usd": 100,
+          "service_fraction": 0.2,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.2
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        },
+        {
+          "id": "shield",
+          "label": "Shield crossing while retaining task illumination",
+          "cost_usd": 2000,
+          "service_fraction": 1,
+          "reviewed": true,
+          "change": {
+            "uplight_fraction": 0.0
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    },
+    {
+      "id": "monument",
+      "label": "Neighboring monument",
+      "owner": "Nonparticipating owner",
+      "authorized": false,
+      "minimum_service_fraction": 0,
+      "spectrum": "3000K",
+      "emitters": [
+        {
+          "x_m": -2500,
+          "y_m": 1500,
+          "radius_m": 100,
+          "lumens": 2000000.0,
+          "uplight_fraction": 0.5,
+          "reflectance": 0.4
+        }
+      ],
+      "options": [
+        {
+          "id": "curfew",
+          "label": "Request a monument-lighting curfew",
+          "cost_usd": 600,
+          "service_fraction": 0,
+          "reviewed": true,
+          "change": {
+            "output_factor": 0.05
+          },
+          "evidence": "INVENTED cost and physical change; replace with photometry, quotations and review."
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    {
+      "id": "sign-rebound",
+      "label": "Merchants leave security floodlights on after the sign curfew",
+      "when": {
+        "signs": "curfew"
+      },
+      "delta_mcd_m2": {
+        "clear": {
+          "park": 0,
+          "neighborhood": 0.05,
+          "river": 0
+        },
+        "hazy": {
+          "park": 0,
+          "neighborhood": [
+            0.05,
+            0.08
+          ],
+          "river": 0
+        },
+        "snow": {
+          "park": 0,
+          "neighborhood": 0.09,
+          "river": 0
+        }
+      },
+      "evidence": "INVENTED rebound; a source-isolation trial with the floodlights logged would measure it."
+    }
+  ]
+}
