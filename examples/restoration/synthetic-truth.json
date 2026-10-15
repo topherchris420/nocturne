@@ -1,0 +1,7 @@
+{
+  "source_baseline_mcd_m2": {
+    "facades": 0.8,
+    "signs": 0.55
+  },
+  "synthetic": true
+}

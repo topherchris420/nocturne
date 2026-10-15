@@ -1,0 +1,327 @@
+{
+  "schema_version": 1,
+  "title": "An invented district: restore the sky without dimming every task",
+  "synthetic": true,
+  "evidence": "SYNTHETIC. No DC observations, quotations, owner approvals or engineering reviews are represented.",
+  "budget_usd": 8000,
+  "receptors": [
+    {
+      "id": "park",
+      "label": "Park observation point",
+      "target_mcd_m2": 1.55
+    },
+    {
+      "id": "neighborhood",
+      "label": "Neighborhood observation point",
+      "target_mcd_m2": 1.7
+    },
+    {
+      "id": "river",
+      "label": "River observation point",
+      "target_mcd_m2": 1.6
+    }
+  ],
+  "sources": [
+    {
+      "id": "streets",
+      "label": "Residential streets",
+      "owner": "Example transport department",
+      "authorized": true,
+      "minimum_service_fraction": 0.6,
+      "options": [
+        {
+          "id": "schedule",
+          "label": "Reviewed late-night schedule",
+          "cost_usd": 800,
+          "service_fraction": 0.6,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.7,
+            "hazy": 0.75
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        },
+        {
+          "id": "shield-and-schedule",
+          "label": "Shielding plus reviewed schedule",
+          "cost_usd": 2400,
+          "service_fraction": 0.8,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.4,
+            "hazy": 0.5
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    },
+    {
+      "id": "facades",
+      "label": "Decorative building facades",
+      "owner": "Example building consortium",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "closing-time",
+          "label": "Switch decorative uplights off after closing",
+          "cost_usd": 500,
+          "service_fraction": 0,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.12,
+            "hazy": 0.16
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    },
+    {
+      "id": "offices",
+      "label": "Office windows",
+      "owner": "Example office cooperative",
+      "authorized": true,
+      "minimum_service_fraction": 1,
+      "options": [
+        {
+          "id": "blinds",
+          "label": "Close blinds while preserving indoor task light",
+          "cost_usd": 1800,
+          "service_fraction": 1,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.25,
+            "hazy": 0.35
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        },
+        {
+          "id": "blinds-and-zoning",
+          "label": "Blinds plus vacancy zoning",
+          "cost_usd": 2200,
+          "service_fraction": 1,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.15,
+            "hazy": 0.2
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        },
+        {
+          "id": "all-off",
+          "label": "Switch all interior lighting off",
+          "cost_usd": 100,
+          "service_fraction": 0,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.05,
+            "hazy": 0.05
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    },
+    {
+      "id": "signs",
+      "label": "Commercial signs",
+      "owner": "Example merchants association",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "curfew",
+          "label": "Apply the shared curfew to nonessential signs",
+          "cost_usd": 250,
+          "service_fraction": 0,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.05,
+            "hazy": 0.07
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    },
+    {
+      "id": "sports",
+      "label": "Sports field spill",
+      "owner": "Example recreation department",
+      "authorized": true,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "booking",
+          "label": "Tie field lights to bookings and shutdown checks",
+          "cost_usd": 1200,
+          "service_fraction": 0,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.1,
+            "hazy": 0.12
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        },
+        {
+          "id": "optics",
+          "label": "Replace floodlight optics",
+          "cost_usd": 4000,
+          "service_fraction": 1,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.4,
+            "hazy": 0.35
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    },
+    {
+      "id": "crossing",
+      "label": "Pedestrian crossing",
+      "owner": "Example transport department",
+      "authorized": true,
+      "minimum_service_fraction": 0.9,
+      "options": [
+        {
+          "id": "dim",
+          "label": "Deep-dim the crossing",
+          "cost_usd": 100,
+          "service_fraction": 0.2,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.2,
+            "hazy": 0.2
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        },
+        {
+          "id": "shield",
+          "label": "Shield crossing while retaining task illumination",
+          "cost_usd": 2000,
+          "service_fraction": 1,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.7,
+            "hazy": 0.65
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    },
+    {
+      "id": "monument",
+      "label": "Neighboring monument",
+      "owner": "Nonparticipating owner",
+      "authorized": false,
+      "minimum_service_fraction": 0,
+      "options": [
+        {
+          "id": "curfew",
+          "label": "Request a monument-lighting curfew",
+          "cost_usd": 600,
+          "service_fraction": 0,
+          "reviewed": true,
+          "remaining_fraction": {
+            "clear": 0.05,
+            "hazy": 0.05
+          },
+          "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "clear",
+      "label": "Clear reference sky",
+      "unmanaged_mcd_m2": {
+        "park": 0.3,
+        "neighborhood": 0.35,
+        "river": 0.4
+      },
+      "contributions_mcd_m2": {
+        "streets": {
+          "park": 0.3,
+          "neighborhood": 0.4,
+          "river": 0.28
+        },
+        "facades": {
+          "park": 0.85,
+          "neighborhood": 0.4,
+          "river": 0.35
+        },
+        "offices": {
+          "park": 0.25,
+          "neighborhood": 0.85,
+          "river": 0.15
+        },
+        "signs": {
+          "park": 0.4,
+          "neighborhood": 0.65,
+          "river": 0.35
+        },
+        "sports": {
+          "park": 0.6,
+          "neighborhood": 0.25,
+          "river": 0.65
+        },
+        "crossing": {
+          "park": 0.1,
+          "neighborhood": 0.1,
+          "river": 0.08
+        },
+        "monument": {
+          "park": 0.25,
+          "neighborhood": 0.2,
+          "river": 0.1
+        }
+      }
+    },
+    {
+      "id": "hazy",
+      "label": "Hazy stress case",
+      "unmanaged_mcd_m2": {
+        "park": 0.4,
+        "neighborhood": 0.45,
+        "river": 0.55
+      },
+      "contributions_mcd_m2": {
+        "streets": {
+          "park": 0.42,
+          "neighborhood": 0.56,
+          "river": 0.392
+        },
+        "facades": {
+          "park": 1.19,
+          "neighborhood": 0.56,
+          "river": 0.49
+        },
+        "offices": {
+          "park": 0.35,
+          "neighborhood": 1.19,
+          "river": 0.21
+        },
+        "signs": {
+          "park": 0.56,
+          "neighborhood": 0.91,
+          "river": 0.49
+        },
+        "sports": {
+          "park": 0.84,
+          "neighborhood": 0.35,
+          "river": 0.91
+        },
+        "crossing": {
+          "park": 0.14,
+          "neighborhood": 0.14,
+          "river": 0.112
+        },
+        "monument": {
+          "park": 0.35,
+          "neighborhood": 0.28,
+          "river": 0.14
+        }
+      }
+    }
+  ]
+}

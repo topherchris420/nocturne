@@ -1,5 +1,7 @@
 # Cutting light pollution with technology: a proposal
 
+**Executable next step:** [the restoration workflow](RESTORATION.md) now turns a declared source inventory, owner participation, service requirements and darkness targets into a least-cost intervention portfolio, then provides randomized source-isolation trial tools. Its worked example is explicitly synthetic.
+
 [Back to the README](../README.md)
 
 This proposal sets out the hardware, software, sensors, materials and data systems that can cut skyglow, glare, light trespass and harm to wildlife while keeping streets safe, sites secure and budgets intact. It is written from five seats at once:

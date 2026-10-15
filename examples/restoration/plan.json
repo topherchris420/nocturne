@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "title": "An invented district: restore the sky without dimming every task",
+  "synthetic": true,
+  "project_sha256": "cd096120e8e6b1687c6cbd4c5a0bb3fd85482b8053f129f0e1d15671317452d8",
+  "status": "feasible",
+  "solver": "exact enumeration after dominance pruning",
+  "candidate_portfolios": 144,
+  "portfolios_within_budget": 140,
+  "budget_usd": 8000.0,
+  "cost_usd": 6550.0,
+  "minimum_feasible_cost_usd": 6550.0,
+  "worst_target_completion": 1.0,
+  "receptors": [
+    {
+      "scenario": "clear",
+      "receptor": "neighborhood",
+      "label": "Neighborhood observation point",
+      "baseline_mcd_m2": 3.1999999999999997,
+      "remaining_mcd_m2": 1.0430000000000001,
+      "target_mcd_m2": 1.7,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.6740624999999999,
+      "optimistic_floor_without_budget_mcd_m2": 1.013,
+      "meets_target": true
+    },
+    {
+      "scenario": "clear",
+      "receptor": "park",
+      "label": "Park observation point",
+      "baseline_mcd_m2": 3.05,
+      "remaining_mcd_m2": 0.9895,
+      "target_mcd_m2": 1.55,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.6755737704918032,
+      "optimistic_floor_without_budget_mcd_m2": 0.9594999999999999,
+      "meets_target": true
+    },
+    {
+      "scenario": "clear",
+      "receptor": "river",
+      "label": "River observation point",
+      "baseline_mcd_m2": 2.3600000000000003,
+      "remaining_mcd_m2": 0.839,
+      "target_mcd_m2": 1.6,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.6444915254237289,
+      "optimistic_floor_without_budget_mcd_m2": 0.8149999999999998,
+      "meets_target": true
+    },
+    {
+      "scenario": "hazy",
+      "receptor": "neighborhood",
+      "label": "Neighborhood observation point",
+      "baseline_mcd_m2": 4.44,
+      "remaining_mcd_m2": 1.5833,
+      "target_mcd_m2": 1.7,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.643400900900901,
+      "optimistic_floor_without_budget_mcd_m2": 1.5343000000000002,
+      "meets_target": true
+    },
+    {
+      "scenario": "hazy",
+      "receptor": "park",
+      "label": "Park observation point",
+      "baseline_mcd_m2": 4.25,
+      "remaining_mcd_m2": 1.5004,
+      "target_mcd_m2": 1.55,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.646964705882353,
+      "optimistic_floor_without_budget_mcd_m2": 1.4514,
+      "meets_target": true
+    },
+    {
+      "scenario": "hazy",
+      "receptor": "river",
+      "label": "River observation point",
+      "baseline_mcd_m2": 3.294,
+      "remaining_mcd_m2": 1.2619,
+      "target_mcd_m2": 1.6,
+      "gap_mcd_m2": 0.0,
+      "reduction_fraction": 0.6169095324833029,
+      "optimistic_floor_without_budget_mcd_m2": 1.2227000000000001,
+      "meets_target": true
+    }
+  ],
+  "excluded_options": [
+    {
+      "source": "crossing",
+      "option": "dim",
+      "reasons": [
+        "below declared service floor"
+      ]
+    },
+    {
+      "source": "monument",
+      "option": "curfew",
+      "reasons": [
+        "owner authorization missing"
+      ]
+    },
+    {
+      "source": "offices",
+      "option": "all-off",
+      "reasons": [
+        "below declared service floor"
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "source": "facades",
+      "source_label": "Decorative building facades",
+      "owner": "Example building consortium",
+      "option": "closing-time",
+      "label": "Switch decorative uplights off after closing",
+      "cost_usd": 500.0,
+      "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+    },
+    {
+      "source": "offices",
+      "source_label": "Office windows",
+      "owner": "Example office cooperative",
+      "option": "blinds-and-zoning",
+      "label": "Blinds plus vacancy zoning",
+      "cost_usd": 2200.0,
+      "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+    },
+    {
+      "source": "signs",
+      "source_label": "Commercial signs",
+      "owner": "Example merchants association",
+      "option": "curfew",
+      "label": "Apply the shared curfew to nonessential signs",
+      "cost_usd": 250.0,
+      "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+    },
+    {
+      "source": "sports",
+      "source_label": "Sports field spill",
+      "owner": "Example recreation department",
+      "option": "booking",
+      "label": "Tie field lights to bookings and shutdown checks",
+      "cost_usd": 1200.0,
+      "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+    },
+    {
+      "source": "streets",
+      "source_label": "Residential streets",
+      "owner": "Example transport department",
+      "option": "shield-and-schedule",
+      "label": "Shielding plus reviewed schedule",
+      "cost_usd": 2400.0,
+      "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
+    }
+  ],
+  "limits": [
+    "Planning result only. No commands are sent to lights.",
+    "Every result is conditional on the supplied contributions and complete action packages.",
+    "Scenarios are stress cases, not statistical confidence intervals.",
+    "Service fractions and review flags are declarations, not a photometric safety certification.",
+    "Artificial zenith luminance is not a measure of glare, window trespass, or habitat illuminance.",
+    "Unmanaged light remains in every portfolio; no energy savings or star counts are inferred."
+  ]
+}

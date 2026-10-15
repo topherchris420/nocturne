@@ -1,0 +1,497 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "sources": [
+    "facades",
+    "signs"
+  ],
+  "start": "2027-01-04",
+  "seed": "nocturne-synthetic-demo-v1",
+  "pairs": 12,
+  "dim_fraction": 0.5,
+  "timezone": "America/New_York",
+  "control_scale": 1.0,
+  "assignments": [
+    {
+      "pair_id": "facades-2027-01-04",
+      "source": "facades",
+      "night": "2027-01-04",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-05T04:20:00+00:00",
+      "end_utc": "2027-01-05T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-04",
+      "source": "facades",
+      "night": "2027-01-04",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-05T05:20:00+00:00",
+      "end_utc": "2027-01-05T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-05",
+      "source": "facades",
+      "night": "2027-01-05",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-06T04:20:00+00:00",
+      "end_utc": "2027-01-06T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-05",
+      "source": "facades",
+      "night": "2027-01-05",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-06T05:20:00+00:00",
+      "end_utc": "2027-01-06T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-06",
+      "source": "facades",
+      "night": "2027-01-06",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-07T04:20:00+00:00",
+      "end_utc": "2027-01-07T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-06",
+      "source": "facades",
+      "night": "2027-01-06",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-07T05:20:00+00:00",
+      "end_utc": "2027-01-07T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-07",
+      "source": "facades",
+      "night": "2027-01-07",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-08T04:20:00+00:00",
+      "end_utc": "2027-01-08T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-07",
+      "source": "facades",
+      "night": "2027-01-07",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-08T05:20:00+00:00",
+      "end_utc": "2027-01-08T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-08",
+      "source": "facades",
+      "night": "2027-01-08",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-09T04:20:00+00:00",
+      "end_utc": "2027-01-09T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-08",
+      "source": "facades",
+      "night": "2027-01-08",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-09T05:20:00+00:00",
+      "end_utc": "2027-01-09T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-09",
+      "source": "facades",
+      "night": "2027-01-09",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-10T04:20:00+00:00",
+      "end_utc": "2027-01-10T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-09",
+      "source": "facades",
+      "night": "2027-01-09",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-10T05:20:00+00:00",
+      "end_utc": "2027-01-10T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-10",
+      "source": "facades",
+      "night": "2027-01-10",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-11T04:20:00+00:00",
+      "end_utc": "2027-01-11T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-10",
+      "source": "facades",
+      "night": "2027-01-10",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-11T05:20:00+00:00",
+      "end_utc": "2027-01-11T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-11",
+      "source": "facades",
+      "night": "2027-01-11",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-12T04:20:00+00:00",
+      "end_utc": "2027-01-12T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-11",
+      "source": "facades",
+      "night": "2027-01-11",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-12T05:20:00+00:00",
+      "end_utc": "2027-01-12T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-12",
+      "source": "facades",
+      "night": "2027-01-12",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-13T04:20:00+00:00",
+      "end_utc": "2027-01-13T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-12",
+      "source": "facades",
+      "night": "2027-01-12",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-13T05:20:00+00:00",
+      "end_utc": "2027-01-13T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-13",
+      "source": "facades",
+      "night": "2027-01-13",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-14T04:20:00+00:00",
+      "end_utc": "2027-01-14T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-13",
+      "source": "facades",
+      "night": "2027-01-13",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-14T05:20:00+00:00",
+      "end_utc": "2027-01-14T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-14",
+      "source": "facades",
+      "night": "2027-01-14",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-15T04:20:00+00:00",
+      "end_utc": "2027-01-15T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-14",
+      "source": "facades",
+      "night": "2027-01-14",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-15T05:20:00+00:00",
+      "end_utc": "2027-01-15T05:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-15",
+      "source": "facades",
+      "night": "2027-01-15",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-16T04:20:00+00:00",
+      "end_utc": "2027-01-16T04:40:00+00:00"
+    },
+    {
+      "pair_id": "facades-2027-01-15",
+      "source": "facades",
+      "night": "2027-01-15",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-16T05:20:00+00:00",
+      "end_utc": "2027-01-16T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-16",
+      "source": "signs",
+      "night": "2027-01-16",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-17T04:20:00+00:00",
+      "end_utc": "2027-01-17T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-16",
+      "source": "signs",
+      "night": "2027-01-16",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-17T05:20:00+00:00",
+      "end_utc": "2027-01-17T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-17",
+      "source": "signs",
+      "night": "2027-01-17",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-18T04:20:00+00:00",
+      "end_utc": "2027-01-18T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-17",
+      "source": "signs",
+      "night": "2027-01-17",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-18T05:20:00+00:00",
+      "end_utc": "2027-01-18T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-18",
+      "source": "signs",
+      "night": "2027-01-18",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-19T04:20:00+00:00",
+      "end_utc": "2027-01-19T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-18",
+      "source": "signs",
+      "night": "2027-01-18",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-19T05:20:00+00:00",
+      "end_utc": "2027-01-19T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-19",
+      "source": "signs",
+      "night": "2027-01-19",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-20T04:20:00+00:00",
+      "end_utc": "2027-01-20T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-19",
+      "source": "signs",
+      "night": "2027-01-19",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-20T05:20:00+00:00",
+      "end_utc": "2027-01-20T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-20",
+      "source": "signs",
+      "night": "2027-01-20",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-21T04:20:00+00:00",
+      "end_utc": "2027-01-21T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-20",
+      "source": "signs",
+      "night": "2027-01-20",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-21T05:20:00+00:00",
+      "end_utc": "2027-01-21T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-21",
+      "source": "signs",
+      "night": "2027-01-21",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-22T04:20:00+00:00",
+      "end_utc": "2027-01-22T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-21",
+      "source": "signs",
+      "night": "2027-01-21",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-22T05:20:00+00:00",
+      "end_utc": "2027-01-22T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-22",
+      "source": "signs",
+      "night": "2027-01-22",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-23T04:20:00+00:00",
+      "end_utc": "2027-01-23T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-22",
+      "source": "signs",
+      "night": "2027-01-22",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-23T05:20:00+00:00",
+      "end_utc": "2027-01-23T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-23",
+      "source": "signs",
+      "night": "2027-01-23",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-24T04:20:00+00:00",
+      "end_utc": "2027-01-24T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-23",
+      "source": "signs",
+      "night": "2027-01-23",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-24T05:20:00+00:00",
+      "end_utc": "2027-01-24T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-24",
+      "source": "signs",
+      "night": "2027-01-24",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-25T04:20:00+00:00",
+      "end_utc": "2027-01-25T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-24",
+      "source": "signs",
+      "night": "2027-01-24",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-25T05:20:00+00:00",
+      "end_utc": "2027-01-25T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-25",
+      "source": "signs",
+      "night": "2027-01-25",
+      "period": 1,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-26T04:20:00+00:00",
+      "end_utc": "2027-01-26T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-25",
+      "source": "signs",
+      "night": "2027-01-25",
+      "period": 2,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-26T05:20:00+00:00",
+      "end_utc": "2027-01-26T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-26",
+      "source": "signs",
+      "night": "2027-01-26",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-27T04:20:00+00:00",
+      "end_utc": "2027-01-27T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-26",
+      "source": "signs",
+      "night": "2027-01-26",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-27T05:20:00+00:00",
+      "end_utc": "2027-01-27T05:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-27",
+      "source": "signs",
+      "night": "2027-01-27",
+      "period": 1,
+      "condition": "dim",
+      "requested_fraction": 0.5,
+      "start_utc": "2027-01-28T04:20:00+00:00",
+      "end_utc": "2027-01-28T04:40:00+00:00"
+    },
+    {
+      "pair_id": "signs-2027-01-27",
+      "source": "signs",
+      "night": "2027-01-27",
+      "period": 2,
+      "condition": "baseline",
+      "requested_fraction": 1.0,
+      "start_utc": "2027-01-28T05:20:00+00:00",
+      "end_utc": "2027-01-28T05:40:00+00:00"
+    }
+  ],
+  "trial_sha256": "6e835176af9d4315d3cfac1da783c9fd3cb93f993572d633a4b05d6523ddd7c2"
+}

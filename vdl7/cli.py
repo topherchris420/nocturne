@@ -19,6 +19,9 @@ The city
     nocturne brake --plan plan.csv --crashes night_crashes.csv --through 2027-02-28   # before each wave
 
 Models
+    nocturne restore examples/restoration/district.json --report restoration.html
+    nocturne experiment --source facades --start 2027-01-04 --seed public-seed --out trial
+    nocturne attribute trial/trial.json trial/readings.csv
     nocturne spectral [--spd my_engine=lm79.csv]
     nocturne simulate --out out
 """
@@ -492,9 +495,68 @@ def cmd_schedule(a) -> int:
     return 0
 
 
+def cmd_restore(a) -> int:
+    from .restore import read_project, solve, format_plan
+    result = solve(read_project(a.project), a.budget)
+    if a.report:
+        from .restoration_report import render
+        with open(a.report, "x", encoding="utf-8") as stream:
+            stream.write(render(result))
+        print(f"wrote {a.report}", file=sys.stderr)
+    print(json.dumps(result, indent=2, allow_nan=False) if a.json else format_plan(result))
+    return 0 if result["status"] == "feasible" else 3
+
+
+def cmd_experiment(a) -> int:
+    from pathlib import Path
+    from .attribution import make_trial, write_template
+    trial = make_trial(a.source, a.start.isoformat(), a.seed, a.pairs, a.fraction, a.timezone, a.control_scale)
+    directory = Path(a.out)
+    directory.mkdir(parents=True, exist_ok=False)
+    (directory / "trial.json").write_text(json.dumps(trial, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    write_template(trial, directory / "readings.csv")
+    print(json.dumps({"trial_sha256": trial["trial_sha256"], "nights": len(trial["sources"]) * trial["pairs"],
+                      "out": str(directory), "status": "study design only; no lights controlled",
+                      "next": "Review docs/RESTORATION.md, preregister trial.json, then fill readings.csv from screened observations."}, indent=2))
+    return 0
+
+
+def cmd_attribute(a) -> int:
+    from .restore import read_project
+    from .attribution import analyze
+    result = analyze(read_project(a.trial), a.readings)
+    print(json.dumps(result, indent=2, allow_nan=False))
+    return 0 if all(e["complete"] and e["status"] != "insufficient_data" for e in result["estimates"]) else 3
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="nocturne", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    rp = sub.add_parser("restore", help="find the least-cost portfolio that meets every darkness target",
+                        epilog="Exit 0: model targets met; 3: unmet targets; 2: invalid input. This is not a deployment approval.")
+    rp.add_argument("project", help="restoration project JSON")
+    rp.add_argument("--budget", type=_nonneg_float, help="override capital budget in USD")
+    rp.add_argument("--report", help="write a portable HTML brief (new file only)")
+    rp.add_argument("--json", action="store_true")
+    rp.set_defaults(fn=cmd_restore)
+
+    ex = sub.add_parser("experiment", help="preregister randomized source-isolation windows; no actuation")
+    ex.add_argument("--source", action="append", required=True, help="consenting source group ID; repeat for several groups")
+    ex.add_argument("--start", type=_iso_date, required=True, help="first evening YYYY-MM-DD")
+    ex.add_argument("--seed", required=True, help="public seed fixed before collecting data")
+    ex.add_argument("--pairs", type=_positive_int, default=12, help="6–64 nights per source; not a power calculation")
+    ex.add_argument("--fraction", type=float, default=0.5, help="reviewed treatment light-output fraction, 0–0.95")
+    ex.add_argument("--timezone", default="America/New_York", help="IANA timezone")
+    ex.add_argument("--control-scale", type=float, default=1.0, help="preregistered additive control coefficient")
+    ex.add_argument("--out", required=True, help="new trial directory (will not overwrite)")
+    ex.set_defaults(fn=cmd_experiment)
+
+    at = sub.add_parser("attribute", help="estimate source-specific effects from a preregistered crossover trial",
+                        epilog="Exit 0: all planned pairs analyzed; 3: incomplete/insufficient data; 2: invalid input. Exit 0 does not imply an effect.")
+    at.add_argument("trial", help="original trial.json")
+    at.add_argument("readings", help="completed readings.csv")
+    at.set_defaults(fn=cmd_attribute)
 
     t = sub.add_parser("trace", help="run one node on the bench and print its decisions")
     t.add_argument("--road", default="local", choices=[r.value for r in RoadClass])

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "trial_sha256": "6e835176af9d4315d3cfac1da783c9fd3cb93f993572d633a4b05d6523ddd7c2",
+  "readings_sha256": "2087da66d2a4780a06feba6a57500f1aee05b75ccad636c9948bdabb85b9ce7d",
+  "estimates": [
+    {
+      "source": "facades",
+      "usable_pairs": 12,
+      "planned_pairs": 12,
+      "complete": true,
+      "status": "reduction_detected",
+      "removed_mcd_m2": 0.40832657158757274,
+      "removed_interval_mcd_m2": [
+        0.38580569803950704,
+        0.43263608413371285
+      ],
+      "source_at_baseline_mcd_m2": 0.8166531431751455,
+      "source_interval_mcd_m2": [
+        0.7716113960790141,
+        0.8652721682674257
+      ],
+      "p_two_sided": 0.00048828125,
+      "p_bonferroni": 0.0009765625,
+      "test": "exact paired randomization"
+    },
+    {
+      "source": "signs",
+      "usable_pairs": 12,
+      "planned_pairs": 12,
+      "complete": true,
+      "status": "reduction_detected",
+      "removed_mcd_m2": 0.2782652066293668,
+      "removed_interval_mcd_m2": [
+        0.25887016562353915,
+        0.29759045640602094
+      ],
+      "source_at_baseline_mcd_m2": 0.5565304132587336,
+      "source_interval_mcd_m2": [
+        0.5177403312470783,
+        0.5951809128120419
+      ],
+      "p_two_sided": 0.00048828125,
+      "p_bonferroni": 0.0009765625,
+      "test": "exact paired randomization"
+    }
+  ],
+  "lost_pairs": [],
+  "received_windows": 48,
+  "planned_windows": 48,
+  "limits": [
+    "One preregistered final analysis; repeated looks invalidate the nominal error rate.",
+    "Exact randomization inference assumes independent randomized order and no carryover.",
+    "Bootstrap intervals are approximate, Bonferroni-adjusted across planned sources, and may undercover with few nights.",
+    "A control affected by the intervention biases attribution; verify it is outside the source footprint.",
+    "Source-at-baseline estimates assume sky luminance changes linearly with delivered light output.",
+    "Quality screening must verify moonless astronomical darkness, stable cloud/aerosol/surface conditions, calibrated sensors and no competing interventions.",
+    "Excluded or missing pairs can bias results; incomplete results remain exploratory.",
+    "An attribution at one receptor does not supply coefficients for other receptors or weather scenarios."
+  ]
+}

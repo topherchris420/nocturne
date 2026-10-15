@@ -1,7 +1,7 @@
 # Nocturne
 ### Light where it is needed. Darkness where it is not.
 
-**Nocturne is a software toolkit for exploring how cities could reduce light pollution and electricity use while keeping streets lit.** It simulates streetlights, compares lighting plans, estimates savings, and helps design a measured rollout.
+**Nocturne is an open-source toolkit for restoring the night: identify avoidable light, choose changes that meet a darkness target, and measure whether they worked.** It connects streetlight simulation with a restoration planner for buildings, signs, sports fields and other sources, while keeping the required lighting service explicit.
 
 Think of a residential street at 1 a.m. Instead of leaving every lamp at full brightness, a lighting system could dim them, brighten nearby lamps when someone approaches, and respond to emergencies. Each lamp could keep its own schedule even if its internet connection fails. Nocturne models that behavior—and asks what it would mean across a city.
 
@@ -11,6 +11,22 @@ Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the wo
 
 [Try it](#try-it-on-your-computer) · [What it does](#what-can-you-do-with-it) · [DC example](#what-could-this-mean-for-washington-dc) · [Documentation](#go-deeper)
 
+## Start with the sky you want back
+
+A city can buy efficient lamps and still get brighter. A useful light can also spill into a window or illuminate the sky. Nocturne's new **restoration planner** works backward: set a target at each protected place, identify the owners and available changes, then find the least-cost combination that meets every target across the supplied conditions.
+
+```bash
+nocturne restore examples/restoration/district.json --report my-restoration.html
+```
+
+In the included **entirely synthetic example**, a $6,550 package combines facade curfews, office blinds, sign schedules, sports-field shutdown checks, and street shielding. It meets all six modeled place-and-weather targets. The crossing stays unchanged, and an unconsenting owner's lights remain in the pollution budget. These costs and effects are invented demonstrations, not DC forecasts.
+
+If the budget is too small, the planner reports the shortfall. If no available combination works, it says so. Its companion trial tools randomize source-specific dimming windows and analyze paired sky observations, helping replace assumptions with measurements.
+
+**[Explore the restoration workflow](docs/RESTORATION.md)** · [Example input](examples/restoration/district.json) · [Offline example report](examples/restoration/report.html)
+
+Install using the instructions below before running the command. To view the example report without installation, download the repository and open its HTML file locally.
+
 ![Simulated streetlight brightness through the night, grouped by road type](out/night_profile.png)
 
 *Each line shows how a type of streetlight changes brightness during the simulated night.*
@@ -19,6 +35,8 @@ Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the wo
 
 | Your question | What Nocturne provides |
 |---|---|
+| Which changes would actually reach our darkness target? | An exact portfolio planner with budgets, named owners, service floors, multiple observation points and weather scenarios. |
+| Which buildings or lights are responsible? | Reproducible source-isolation trial designs and analysis of paired target/control observations. |
 | Could we use less electricity? | A year-long estimate of energy use, cost, and emissions under different lighting plans. |
 | What happens when a connection fails? | A simulation showing how a streetlight continues operating with local rules. |
 | Would the night sky get darker? | A model of sky brightness at six DC locations, with adjustable assumptions. |
@@ -193,6 +211,7 @@ There are 17 location presets. Changing the location does not supply that city's
 
 - **Hardware and integration:** the controller is modeled in Python. Hardware firmware, field testing, and connections to municipal systems remain deployment work.
 - **Local measurements:** traffic, fixture characteristics, sky conditions, electricity prices, and existing dimming policies need verification.
+- **Restoration inputs:** the supplied multi-owner district is synthetic. Real source contributions, costs, service reviews and owner approvals must replace it. The exact planner handles grouped district projects, with a one-million-portfolio limit.
 - **Safety evidence:** a crash-monitoring tool can flag concerning data; a “continue” result does not prove a lighting plan is safe.
 - **Model limits:** the sky model simplifies the atmosphere and does not include terrain or buildings. Some inventory wattages are filled in from comparable fixtures.
 - **Participation:** Night Signal is a protocol proposal, not an adopted city policy or an operating public service.
@@ -203,6 +222,7 @@ The [evidence review](docs/EVIDENCE.md) and [engineering reference](docs/ENGINEE
 
 | Resource | What you will find |
 |---|---|
+| [Restoration workflow](docs/RESTORATION.md) | Work backward from a darkness target; choose source interventions; preregister and analyze a field trial. |
 | [DC playbook](docs/PLAYBOOK.md) | The proposed rollout, costs, measurement plan, and governance. |
 | [Evidence review](docs/EVIDENCE.md) | Research behind the approach, including contrary evidence. |
 | [Technology proposal](docs/TECHNOLOGY.md) | Hardware, software, sensors and materials that cut light pollution, from single fixtures to satellites: readiness, costs, impact, trade-offs, and a prioritised roadmap. |
