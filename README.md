@@ -1,85 +1,49 @@
 # Nocturne
-### Light where it is needed. Darkness where it is not.
 
-**Nocturne is an open-source toolkit for restoring the night: identify avoidable light, choose changes that meet a darkness target, and measure whether they worked.** It connects streetlight simulation with a restoration planner for buildings, signs, sports fields and other sources, while keeping the required lighting service explicit.
+**Light where it is needed. Darkness where it is not.**
 
-Think of a residential street at 1 a.m. Instead of leaving every lamp at full brightness, a lighting system could dim them, brighten nearby lamps when someone approaches, and respond to emergencies. Each lamp could keep its own schedule even if its internet connection fails. Nocturne models that behavior—and asks what it would mean across a city.
+Nocturne is an open-source toolkit for planning a darker city—and testing whether the plan worked. Set a sky-brightness target, compare changes across buildings, signs, sports fields and streetlights, and find the least-cost combination that meets the target under the conditions you specify.
+
+A lit crossing does not need an illuminated sky. An occupied office does not need a glowing facade. Nocturne treats useful lighting and unwanted spill as separate things to account for: keep the service people need, then work backward from the night you want to restore.
 
 Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the worked example.
 
-> **Current status: research prototype.** You can run the software and explore its results today. It is a Python model and planning toolkit, not certified streetlight firmware or a ready-to-deploy city service. The savings and sky improvements below are estimates, not measured outcomes from an installed Nocturne system.
+> **Research prototype · Python 3.10+ · MIT license.** The planner, simulations, reports and trial-analysis tools run today. City integration, physical controllers and field validation remain deployment work. DC results are model estimates; the restoration demonstration uses entirely invented data.
 
-[Try it](#try-it-on-your-computer) · [What it does](#what-can-you-do-with-it) · [DC example](#what-could-this-mean-for-washington-dc) · [Documentation](#go-deeper)
+[Quick start](#quick-start) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
 
-## Start with the sky you want back
+## What you can do
 
-A city can buy efficient lamps and still get brighter. A useful light can also spill into a window or illuminate the sky. Nocturne's new **restoration planner** works backward: set a target at each protected place, identify the owners and available changes, then find the least-cost combination that meets every target across the supplied conditions.
-
-```bash
-nocturne restore examples/restoration/district.json --report my-restoration.html
-```
-
-In the included **entirely synthetic example**, a $6,550 package combines facade curfews, office blinds, sign schedules, sports-field shutdown checks, and street shielding. It meets all six modeled place-and-weather targets. The crossing stays unchanged, and an unconsenting owner's lights remain in the pollution budget. These costs and effects are invented demonstrations, not DC forecasts.
-
-If the budget is too small, the planner reports the shortfall. If no available combination works, it says so. Its companion trial tools randomize source-specific dimming windows and analyze paired sky observations, helping replace assumptions with measurements.
-
-**[Explore the restoration workflow](docs/RESTORATION.md)** · [Example input](examples/restoration/district.json) · [Offline example report](examples/restoration/report.html)
-
-Install using the instructions below before running the command. To view the example report without installation, download the repository and open its HTML file locally.
-
-![Simulated streetlight brightness through the night, grouped by road type](out/night_profile.png)
-
-*Each line shows how a type of streetlight changes brightness during the simulated night.*
-
-## What can you do with it?
-
-| Your question | What Nocturne provides |
+| Start with a question | Use Nocturne to… |
 |---|---|
-| Which changes would actually reach our darkness target? | An exact portfolio planner with budgets, named owners, service floors, multiple observation points and weather scenarios. |
-| Which buildings or lights are responsible? | Reproducible source-isolation trial designs and analysis of paired target/control observations. |
-| Could we use less electricity? | A year-long estimate of energy use, cost, and emissions under different lighting plans. |
-| What happens when a connection fails? | A simulation showing how a streetlight continues operating with local rules. |
-| Would the night sky get darker? | A model of sky brightness at six DC locations, with adjustable assumptions. |
-| Is a fixture sending light upward or into a window? | Tools to inspect lighting measurement files and estimate light reaching a window. |
-| How could a city try this gradually? | A reproducible rollout plan and a statistical check that can recommend pausing if crash data signals harm. |
-| Could buildings and signs dim together too? | “Night Signal”: a proposed shared lighting schedule, exportable as data and a calendar. |
+| Which changes would reach our darkness target? | Choose a portfolio across named owners, observation points and weather scenarios, within a budget and declared service constraints. |
+| What if the target cannot be reached? | Identify a budget shortfall or show that the available actions are insufficient. |
+| Which sources contribute to the glow? | Design randomized source-isolation trials and analyze paired target/control observations. |
+| Could existing streetlights use less energy? | Compare a year of electricity, cost and emissions under scheduled and adaptive lighting. |
+| What happens during a network outage? | Simulate a lamp continuing to follow local rules after losing its connection. |
+| Where does a fixture send its light? | Inspect IES photometry files for backlight, uplight and glare, and estimate light at a window. |
+| How could a city coordinate a trial? | Export streetlight schedules, create a phased rollout, check crash data, and publish a shared Night Signal calendar. |
 
-City planners can explore the costs and rollout. Lighting engineers can inspect schedules and fixture behavior. Researchers and developers can examine the models and test their assumptions.
+## Explore without installing
 
-## How it works
+Download the repository through **Code → Download ZIP**, extract it, and open one of these files in your browser:
 
-Nocturne has two connected parts:
+| File | What to explore |
+|---|---|
+| [Restoration report](examples/restoration/report.html) | An offline brief showing the selected interventions, costs and remaining sky brightness in the synthetic district. |
+| [Decision brief](docs/brief.html) | Interactive estimates of energy costs, lighting through the night, modeled skies and the proposed rollout. |
+| [Operator console](console/index.html) | A standalone browser demonstration of streetlight controller behavior. |
 
-- **A simulated streetlight controller.** The small computer attached to a lamp is called a *node*. Nocturne's reference controller, VDL-7, models how that node chooses brightness from the time, road type, activity, weather, and emergency instructions.
-- **City planning tools.** These combine lighting rules with inventory data to estimate results, export schedules, plan a trial, and analyze measurements.
+GitHub displays HTML source at these links. Open the downloaded files locally to see the interfaces. These demonstrations do not connect to live lights.
 
-The central idea is that **each light keeps its own schedule**. A lost connection changes which new messages it receives; it does not automatically erase its dimming rules. If its clock also becomes unreliable, a fallback mode uses its light sensor and previously learned night timing, with limits described in the [engineering reference](docs/ENGINEERING.md).
+## Quick start
 
-Dimming follows minimum brightness rules. Emergency messages can raise output. Those modeled safeguards still need engineering review and real-world validation before deployment.
-
-## Explore without installing Python
-
-Download the repository using GitHub's **Code → Download ZIP**, extract it, and open either file in your browser:
-
-- **[Decision brief](docs/brief.html)** — explore energy prices, a street through the night, modeled skies, and the rollout.
-- **[Operator console](console/index.html)** — explore the controller through a standalone browser interface.
-
-GitHub normally shows the HTML source when you click these links. Open the downloaded files locally to see the interfaces. They are demonstrations, not connections to live streetlights.
-
-## Try it on your computer
-
-You need **Python 3.10 or newer**. Use a terminal on macOS/Linux or PowerShell on Windows. Git is needed only for the clone command; downloading and extracting the ZIP works too.
-
-### 1. Get the project
+You need **Python 3.10 or newer**. Git is optional if you download and extract the ZIP instead.
 
 ```bash
 git clone https://github.com/topherchris420/nocturne.git
 cd nocturne
 ```
-
-If you used the ZIP, open your terminal in the extracted project folder instead.
-
-### 2. Install it in a separate Python environment
 
 **macOS / Linux**
 
@@ -96,150 +60,209 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-The Windows instructions do not require activating a script. In the commands below, replace `nocturne` with `.\.venv\Scripts\nocturne.exe` on Windows.
+The Windows setup does not require script activation. In subsequent commands, replace `nocturne` with `.\.venv\Scripts\nocturne.exe`, and `python` with `.\.venv\Scripts\python.exe`.
 
-The `dev` option includes the test and chart packages as well as Nocturne itself.
+The `dev` extra includes tests and chart generation. For the core command-line tools alone, install with `python -m pip install -e .`.
 
-### 3. Run your first example
+Run the included restoration example:
+
+```bash
+nocturne restore examples/restoration/district.json --report my-restoration.html
+```
+
+Open `my-restoration.html` in your browser. Choose a new filename each time; the report writer refuses to overwrite an existing file.
+
+Then compare annual energy use or watch a simulated lamp lose its connection:
 
 ```bash
 nocturne business-case
+nocturne trace --road local --offline-at 22:15
 ```
 
-This prints a comparison of lighting plans for the included DC inventory over 2027: electricity use, estimated savings, emissions, and modeled light output. It does not change any real lights.
+Run these commands from the project folder so the included data and examples are available. If `nocturne` is not found, reactivate the environment or use its executable path. Use `nocturne --help` or `nocturne restore --help` for command options.
 
-Try a different electricity price, in dollars per kilowatt-hour:
+## A complete restoration example
+
+The included district contains **seven source groups, three observation points and two weather scenarios**. Under an $8,000 budget, the planner selects this $6,550 package:
+
+| Source | Selected change | Invented cost |
+|---|---|---:|
+| Facades | Switch decorative uplights off after closing | $500 |
+| Offices | Close blinds and zone vacant rooms while retaining occupied task lighting | $2,200 |
+| Signs | Apply a shared curfew to nonessential signs | $250 |
+| Sports fields | Connect operation to bookings and shutdown checks | $1,200 |
+| Residential streets | Combine shielding with a reviewed schedule | $2,400 |
+| **Total** | **All six modeled place-and-weather targets met** | **$6,550** |
+
+**Every cost, contribution, owner, permission and review flag in this example is synthetic.** It demonstrates the software, not a DC forecast or an approved lighting design. The crossing remains unchanged. A monument owner's unapproved curfew is excluded, while that monument's light still counts toward the pollution budget.
+
+### Make failure visible
+
+Try a budget that cannot buy the required changes:
+
+```bash
+nocturne restore examples/restoration/district.json --budget 1000
+```
+
+This deliberately returns **exit code 3** and reports the shortfall. The planner distinguishes three outcomes:
+
+| Outcome | Meaning |
+|---|---|
+| `feasible` | The least-cost eligible portfolio meets every supplied target within budget. |
+| `budget_shortfall` | A qualifying portfolio exists, but the budget cannot cover it. |
+| `outside_available_actions` | No eligible combination reaches all targets, even with an unlimited budget. |
+
+These results are conditional on the supplied model. The exact search supports grouped district projects and stops above **1,000,000 candidate portfolios**. It is not a city-scale optimizer for individual lamps.
+
+### Connect the plan to measurements
+
+Analyze the included synthetic observations:
+
+```bash
+nocturne attribute examples/restoration/trial.json examples/restoration/synthetic-readings.csv
+```
+
+The demonstration recovers source contributions of approximately **0.817 and 0.557 mcd/m²**, against injected values of **0.800 and 0.550**. This is a software recovery check using invented observations; it does not validate the district model or establish field effectiveness.
+
+To prepare a new study design:
+
+```bash
+nocturne experiment --source facades --source signs --start 2027-01-04 --seed "publish-before-measuring" --pairs 12 --fraction 0.5 --out my-trial
+```
+
+This creates `my-trial/trial.json` and an empty `my-trial/readings.csv`. It schedules separate source groups on separate nights, with independently randomized baseline/dimmed window order. It does not operate any lights. Twelve nights per source is an example, not a power calculation.
+
+A field study needs consenting owners, reviewed lighting levels, calibrated target and control stations, preregistered quality rules, and records of the delivered light output. After collecting and screening observations:
+
+```bash
+nocturne attribute my-trial/trial.json my-trial/readings.csv
+```
+
+The analysis compares paired observations in linear luminance, reports exclusions and missing data, and adjusts inference across sources. Measurements can inform revised planning inputs; they do not automatically authorize a lighting change.
+
+**[Read the full restoration protocol](docs/RESTORATION.md)** for input units, solver guarantees, study assumptions and the field procedure. To regenerate all synthetic example artifacts in a new directory:
+
+```bash
+python tools/restoration_demo.py --out my-restoration-demo
+```
+
+## Washington, DC: the worked example
+
+Nocturne includes aggregates from a **DDOT inventory retrieved October 14, 2026**: 72,512 active lights, with 72,068 included as dimmable in the annual comparison. This is a stored snapshot. [Data source and processing notes →](data/dc/README.md)
+
+The default 2027 model estimates:
+
+| Lighting plan | Annual electricity | Annual electricity saving |
+|---|---:|---:|
+| Baseline: commissioned maximum output all night | 16.4 million kWh | — |
+| Scheduled dimming on existing compatible equipment | 11.5 million kWh | About $641,000 |
+| Adaptive control responding to activity | 10.9 million kWh | About $720,000 |
+| Adaptive control, shielding and warmer replacement lights | 11.5 million kWh | About $645,000 |
+
+Dollar savings assume **$0.13/kWh**, exclude implementation costs, and compare against an all-night static baseline. Existing overnight dimming would reduce the additional savings. Warmer lights require more electricity for the same useful light in this model, which explains the final row's tradeoff. These are estimates, not measured savings.
+
+Change the price assumption yourself:
 
 ```bash
 nocturne business-case --price 0.18
 ```
 
-### 4. Watch a simulated light lose its connection
+The first rollout step, **Phase 0**, prepares schedules for existing compatible controllers. The default minimum is 50% on streets without presence sensing, retaining higher applicable floors. Separate High-Injury Network programs never drop below 60%; the city must identify and assign those streets. Exported files need translation into the actual municipal management system.
 
-```bash
-nocturne trace --road local --offline-at 22:15
-```
+### One clock for the night
 
-The table shows the local time, connection mode, target brightness, and actual brightness as the night progresses. Watch the light continue using its schedule after the connection is lost.
+Streetlights are one contributor to skyglow—the bright haze above a city. Buildings, signs, sports fields and other sources need their own owners and actions.
 
-For all commands and options:
+**Night Signal** proposes a shared schedule that those owners could follow, exported as JSON and an iCalendar feed. Its modeled benefits depend on participation. It is a protocol proposal, not an adopted city policy or an operating public service. The migration flag is supplied by the caller; the CLI does not fetch a live forecast.
 
-```bash
-nocturne --help
-nocturne trace --help
-```
-
-**Trouble starting?** Run commands from the project folder. If `nocturne` is not found, reactivate your environment or use its full executable path. If Windows cannot find `py`, check that Python is installed and available in your terminal.
-
-## What could this mean for Washington, DC?
-
-The included inventory contains **72,512 active lights**, of which **72,068 are included as dimmable** in the annual comparison. These are a stored snapshot of DDOT data, not a live connection. See the [data source and processing notes](data/dc/README.md).
-
-The documented 2027 model compares these options:
-
-| Lighting plan | Estimated annual electricity | Estimated annual saving |
-|---|---:|---:|
-| Baseline: commissioned maximum output all night | 16.4 million kWh | — |
-| Scheduled dimming on existing compatible equipment | 11.5 million kWh | About $641,000 |
-| Adaptive control that responds to activity | 10.9 million kWh | About $720,000 |
-| Adaptive control plus shielding and warmer replacement lights | 11.5 million kWh | About $645,000 |
-
-*Dollar savings assume $0.13/kWh and exclude implementation costs. Warmer lights use more electricity in this model for a given amount of useful light, so the final row has a different tradeoff.*
-
-The first option is called **Phase 0**: prepare schedules for existing compatible controllers before buying new equipment. Its default minimum brightness is 50% on streets without presence sensing, with higher applicable safety floors retained. Streets on the High-Injury Network get separate programmes that never drop below 60%; the city assigns those from its own list. Exported schedules still need translation into the city's actual management system.
-
-**These estimates depend on the baseline.** If the city already dims its lights overnight, the additional savings would be smaller. New adaptive controllers also do not pay for themselves through energy savings alone at ordinary hardware costs; the [playbook](docs/PLAYBOOK.md) explains that tradeoff.
-
-### Darker streetlights are only part of a darker sky
-
-*Skyglow* is the bright haze above a city at night. Streetlights contribute to it, but buildings, signs, stadiums, and other lights do too.
-
-Nocturne's **Night Signal** proposes a common schedule those other lighting owners could follow. Its modeled benefits depend on their participation. The DC sky model currently borrows a streetlight-share assumption from Tucson; DC measurements are needed to establish the local share. Predicted star counts are illustrations from the model, not promises.
+The separate DC sky model borrows a streetlight-share assumption from Tucson. DC measurements are needed to establish the local share. Modeled star counts are illustrations, not promises.
 
 ## More things to try
 
-All of these examples use included data or generate their own files.
-
-**Estimate the sky at six DC locations:**
+**Estimate sky brightness at six DC locations:**
 
 ```bash
 nocturne sky
 ```
 
-**Check upward light from an included synthetic fixture:**
+**Inspect an included synthetic fixture and estimate light reaching a window:**
 
 ```bash
 nocturne bug examples/ies/synthetic-globe-4000lm-ulr15.ies
+nocturne trespass examples/ies/synthetic-globe-4000lm-ulr15.ies --height 9 --setback 10 --window 5
 ```
 
-Here, “BUG” means **backlight, uplight, and glare**: where a fixture sends light.
+“BUG” means backlight, uplight and glare. Distances above are in metres.
 
-**Create a trial plan, then export its first wave of schedules:**
+**Create a phased trial and export its first wave of schedules:**
 
 ```bash
-nocturne pilot --seed "example-seed" --out plan.csv
+nocturne pilot --seed "publish-before-drawing" --out plan.csv
 nocturne schedule --plan plan.csv --wave 1 --out phase0
 ```
 
-This creates `plan.csv`, then `phase0/programs.json` and an assignment CSV. For a real trial, publish the chosen seed before drawing the groups.
+This writes `plan.csv`, `phase0/programs.json` and an assignment CSV. Publish the seed before drawing groups for a real trial. The `brake` command analyzes supplied crash records before subsequent waves; see `nocturne brake --help` and the [playbook](docs/PLAYBOOK.md).
 
-**Create a 30-night calendar:**
+**Create a 30-night Night Signal calendar:**
 
 ```bash
 nocturne signal --date 2026-10-14 --ics curfew.ics --days 30
 ```
 
-This writes `curfew.ics` and prints the first night's schedule as JSON. Signing the signal requires the optional `--key` setting; it is not signed by default.
+This writes `curfew.ics` and prints the first night's schedule as JSON. Signing requires the optional `--key` setting; the default output is unsigned.
 
-**Run the full night simulation:**
+**Run the network night simulation with charts:**
 
 ```bash
 nocturne simulate --out simulation-output
 ```
 
-This runs multiple scenarios and writes results to a new folder. Allow several minutes.
+Allow several minutes. The `dev` or `charts` extra supplies the chart dependency. The [recorded simulation report](out/report.md) uses a representative October night scaled to 75,000 lights; it is a different experiment from the DC inventory's annual comparison above.
 
-**Try another city's clock:**
+**Try another location's clock:**
 
 ```bash
 nocturne trace --site sydney --road local --start "2027-01-15 20:00" --end "2027-01-16 08:00"
 ```
 
-There are 17 location presets. Changing the location does not supply that city's streetlight inventory; DC-specific sky maps and data remain DC-specific.
+There are 17 location presets. Changing the clock and geography does not supply another city's inventory; the included fleet and sky maps remain DC-specific.
 
-## What still needs real-world work?
+## How the controller fits in
 
-- **Hardware and integration:** the controller is modeled in Python. Hardware firmware, field testing, and connections to municipal systems remain deployment work.
-- **Local measurements:** traffic, fixture characteristics, sky conditions, electricity prices, and existing dimming policies need verification.
-- **Restoration inputs:** the supplied multi-owner district is synthetic. Real source contributions, costs, service reviews and owner approvals must replace it. The exact planner handles grouped district projects, with a one-million-portfolio limit.
-- **Safety evidence:** a crash-monitoring tool can flag concerning data; a “continue” result does not prove a lighting plan is safe.
-- **Model limits:** the sky model simplifies the atmosphere and does not include terrain or buildings. Some inventory wattages are filled in from comparable fixtures.
-- **Participation:** Night Signal is a protocol proposal, not an adopted city policy or an operating public service.
+The **VDL-7 reference controller** models how an individual lamp chooses brightness from time, road type, activity, weather and emergency instructions. It keeps schedules locally, so losing the network does not erase the lighting program. If the clock also becomes unreliable, a fallback uses a light sensor and previously learned night timing.
 
-The [evidence review](docs/EVIDENCE.md) and [engineering reference](docs/ENGINEERING.md) explain the assumptions, discrepancies, and limitations in more detail.
+The planning tools operate around that model: estimate annual effects, export schedules, organize trials and analyze observations. The restoration planner extends the decision beyond streetlights to multiple owners and source types. None of these commands actuates physical infrastructure.
 
-## Go deeper
+## What still needs field work
 
-| Resource | What you will find |
+- **Engineering and integration.** Python controller behavior needs hardware implementation, municipal integration and field testing. Declared service fractions and review flags do not establish photometric safety.
+- **Local evidence.** Source contributions, intervention effects, costs, owner permissions, traffic and existing schedules need verification. Some inventory wattages are imputed from comparable fixtures.
+- **Model coverage.** Restoration targets hold only across supplied scenarios. The DC sky model simplifies atmospheric transport and omits terrain and buildings.
+- **Safety monitoring.** The crash-data brake can flag concerning observations; a “continue” result does not prove safety.
+- **Economics and participation.** New adaptive controllers do not pay for themselves through energy savings alone at ordinary hardware costs in this model. Multi-owner gains require actual participation.
+
+A practical starting point is **one willing building owner, one avoidable spill source and two calibrated observation points**. Establish that useful lighting survives while unwanted light falls, then use the evidence to revise the next plan.
+
+## Documentation
+
+| Resource | Contents |
 |---|---|
-| [Restoration workflow](docs/RESTORATION.md) | Work backward from a darkness target; choose source interventions; preregister and analyze a field trial. |
-| [DC playbook](docs/PLAYBOOK.md) | The proposed rollout, costs, measurement plan, and governance. |
-| [Evidence review](docs/EVIDENCE.md) | Research behind the approach, including contrary evidence. |
-| [Technology proposal](docs/TECHNOLOGY.md) | Hardware, software, sensors and materials that cut light pollution, from single fixtures to satellites: readiness, costs, impact, trade-offs, and a prioritised roadmap. |
-| [Engineering reference](docs/ENGINEERING.md) | Control logic, specification corrections, security, test coverage, and detailed simulation results. |
-| [DC inventory notes](data/dc/README.md) | Where the included data comes from and how it is processed. |
-| [Recorded simulation report](out/report.md) | Results from the committed example run. |
-| [Controller code](vdl7/controller.py) | How a modeled streetlight makes decisions. |
-| [Command-line code](vdl7/cli.py) | Available commands, defaults, and input formats. |
-| [Tests](tests/) | Checks for the controller and planning tools. |
+| [Restoration workflow](docs/RESTORATION.md) | Project schema, units, optimization guarantees, trial design and measurement analysis. |
+| [Synthetic example](examples/restoration/README.md) | Inputs, provenance, generated results and reproduction instructions. |
+| [DC playbook](docs/PLAYBOOK.md) | Rollout, costs, measurement plan and governance. |
+| [Evidence review](docs/EVIDENCE.md) | Supporting research, contrary findings and limitations. |
+| [Technology proposal](docs/TECHNOLOGY.md) | Lighting controls, optics, spectrum, sensors and measurement options, with costs and readiness. |
+| [Engineering reference](docs/ENGINEERING.md) | Controller behavior, specification corrections, security and simulation details. |
+| [DC inventory notes](data/dc/README.md) | Data source, aggregation and fixture classification. |
+| [Controller](vdl7/controller.py) · [CLI](vdl7/cli.py) · [Tests](tests/) | Implementation and verification. |
 
-To run the tests locally after the installation above:
+To run the existing tests after installing the `dev` extra:
 
 ```bash
 python -m pytest -q
 ```
 
-On Windows, use `.\.venv\Scripts\python.exe -m pytest -q`. The browser/Python parity test also needs Node.js and is skipped if it is unavailable.
+The browser/Python parity test also requires Node.js and is skipped when it is unavailable.
 
 Nocturne began as the reference implementation for **VD-DSL-SPEC-001 RevA, DC Dark-Sky Lighting Engineering Specification** (Christopher Woodyard, Vers3Dynamics, October 2026). The engineering reference preserves that specification-level detail.
 
