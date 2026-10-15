@@ -1,0 +1,60 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Nocturne//DC Tonight//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:940504aee94b70e08834fb73-facade-start@nocturne.local
+DTSTAMP:20261015T120000Z
+DTSTART:20261016T020000Z
+DURATION:PT5M
+SUMMARY:[FICTIONAL DEMO] Switch off an unnecessary circuit: Decorative faca
+ de
+LOCATION:Fictional building\, Washington DC
+DESCRIPTION:Manual owner task for Example facilities manager. Recheck occup
+ ancy and need at the time. Preserve: Exit signs\, stairs\, paths and all o
+ ccupied task areas stay as commissioned. Restore: The owner restores the p
+ revious setting immediately if useful lighting is affected. No automatic l
+ ight control. Record the actual interval in receipts.csv.
+END:VEVENT
+BEGIN:VEVENT
+UID:940504aee94b70e08834fb73-facade-check@nocturne.local
+DTSTAMP:20261015T120000Z
+DTSTART:20261016T100000Z
+DURATION:PT5M
+SUMMARY:[FICTIONAL DEMO] Check outcome and restore agreed daytime setting: 
+ Decorative facade
+LOCATION:Fictional building\, Washington DC
+DESCRIPTION:Manual owner task for Example facilities manager. Recheck occup
+ ancy and need at the time. Preserve: Exit signs\, stairs\, paths and all o
+ ccupied task areas stay as commissioned. Restore: The owner restores the p
+ revious setting immediately if useful lighting is affected. No automatic l
+ ight control. Record the actual interval in receipts.csv.
+END:VEVENT
+BEGIN:VEVENT
+UID:940504aee94b70e08834fb73-windows-start@nocturne.local
+DTSTAMP:20261015T120000Z
+DTSTART:20261016T020000Z
+DURATION:PT5M
+SUMMARY:[FICTIONAL DEMO] Close existing blinds: Occupied office windows
+LOCATION:Fictional building\, Washington DC
+DESCRIPTION:Manual owner task for Example facilities manager. Recheck occup
+ ancy and need at the time. Preserve: Exit signs\, stairs\, paths and all o
+ ccupied task areas stay as commissioned. Restore: The owner restores the p
+ revious setting immediately if useful lighting is affected. No automatic l
+ ight control. Record the actual interval in receipts.csv.
+END:VEVENT
+BEGIN:VEVENT
+UID:940504aee94b70e08834fb73-windows-check@nocturne.local
+DTSTAMP:20261015T120000Z
+DTSTART:20261016T100000Z
+DURATION:PT5M
+SUMMARY:[FICTIONAL DEMO] Check outcome and restore agreed daytime setting: 
+ Occupied office windows
+LOCATION:Fictional building\, Washington DC
+DESCRIPTION:Manual owner task for Example facilities manager. Recheck occup
+ ancy and need at the time. Preserve: Exit signs\, stairs\, paths and all o
+ ccupied task areas stay as commissioned. Restore: The owner restores the p
+ revious setting immediately if useful lighting is affected. No automatic l
+ ight control. Record the actual interval in receipts.csv.
+END:VEVENT
+END:VCALENDAR

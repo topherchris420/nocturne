@@ -22,6 +22,9 @@ The city
     nocturne brake --plan plan.csv --crashes night_crashes.csv --through 2027-02-28   # before each wave
 
 Models
+    nocturne tonight --example --out tonight-demo          # manual owner actions, calendar and empty receipts
+    nocturne tonight my-block.json --out tonight           # plan this one night with existing controls
+    nocturne receipts tonight/project.json tonight/receipts.csv  # what was actually reported complete?
     nocturne app [project.json]                            # the planner in your browser (local only)
     nocturne check project.json                            # every problem in a project, with its path
     nocturne derive physical.json --out project.json       # coefficients from geometry and atmosphere
@@ -623,7 +626,31 @@ def cmd_check(a) -> int:
 
 def cmd_app(a) -> int:
     from .app import run
-    return run(a.project, port=a.port, open_browser=not a.no_browser)
+    return run(a.project, port=a.port, open_browser=not a.no_browser, page="tonight" if a.tonight else "planner")
+
+
+def cmd_tonight(a) -> int:
+    from .tonight import blank_project, example_project, plan, write_packet
+    from .restore import read_project
+    if a.project and a.example:
+        raise ValueError("choose a project or --example, not both")
+    project = read_project(a.project) if a.project else (example_project() if a.example else blank_project())
+    if not isinstance(project, dict):
+        raise ValueError("DC Tonight project must be a JSON object")
+    if a.date:
+        project["night_of"] = a.date.isoformat()
+    result = write_packet(project, a.out) if a.out else plan(project)
+    print(json.dumps(result, indent=2, allow_nan=False))
+    return 0
+
+
+def cmd_receipts(a) -> int:
+    from pathlib import Path
+    from .restore import read_project
+    from .tonight import read_receipts, reconcile
+    result = reconcile(read_project(a.project), read_receipts(Path(a.receipts).read_text(encoding="utf-8-sig")))
+    print(json.dumps(result, indent=2, allow_nan=False))
+    return 3 if result["unconfirmed_count"] or result["review_count"] else 0
 
 
 def cmd_derive(a) -> int:
@@ -665,6 +692,21 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="nocturne", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    tn = sub.add_parser("tonight", help="prepare a DC owner action sheet, calendar and completion ledger",
+                        epilog="Plans manual actions using existing controls. No lights operated or requests submitted.")
+    tn.add_argument("project", nargs="?", help="DC Tonight project JSON; omit for an empty template")
+    tn.add_argument("--example", action="store_true", help="use a clearly fictional block")
+    tn.add_argument("--date", type=_iso_date, help="evening date in Washington DC; defaults to the project's date")
+    tn.add_argument("--out", help="new packet directory; will not overwrite")
+    tn.set_defaults(fn=cmd_tonight)
+
+    rr = sub.add_parser("receipts", help="reconcile self-reported completions against the exact DC Tonight plan",
+                        epilog="Exit 0: all owner-ready actions accounted for (including skips/rollbacks); "
+                               "3: missing confirmation or service/rebound concern; 2: invalid input. Zero does not mean a benefit.")
+    rr.add_argument("project", help="the original packet's project.json")
+    rr.add_argument("receipts", help="filled receipts.csv")
+    rr.set_defaults(fn=cmd_receipts)
+
     rp = sub.add_parser("restore", help="find the least-cost portfolio that meets every darkness target",
                         epilog="Exit 0: model targets met; 3: unmet targets; 2: invalid input. This is not a deployment approval.")
     rp.add_argument("project", help="restoration project JSON")
@@ -679,6 +721,7 @@ def main(argv=None) -> int:
     ap_.add_argument("project", nargs="?", help="project JSON to open and save to (created on first save if missing)")
     ap_.add_argument("--port", type=_nonneg_int, default=0, help="local port (default: any free port)")
     ap_.add_argument("--no-browser", action="store_true", help="print the address instead of opening a browser")
+    ap_.add_argument("--tonight", action="store_true", help="open DC Tonight: manual actions and owner handoffs")
     ap_.set_defaults(fn=cmd_app)
 
     ck = sub.add_parser("check", help="list every problem in a restoration project, with warnings to read",

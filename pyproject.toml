@@ -23,7 +23,7 @@ nocturne = "vdl7.cli:main"
 include = ["vdl7*", "sim*"]
 
 [tool.setuptools.package-data]
-vdl7 = ["planner.html"]
+vdl7 = ["planner.html", "tonight.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

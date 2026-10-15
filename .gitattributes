@@ -1,0 +1,4 @@
+# Keep the exported example's RFC 5545 record endings and significant folded text.
+examples/dc-tonight/*.ics -text whitespace=-blank-at-eol
+# CSV records are exported with CRLF; the CR is part of the record separator.
+examples/dc-tonight/*.csv -text whitespace=cr-at-eol

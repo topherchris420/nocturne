@@ -59,6 +59,22 @@ def test_page_is_served_with_a_strict_policy(served):
     assert "default-src 'none'" in res.getheader("Content-Security-Policy")
 
 
+def test_tonight_uses_the_same_engine_and_existing_security_boundary(served):
+    from vdl7.tonight import example_project, plan, receipt_template
+    call, _, _ = served()
+    assert "DC Tonight" in call("GET", "/tonight", token=None)[1]
+    p = example_project("2026-10-15")
+    assert call("GET", "/api/tonight/example", token=None)[0] == 403
+    assert call("POST", "/api/tonight", {"project": p}, token=None)[0] == 403
+    assert call("GET", "/api/tonight/blank")[1]["actions"] == []
+    status, result, _ = call("POST", "/api/tonight", {"project": p, "receipts_csv": receipt_template(plan(p))})
+    assert status == 200 and result["plan"] == plan(p)
+    assert result["completion"]["unconfirmed_count"] == 2
+    assert "BEGIN:VCALENDAR" in result["calendar"] and "Less spill" in result["report"]
+    assert call("POST", "/api/tonight", {"project": {}})[0] == 400
+    assert call("POST", "/api/tonight", {"project": p, "receipts_csv": []})[0] == 400
+
+
 def test_data_needs_the_session_token_and_a_local_host(served):
     call, _, _ = served()
     assert call("GET", "/api/session", token=None)[0] == 403

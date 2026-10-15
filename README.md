@@ -2,7 +2,9 @@
 
 **Light where it is needed. Darkness where it is not.**
 
-Nocturne is an open-source toolkit for planning a darker city—and testing whether the plan worked. Set a sky-brightness target, compare changes across buildings, signs, sports fields and streetlights, and find the least-cost combination that meets the target under the conditions you specify.
+Nocturne is an open-source toolkit for reducing unnecessary light, starting with the controls people already have. **DC Tonight** turns an existing switch, timer or blind into a named-owner action, a calendar handoff and a record of what actually happened. Start with one building; coordinate the next willing neighbour.
+
+For larger projects, set a sky-brightness target, compare changes across buildings, signs, sports fields and streetlights, and find the least-cost combination that meets the target under the conditions you specify.
 
 A lit crossing does not need an illuminated sky. An occupied office does not need a glowing facade. Nocturne treats useful lighting and unwanted spill as separate things to account for: keep the service people need, then work backward from the night you want to restore.
 
@@ -10,12 +12,45 @@ Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the wo
 
 > **Research prototype · Python 3.10+ · MIT license.** The planner (in a browser or on the command line), physics derivation, simulations, reports, integration checks and trial-analysis tools run today. Nocturne does not connect to a city's lighting system: contracts, equipment tests, safety reviews and the import itself remain deployment work, and the software records them rather than assuming them. DC results are model estimates; the restoration demonstrations use entirely invented data.
 
-[Quick start](#quick-start) · [Planner in your browser](#plan-in-your-browser) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
+[Do something tonight](#do-something-tonight) · [Quick start](#quick-start) · [Restoration planner](#plan-in-your-browser) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
+
+## Do something tonight
+
+**The part we can address immediately is unnecessary light on property whose owner can act.** A facade can stop glowing after closing. An occupied office can close its existing blinds. A closing checklist can include the dedicated decorative circuit. The people doing the work need a clear handoff and a way to record exceptions.
+
+After the [quick-start installation](#quick-start):
+
+```bash
+nocturne app --tonight
+```
+
+The local browser page lets you:
+
+1. Add a switch/timer action, an existing blind, or an observation to route to an owner.
+2. Name the responsible person, the specific circuit, the operating window, the useful lighting to preserve and the way to restore the previous setting.
+3. Export an action sheet, a start-and-morning-check calendar, the project and an empty completion CSV.
+4. Import the completed CSV to separate reported work, missed checks and actions needing review.
+
+**No new equipment is required for these first actions. Staff time and permission still matter.** Every change is manual and reversible. Streetlights and federal assets become operator requests, never instructions to turn them off. DC Tonight links to [Lights Out DC](https://www.lightsoutdc.info/) and the [existing DDOT/311 service](https://ddot.dc.gov/service/street-and-alley-light-repair); a request can start today, while an actual repair may take much longer.
+
+The distinction between *planned* and *done* is built into the accounting. A blank ledger claims no completed work. Unknown watts stay unquantified. Blinds get no electricity credit. A receipt must match the exact project and date; a service problem or replacement floodlight withholds credit pending review. Completion remains self-reported, and no circuit-level result is presented as measured citywide skyglow reduction.
+
+Try the fictional example, or inspect its [portable action sheet](examples/dc-tonight/action-sheet.html) after downloading the repository:
+
+```bash
+nocturne tonight --example --date 2026-10-15 --out my-tonight-demo
+# Open my-tonight-demo/action-sheet.html. The people and observations are invented.
+nocturne receipts my-tonight-demo/project.json my-tonight-demo/receipts.csv
+# Exit 3 is expected: the two owner-ready actions have no completion evidence yet.
+```
+
+For a real project, use **Start fresh**, record your own observations, and save the project before carrying out the agreed actions. **[Read the DC Tonight field guide](docs/TONIGHT.md)** for a first-night procedure, coordinated building routines and exact accounting rules.
 
 ## What you can do
 
 | Start with a question | Use Nocturne to… |
 |---|---|
+| What can I change tonight with the equipment already here? | Make owner action sheets, route spill reports, export calendar handoffs and reconcile completion receipts in **DC Tonight**. |
 | Which changes would reach our darkness target? | Choose a portfolio across named owners, observation points and weather scenarios, within a budget and declared service constraints. |
 | What if the target cannot be reached? | Identify a budget shortfall or show that the available actions are insufficient. |
 | Will the plan hold in haze, under snow, or if our numbers are off? | Derive each source's effect from positions, lumens, shielding and the atmosphere; give uncertain values as ranges and plan for their pessimistic end; charge rebounds and synergies to the plans that trigger them. |
@@ -32,6 +67,7 @@ Download the repository through **Code → Download ZIP**, extract it, and open 
 
 | File | What to explore |
 |---|---|
+| [DC Tonight action sheet](examples/dc-tonight/action-sheet.html) | A fictional block's actionable owner handoff, pending checks and streetlight request. Open locally; no server needed to read the sheet. |
 | [Restoration report](examples/restoration/report.html) | An offline brief showing the selected interventions, costs and remaining sky brightness in the synthetic district. |
 | [Derived-district report](examples/restoration/derived-report.html) | The same kind of brief for a district whose coefficients were computed from geometry, haze and snow, with uncertainty ranges and a rebound. |
 | [Decision brief](docs/brief.html) | Interactive estimates of energy costs, lighting through the night, modeled skies and the proposed rollout. |
@@ -273,7 +309,7 @@ The planning tools operate around that model: estimate annual effects, export sc
 - **Engineering and integration.** Python controller behavior needs hardware implementation and field testing. Nocturne checks schedules against declared controller limits and records the approvals, but the controller profiles must be confirmed on the bench, the import into DDOT's system is the integrator's work, and contracts, permissions and photometric safety reviews belong to the people responsible. Declared service fractions and review flags do not establish photometric safety.
 - **Local evidence.** Source contributions, intervention effects, costs, owner permissions, traffic and existing schedules need verification. Some inventory wattages are imputed from comparable fixtures.
 - **Model coverage.** Restoration targets hold only across supplied scenarios and within supplied ranges, which carry no probabilities. Derived coefficients use single scattering without terrain, buildings, Earth curvature or real luminaire distributions, and need calibrating against measurements. Interactions between owners must be declared from evidence; the software cannot discover them.
-- **Ease of use.** The browser planner covers the restoration workflow, but it still needs Python installed and one command to start. There is no packaged installer, shared multi-user deployment or GIS import yet.
+- **Ease of use.** The browser tools cover restoration planning and DC Tonight's owner actions, but still need Python installed and one command to start. Exported action sheets work offline without Python. There is no packaged installer, shared multi-user deployment or GIS import yet.
 - **Safety monitoring.** The crash-data brake can flag concerning observations; a “continue” result does not prove safety.
 - **Economics and participation.** New adaptive controllers do not pay for themselves through energy savings alone at ordinary hardware costs in this model. Multi-owner gains require actual participation.
 
@@ -283,6 +319,7 @@ A practical starting point is **one willing building owner, one avoidable spill 
 
 | Resource | Contents |
 |---|---|
+| [DC Tonight](docs/TONIGHT.md) | Same-night owner actions, a coordinated closing routine, official reporting routes, packet format and completion accounting. |
 | [Restoration workflow](docs/RESTORATION.md) | Project schema, units, optimization guarantees, ranges, interactions, physical derivation, trial design and measurement analysis. |
 | [Integration](docs/INTEGRATION.md) | Controller capability profiles, the readiness record and its gates, and reconciling what the CMS loaded. |
 | [Synthetic example](examples/restoration/README.md) | Inputs, provenance, generated results and reproduction instructions. |

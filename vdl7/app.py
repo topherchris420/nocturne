@@ -148,12 +148,17 @@ def make_handler(session, port_box):
             route = self.path.split("?", 1)[0]
             if route in ("/", "/index.html"):
                 return self._send(HTTPStatus.OK, PAGE.read_bytes(), "text/html; charset=utf-8")
+            if route == "/tonight":
+                return self._send(HTTPStatus.OK, (HERE / "tonight.html").read_bytes(), "text/html; charset=utf-8")
             if not self._authorized():
                 return self._send(HTTPStatus.FORBIDDEN, {"error": "missing or wrong session token"})
             if route == "/api/session":
                 return self._send(HTTPStatus.OK, {
                     "file": str(self.path_name()), "writable": session.writable, "notice": session.notice,
                     "project": session.project, "examples": [{"id": k, "title": t} for k, (t, _) in examples().items()]})
+            if route in ("/api/tonight/blank", "/api/tonight/example"):
+                from .tonight import blank_project, example_project
+                return self._send(HTTPStatus.OK, example_project() if route.endswith("example") else blank_project())
             if route.startswith("/api/example/"):
                 found = examples().get(route.rsplit("/", 1)[1])
                 if not found:
@@ -183,6 +188,17 @@ def make_handler(session, port_box):
                 return self._send(HTTPStatus.BAD_REQUEST, {"error": "body must be an object"})
             route = self.path.split("?", 1)[0]
             try:
+                if route == "/api/tonight":
+                    from .tonight import plan, render, calendar, receipt_template, read_receipts, reconcile
+                    project = body.get("project")
+                    result = plan(project)
+                    response = {"plan": result, "report": render(result), "calendar": calendar(result),
+                                "receipts_csv": receipt_template(result)}
+                    if "receipts_csv" in body:
+                        if not isinstance(body["receipts_csv"], str):
+                            raise ValueError("receipts_csv: expected CSV text")
+                        response["completion"] = reconcile(project, read_receipts(body["receipts_csv"]))
+                    return self._send(HTTPStatus.OK, response)
                 if route == "/api/check":
                     return self._send(HTTPStatus.OK, check(body.get("project")))
                 if route in ("/api/solve", "/api/report"):
@@ -214,7 +230,7 @@ def make_handler(session, port_box):
     return Handler
 
 
-def start(path=None, port=0):
+def start(path=None, port=0, page="planner"):
     """Start the server in a background thread; returns (server, url, session)."""
     session = Session(path)
     port_box = [port]
@@ -222,11 +238,14 @@ def start(path=None, port=0):
     server.daemon_threads = True
     port_box[0] = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server, f"http://127.0.0.1:{port_box[0]}/#token={session.token}", session
+    route = "tonight" if page == "tonight" else ""
+    return server, f"http://127.0.0.1:{port_box[0]}/{route}#token={session.token}", session
 
 
-def run(path=None, port=0, open_browser=True):
-    server, url, session = start(path, port)
+def run(path=None, port=0, open_browser=True, page="planner"):
+    if page == "tonight" and path is not None:
+        raise ValueError("open DC Tonight with --tonight, then use Open project in the page")
+    server, url, session = start(path, port, page)
     print("Nocturne planner is running on this computer only.", file=sys.stderr)
     print(f"Open: {url}", file=sys.stderr)
     if session.path:

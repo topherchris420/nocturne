@@ -113,7 +113,7 @@ details summary { cursor: pointer; color: var(--muted); }
 </head>
 <body>
 <header class="top">
-  <div class="brand">Nocturne <b>Planner</b></div>
+  <div class="brand">Nocturne <b>Planner</b> · <a id="tonightLink" style="color:var(--accent)" href="/tonight">DC Tonight</a></div>
   <div class="file" id="file" aria-live="polite">Loading…</div>
   <div class="actions">
     <select id="examples" aria-label="Open an example or a blank project"><option value="">New or example…</option></select>
@@ -171,6 +171,7 @@ function slug(text, taken) {
 
 // ---------------------------------------------------------------- state
 const token = new URLSearchParams(location.hash.slice(1)).get("token") || sessionStorage.getItem("nocturne-token") || "";
+document.getElementById("tonightLink").href = "/tonight#token=" + encodeURIComponent(token);
 if (token) { sessionStorage.setItem("nocturne-token", token); history.replaceState(null, "", location.pathname); }
 const state = { project: null, file: "", writable: false, fromFile: false, dirty: false, tab: "project",
                 check: { problems: [], warnings: [] }, result: null, budget: null };

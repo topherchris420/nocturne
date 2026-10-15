@@ -1,23 +1,25 @@
-# Nocturne for Washington, DC: what can start this quarter
+# Nocturne for Washington, DC: tonight, then the municipal rollout
 
-This is the operational plan behind the code. Every number on this page comes from a command in this repository, run on DC's own data:
+**Start tonight with [DC Tonight](TONIGHT.md):** a consenting owner's existing switch or blind, a named handoff, and an honest morning record. `nocturne app --tonight` prepares this workflow. It can run independently of a streetlight programme. Public and federal assets are routed to their operators; their changes require separate decisions.
+
+The longer-term municipal proposal below combines DC inventory aggregates with modeled scenarios and planning assumptions:
 
 - **Streetlights:** DDOT's asset layer (`data/dc/`).
 - **Crashes:** the District's crash layer.
 - **Time and sky:** the node's clock and sky models.
 
-Anything assumed is marked ASSUMED and can be changed with a flag.
+These are planning estimates, not observed savings or a verified account of current DDOT operating schedules. The [integration gates](INTEGRATION.md) determine whether an exported schedule is ready for a responsible operator to import.
 
 ## The short version
 
-1. **The expensive part is already done.**
+1. **Much of the relevant infrastructure already exists.**
    - 97 % of DC's 72,512 active streetlights are LED, most already 2700K.
-   - 97 % carry a networked node that has registered with the central system (`CLIGHT_SCAN_SUCCESS_1`).
+   - 96 % carry a node recorded as successfully registered (`CLIGHT_SCAN_SUCCESS_1`).
    - The LED luminaire models that make up most of the inventory specify DALI drivers.
-   - DC can already dim from a desk. It just doesn't have a policy for when.
-2. **Phase 0 needs no new hardware.** Push the Nocturne time-of-night schedule to those nodes. On DC's fleet over the whole of 2027 (`nocturne business-case`):
+   - Remote-control capability does not establish current schedules, permission to change them or compatibility with Nocturne's files. Confirm those with DDOT and its operator.
+2. **Phase 0 targets compatible existing hardware.** Prepare and review a time-of-night schedule, establish the real baseline, then import through the responsible operator after the integration gates pass. The 2027 model (`nocturne business-case`) estimates:
 
-   | | Today | Phase 0 |
+   | | Modeled all-night static baseline | Modeled Phase 0 |
    |---|---|---|
    | Energy per year | 16.4 GWh | 11.5 GWh (−30 %) |
    | Saved per year | — | ≈ $641,000 at an ASSUMED $0.13/kWh |
@@ -30,15 +32,15 @@ Anything assumed is marked ASSUMED and can be changed with a flag.
    - Waves are stratified so every ward moves in every wave.
    - The assignment is seeded from a string published before the draw, so anyone can re-run it.
    - Before each wave, an exact test on night-time crashes can pause the rollout. It compares switched with not-yet-switched segments within each eight-week period, so the season (long, dangerous winter nights against short June ones) cannot hide a harm.
-4. **Measure the sky, not just the meter.** Put six sky-quality meters at the places the model reports on. The curfew-step method detects a 0.05 mag change in one season.
+4. **Measure the sky as well as the electricity.** Six proposed observation sites can support a calibrated field study. Sensitivity and study duration depend on local variance, environmental controls and the number of valid nights; the example's 0.05 mag effect is not a field detection guarantee.
 5. **Fix the globes.**
    - 27 % of DC's streetlight power, 1.08 MW, is in post-top globes. They are the streetlights' main source of uplight.
    - Specify U0 top-reflector kits, checked with `nocturne bug`.
    - Do the cells that matter most to the parks first (`nocturne sky --retrofits 20`).
-6. **Then do what streetlights alone cannot.**
-   - In the only city-scale measurement, streetlights were about 14 % of the light behind Tucson's skyglow.
+6. **Coordinate the other lighting owners in parallel.**
+   - In the cited Tucson study, streetlights contributed about 14 % of skyglow. DC's local share requires measurement.
    - Publish the **Night Signal** and recruit the other lighting owners: federal agencies, BIDs, sports venues, sign owners.
-   - In the model, if they halve their light after 23:00, the stars visible after midnight at Rock Creek Park roughly double (≈ 225 → 454). Streetlights alone add ≈ 20.
+   - The model's star counts illustrate a scenario; they are not a DC forecast. Begin with willing owners through DC Tonight while wider participation and measurements are developed.
 
 ## Phase 0: weeks, existing nodes
 
@@ -105,9 +107,9 @@ The other half of the case:
 
 - **Hardware.** Six sky-quality meters (SQM-LU-DL or TESS-W class), one at each place in `vdl7/skyglow.PLACES_DC`, logging every five minutes.
 - **Method.** `nocturne verify station.dat --go-live YYYY-MM-DD` compares each night's change in brightness across the 23:00 curfew before and after go-live.
-  - Weather, season and aerosol cancel within the night, so a 0.05 mag change shows up in a single season.
+  - Within-night comparisons reduce some environmental variation; clouds, aerosols and other light sources can still change across the window. Use screened observations and appropriate controls rather than assuming cancellation.
   - A naive before/after comparison of the late-night sky is about ten times noisier.
-- **Calibration.** The same readings replace the Tucson prior (`nocturne sky --measured rock-creek=18.4 …`). They tell DC what share of its sky its streetlights really are.
+- **Calibration.** Local brightness readings constrain the overall baseline (`nocturne sky --measured rock-creek=18.4 …`). They do not alone identify the streetlight share; use the source-isolation trials in [RESTORATION.md](RESTORATION.md) for attribution.
 
 ## Governance and equity
 
