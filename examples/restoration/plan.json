@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "project_schema_version": 1,
   "title": "An invented district: restore the sky without dimming every task",
   "synthetic": true,
   "project_sha256": "cd096120e8e6b1687c6cbd4c5a0bb3fd85482b8053f129f0e1d15671317452d8",
@@ -22,7 +23,21 @@
       "gap_mcd_m2": 0.0,
       "reduction_fraction": 0.6740624999999999,
       "optimistic_floor_without_budget_mcd_m2": 1.013,
-      "meets_target": true
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        3.1999999999999997,
+        3.1999999999999997
+      ],
+      "remaining_range_mcd_m2": [
+        1.043,
+        1.043
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.6299137104506229,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.35
+      }
     },
     {
       "scenario": "clear",
@@ -34,7 +49,21 @@
       "gap_mcd_m2": 0.0,
       "reduction_fraction": 0.6755737704918032,
       "optimistic_floor_without_budget_mcd_m2": 0.9594999999999999,
-      "meets_target": true
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        3.05,
+        3.05
+      ],
+      "remaining_range_mcd_m2": [
+        0.9894999999999999,
+        0.9894999999999999
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.5664477008590196,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.3
+      }
     },
     {
       "scenario": "clear",
@@ -46,7 +75,21 @@
       "gap_mcd_m2": 0.0,
       "reduction_fraction": 0.6444915254237289,
       "optimistic_floor_without_budget_mcd_m2": 0.8149999999999998,
-      "meets_target": true
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        2.3600000000000003,
+        2.3600000000000003
+      ],
+      "remaining_range_mcd_m2": [
+        0.8389999999999999,
+        0.8389999999999999
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.9070321811680573,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.4
+      }
     },
     {
       "scenario": "hazy",
@@ -58,7 +101,21 @@
       "gap_mcd_m2": 0.0,
       "reduction_fraction": 0.643400900900901,
       "optimistic_floor_without_budget_mcd_m2": 1.5343000000000002,
-      "meets_target": true
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        4.44,
+        4.44
+      ],
+      "remaining_range_mcd_m2": [
+        1.5833000000000002,
+        1.5833000000000002
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.07370681488031328,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.45
+      }
     },
     {
       "scenario": "hazy",
@@ -70,7 +127,21 @@
       "gap_mcd_m2": 0.0,
       "reduction_fraction": 0.646964705882353,
       "optimistic_floor_without_budget_mcd_m2": 1.4514,
-      "meets_target": true
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        4.25,
+        4.25
+      ],
+      "remaining_range_mcd_m2": [
+        1.5004,
+        1.5004
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.03305785123966953,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.4
+      }
     },
     {
       "scenario": "hazy",
@@ -82,7 +153,21 @@
       "gap_mcd_m2": 0.0,
       "reduction_fraction": 0.6169095324833029,
       "optimistic_floor_without_budget_mcd_m2": 1.2227000000000001,
-      "meets_target": true
+      "meets_target": true,
+      "baseline_range_mcd_m2": [
+        3.294,
+        3.294
+      ],
+      "remaining_range_mcd_m2": [
+        1.2619,
+        1.2619
+      ],
+      "target_status": "met",
+      "headroom_fraction": 0.2679293129408036,
+      "dominant_term": {
+        "term": "unmanaged",
+        "mcd_m2": 0.55
+      }
     }
   ],
   "excluded_options": [
@@ -155,10 +240,26 @@
       "evidence": "INVENTED demonstration coefficient and cost; replace with local measurements and review."
     }
   ],
+  "source_labels": {
+    "crossing": "Pedestrian crossing",
+    "facades": "Decorative building facades",
+    "monument": "Neighboring monument",
+    "offices": "Office windows",
+    "signs": "Commercial signs",
+    "sports": "Sports field spill",
+    "streets": "Residential streets"
+  },
+  "uncertainty": {
+    "ranged_values": 0,
+    "planning_case": "pessimistic end of every range"
+  },
+  "interactions": [],
+  "provenance": null,
   "limits": [
     "Planning result only. No commands are sent to lights.",
     "Every result is conditional on the supplied contributions and complete action packages.",
-    "Scenarios are stress cases, not statistical confidence intervals.",
+    "Contributions add exactly within one scenario (radiative transfer is linear in its sources); the approximations are the scenario set, the supplied coefficients and the declared interactions.",
+    "Scenarios are stress cases, not statistical confidence intervals; ranges are checked at their pessimistic end, not given probabilities.",
     "Service fractions and review flags are declarations, not a photometric safety certification.",
     "Artificial zenith luminance is not a measure of glare, window trespass, or habitat illuminance.",
     "Unmanaged light remains in every portfolio; no energy savings or star counts are inferred."

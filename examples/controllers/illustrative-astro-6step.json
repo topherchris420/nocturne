@@ -1,0 +1,13 @@
+{
+  "schema": "nocturne-controller-capabilities/1",
+  "name": "Illustrative node A: astronomical clock, 6 steps",
+  "source": "INVENTED for the example. Replace with the node family's datasheet and the integrator's bench-test report.",
+  "verified": false,
+  "dusk_dawn": ["astronomical", "photocell"],
+  "max_steps_per_program": 6,
+  "time_resolution_min": 15,
+  "min_level_pct": 10,
+  "max_level_pct": 100,
+  "level_step_pct": 1,
+  "max_programs": 32
+}

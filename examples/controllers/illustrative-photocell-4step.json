@@ -1,0 +1,13 @@
+{
+  "schema": "nocturne-controller-capabilities/1",
+  "name": "Illustrative node B: photocell switching, 4 steps, 10 % levels",
+  "source": "INVENTED for the example. Replace with the node family's datasheet and the integrator's bench-test report.",
+  "verified": false,
+  "dusk_dawn": ["photocell"],
+  "max_steps_per_program": 4,
+  "time_resolution_min": 30,
+  "min_level_pct": 30,
+  "max_level_pct": 100,
+  "level_step_pct": 10,
+  "max_programs": 16
+}

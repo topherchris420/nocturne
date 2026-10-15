@@ -8,9 +8,9 @@ A lit crossing does not need an illuminated sky. An occupied office does not nee
 
 Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the worked example.
 
-> **Research prototype · Python 3.10+ · MIT license.** The planner, simulations, reports and trial-analysis tools run today. City integration, physical controllers and field validation remain deployment work. DC results are model estimates; the restoration demonstration uses entirely invented data.
+> **Research prototype · Python 3.10+ · MIT license.** The planner (in a browser or on the command line), physics derivation, simulations, reports, integration checks and trial-analysis tools run today. Nocturne does not connect to a city's lighting system: contracts, equipment tests, safety reviews and the import itself remain deployment work, and the software records them rather than assuming them. DC results are model estimates; the restoration demonstrations use entirely invented data.
 
-[Quick start](#quick-start) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
+[Quick start](#quick-start) · [Planner in your browser](#plan-in-your-browser) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
 
 ## What you can do
 
@@ -18,11 +18,13 @@ Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the wo
 |---|---|
 | Which changes would reach our darkness target? | Choose a portfolio across named owners, observation points and weather scenarios, within a budget and declared service constraints. |
 | What if the target cannot be reached? | Identify a budget shortfall or show that the available actions are insufficient. |
+| Will the plan hold in haze, under snow, or if our numbers are off? | Derive each source's effect from positions, lumens, shielding and the atmosphere; give uncertain values as ranges and plan for their pessimistic end; charge rebounds and synergies to the plans that trigger them. |
 | Which sources contribute to the glow? | Design randomized source-isolation trials and analyze paired target/control observations. |
 | Could existing streetlights use less energy? | Compare a year of electricity, cost and emissions under scheduled and adaptive lighting. |
 | What happens during a network outage? | Simulate a lamp continuing to follow local rules after losing its connection. |
 | Where does a fixture send its light? | Inspect IES photometry files for backlight, uplight and glare, and estimate light at a window. |
 | How could a city coordinate a trial? | Export streetlight schedules, create a phased rollout, check crash data, and publish a shared Night Signal calendar. |
+| Can our controllers actually run these schedules? | Check the schedules against each node family's declared limits (adapting them brighter-only), record contract, equipment and safety approvals against the exact files, and compare what the central system reports it loaded. |
 
 ## Explore without installing
 
@@ -31,6 +33,7 @@ Download the repository through **Code → Download ZIP**, extract it, and open 
 | File | What to explore |
 |---|---|
 | [Restoration report](examples/restoration/report.html) | An offline brief showing the selected interventions, costs and remaining sky brightness in the synthetic district. |
+| [Derived-district report](examples/restoration/derived-report.html) | The same kind of brief for a district whose coefficients were computed from geometry, haze and snow, with uncertainty ranges and a rebound. |
 | [Decision brief](docs/brief.html) | Interactive estimates of energy costs, lighting through the night, modeled skies and the proposed rollout. |
 | [Operator console](console/index.html) | A standalone browser demonstration of streetlight controller behavior. |
 
@@ -63,6 +66,24 @@ py -m venv .venv
 The Windows setup does not require script activation. In subsequent commands, replace `nocturne` with `.\.venv\Scripts\nocturne.exe`, and `python` with `.\.venv\Scripts\python.exe`.
 
 The `dev` extra includes tests and chart generation. For the core command-line tools alone, install with `python -m pip install -e .`.
+
+### Plan in your browser
+
+```bash
+nocturne app
+```
+
+This opens the planner in your browser. It runs on your computer only and sends nothing to lights. Start from an example or a blank project, then work through the tabs:
+
+1. **Places & targets**: the observation points to protect and the most artificial sky brightness each may have.
+2. **Conditions**: the nights the plan must work on, such as clear, hazy or snow.
+3. **Sources & options**: each owner's lights and the complete changes they could make, with cost, service kept and effect.
+4. **Light contributions**: how much each source adds at each place. Paste a block straight from a spreadsheet; type ranges such as `0.3 – 0.5` where a value is uncertain.
+5. **Plan**: find the cheapest set of changes, then open the printable brief.
+
+The panel on the right checks the project as you type and takes you to any field that needs fixing. To edit and save a file, start with it: `nocturne app my-district.json`. Save keeps the previous version as `my-district.json.bak`. Stop the planner with Ctrl+C in the terminal.
+
+### Or use the command line
 
 Run the included restoration example:
 
@@ -112,7 +133,18 @@ This deliberately returns **exit code 3** and reports the shortfall. The planner
 | `budget_shortfall` | A qualifying portfolio exists, but the budget cannot cover it. |
 | `outside_available_actions` | No eligible combination reaches all targets, even with an unlimited budget. |
 
-These results are conditional on the supplied model. The exact search supports grouped district projects and stops above **1,000,000 candidate portfolios**. It is not a city-scale optimizer for individual lamps.
+These results are conditional on the supplied model. The exact search supports grouped district projects and stops above **1,000,000 candidate portfolios**. It is not a city-scale optimizer for individual lamps. `nocturne check project.json` lists every problem in a project, each with the path of the field, before you plan.
+
+### When one number per source is not enough
+
+Within one atmosphere, light from separate sources adds exactly. What does not hold is a single fixed effect per change: shielding removes more of the glow at a distant park than at a nearby one in clear air, haze and snow change the share again, owners react to each other, and every coefficient is uncertain. The second example describes its sources physically instead:
+
+```bash
+nocturne derive examples/restoration/physical-district.json --out my-derived.json
+nocturne restore my-derived.json --report my-derived.html
+```
+
+`derive` computes each source's contribution and each option's effect at every place, in clear air, haze and under snow, from emitter positions, lumens, uplight, reflectance and spectrum, using the same scattering model as `nocturne sky`. The same shield-and-schedule package leaves 46–47 % of the streets' glow on a clear night, 42–45 % in haze and 56–57 % under snow. With a calibration range on every contribution and a declared rebound (merchants leave floodlights on after the sign curfew), the plan costs **$4,950** at the pessimistic end of every range; on central values **$4,550** would do, so the uncertainty costs $400. That difference is what better measurement could save. See [RESTORATION.md](docs/RESTORATION.md#beyond-fixed-fractions-schema-version-2).
 
 ### Connect the plan to measurements
 
@@ -167,7 +199,9 @@ Change the price assumption yourself:
 nocturne business-case --price 0.18
 ```
 
-The first rollout step, **Phase 0**, prepares schedules for existing compatible controllers. The default minimum is 50% on streets without presence sensing, retaining higher applicable floors. Separate High-Injury Network programs never drop below 60%; the city must identify and assign those streets. Exported files need translation into the actual municipal management system.
+The first rollout step, **Phase 0**, prepares schedules for existing compatible controllers. The default minimum is 50% on streets without presence sensing, retaining higher applicable floors. Separate High-Injury Network programs never drop below 60%; the city must identify and assign those streets.
+
+The inventory records 96% of lights as having a registered networked node. **That does not show that DDOT's central management system will accept these schedules.** The contract, the CMS operator's terms, each node family's limits and an engineer's review of every dimmed level decide that. Nocturne makes each one a recorded step: `nocturne schedule --controller` checks the schedules against a node family's declared limits and adapts them only by adding light, or refuses; `nocturne readiness` stays NOT READY until named people have recorded each approval against the exact files; and after an import, `nocturne reconcile` flags any street that the CMS reports as missing or darker than intended. See [INTEGRATION.md](docs/INTEGRATION.md).
 
 ### One clock for the night
 
@@ -198,10 +232,11 @@ nocturne trespass examples/ies/synthetic-globe-4000lm-ulr15.ies --height 9 --set
 
 ```bash
 nocturne pilot --seed "publish-before-drawing" --out plan.csv
-nocturne schedule --plan plan.csv --wave 1 --out phase0
+nocturne schedule --plan plan.csv --wave 1 --controller examples/controllers/illustrative-photocell-4step.json --out phase0
+nocturne readiness phase0/readiness.json
 ```
 
-This writes `plan.csv`, `phase0/programs.json` and an assignment CSV. Publish the seed before drawing groups for a real trial. The `brake` command analyzes supplied crash records before subsequent waves; see `nocturne brake --help` and the [playbook](docs/PLAYBOOK.md).
+This writes `plan.csv`, `phase0/programs.json`, an assignment CSV, a compatibility report and `phase0/readiness.json`. The example controller is invented; it shows how a coarser node gets brighter-only schedules. `readiness` then exits 3 and lists the seven approvals still missing. Publish the seed before drawing groups for a real trial. The `brake` command analyzes supplied crash records before subsequent waves; see `nocturne brake --help` and the [playbook](docs/PLAYBOOK.md).
 
 **Create a 30-night Night Signal calendar:**
 
@@ -235,9 +270,10 @@ The planning tools operate around that model: estimate annual effects, export sc
 
 ## What still needs field work
 
-- **Engineering and integration.** Python controller behavior needs hardware implementation, municipal integration and field testing. Declared service fractions and review flags do not establish photometric safety.
+- **Engineering and integration.** Python controller behavior needs hardware implementation and field testing. Nocturne checks schedules against declared controller limits and records the approvals, but the controller profiles must be confirmed on the bench, the import into DDOT's system is the integrator's work, and contracts, permissions and photometric safety reviews belong to the people responsible. Declared service fractions and review flags do not establish photometric safety.
 - **Local evidence.** Source contributions, intervention effects, costs, owner permissions, traffic and existing schedules need verification. Some inventory wattages are imputed from comparable fixtures.
-- **Model coverage.** Restoration targets hold only across supplied scenarios. The DC sky model simplifies atmospheric transport and omits terrain and buildings.
+- **Model coverage.** Restoration targets hold only across supplied scenarios and within supplied ranges, which carry no probabilities. Derived coefficients use single scattering without terrain, buildings, Earth curvature or real luminaire distributions, and need calibrating against measurements. Interactions between owners must be declared from evidence; the software cannot discover them.
+- **Ease of use.** The browser planner covers the restoration workflow, but it still needs Python installed and one command to start. There is no packaged installer, shared multi-user deployment or GIS import yet.
 - **Safety monitoring.** The crash-data brake can flag concerning observations; a “continue” result does not prove safety.
 - **Economics and participation.** New adaptive controllers do not pay for themselves through energy savings alone at ordinary hardware costs in this model. Multi-owner gains require actual participation.
 
@@ -247,7 +283,8 @@ A practical starting point is **one willing building owner, one avoidable spill 
 
 | Resource | Contents |
 |---|---|
-| [Restoration workflow](docs/RESTORATION.md) | Project schema, units, optimization guarantees, trial design and measurement analysis. |
+| [Restoration workflow](docs/RESTORATION.md) | Project schema, units, optimization guarantees, ranges, interactions, physical derivation, trial design and measurement analysis. |
+| [Integration](docs/INTEGRATION.md) | Controller capability profiles, the readiness record and its gates, and reconciling what the CMS loaded. |
 | [Synthetic example](examples/restoration/README.md) | Inputs, provenance, generated results and reproduction instructions. |
 | [DC playbook](docs/PLAYBOOK.md) | Rollout, costs, measurement plan and governance. |
 | [Evidence review](docs/EVIDENCE.md) | Supporting research, contrary findings and limitations. |
