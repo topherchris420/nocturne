@@ -51,6 +51,8 @@ nocturne app --tonight
 
 Open a saved **DC Tonight project.json**, or use **Start fresh**. This is a different input format from a restoration project. Add sources in the form, build the plan, and download the project plus action sheet, calendar and empty receipts. Edits invalidate the displayed plan; build again before exporting. Downloads are your saved copy; the browser does not automatically persist work.
 
+The sky panel follows the date you choose. After you build, it lays each owner-ready window over the night (see [the night itself](#the-night-itself)).
+
 Command-line equivalent:
 
 ```bash
@@ -91,12 +93,22 @@ Input times use real elapsed hours across daylight-saving changes. For example, 
 | File | Use |
 |---|---|
 | `project.json` | Exact input to retain with the evidence. |
-| `plan.json` | Derived states, conditional estimates, routing drafts and SHA-256 fingerprint. |
-| `action-sheet.html` | Portable, printable handoff for people doing the work. |
+| `plan.json` | Derived states, conditional estimates, routing drafts and SHA-256 fingerprint, plus the night's sky (outside the fingerprint). |
+| `action-sheet.html` | Portable, printable handoff for people doing the work, with the night's darkness and Moon. |
 | `handoff.ics` | Two events per owner-ready action: start and morning check. Missing-owner and public-asset actions do not become switch events. Fictional calendars label every event as a demo. |
 | `receipts.csv` | One blank outcome row per owner-ready action, tied to the plan fingerprint. |
 
 The fingerprint detects mixing or editing plans within this workflow. It does not prove the observer's identity, prevent fabrication or establish that a physical switch moved. Store original evidence separately; the CSV contains references, not uploaded photos or meter files.
+
+### The night itself
+
+The page, the action sheet and `plan.json` describe the chosen night over Washington: sunset, the end of civil, nautical and astronomical twilight, astronomical darkness, the Moon's phase and when it is above the horizon, and for each owner-ready action how much of its window falls in darkness and in moonless darkness.
+
+- **Dark** means the Sun is more than 18° below the horizon. **Moonless** adds the Moon more than 5° below it: the rule Nocturne's sky-meter analysis uses to keep readings (`vdl7/observe.py`), slightly stricter than the [field pilot](FIELD_PILOT.md)'s "Moon below horizon".
+- The times come from the controller's NOAA solar clock and the lunar series checked against JPL-grade ephemerides, for 38.898° N, 77.037° W, rounded to the minute. On the 2026 nights the tests check, including both daylight-saving nights, sunset, astronomical twilight, moonrise and moonset agree with the U.S. Naval Observatory's tables for Washington to within two minutes. Moonrise and moonset refer to the upper limb on the horizon.
+- The phase words describe the lit fraction at the middle of the night: new below 3 %, full above 97 %, crescent or gibbous either side of half.
+- It describes the night, not any light. A window that covers eight hours of moonless darkness is not evidence that the sky got darker; that takes the [measurement protocol](FIELD_PILOT.md).
+- The sky is not part of the plan fingerprint, so receipts exported before it existed still match their plans.
 
 ### What the receipt can claim
 
