@@ -210,7 +210,7 @@ const token = new URLSearchParams(location.hash.slice(1)).get("token") || sessio
 document.getElementById("tonightLink").href = "/tonight#token=" + encodeURIComponent(token);
 if (token) { sessionStorage.setItem("nocturne-token", token); history.replaceState(null, "", location.pathname); }
 const state = { project: null, file: "", writable: false, fromFile: false, dirty: false, tab: "project",
-                check: { problems: [], warnings: [] }, result: null, budget: null };
+                check: { problems: [], warnings: [] }, result: null, budget: null, solving: false };
 const TABS = [["project", "Project"], ["places", "Places & targets"], ["conditions", "Conditions"],
               ["sources", "Sources & options"], ["light", "Light contributions"], ["interactions", "Interactions"], ["plan", "Plan"]];
 
@@ -625,8 +625,8 @@ function viewPlan() {
     h("div", { class: "card row" },
       valueField(budget, "v", "", "Budget for this run (USD; the project keeps its own)",
         { money: true, onvalue: (v) => { state.budget = v; } }),          // a what-if, not an edit to the project
-      h("button", { class: "primary", disabled: !ready, onclick: solveNow,
-        text: ready ? "Find the plan" : "Fix the problems first" }))];
+      h("button", { class: "primary", disabled: !ready || state.solving, "aria-busy": state.solving ? "true" : null, onclick: solveNow,
+        text: state.solving ? "Finding the plan…" : ready ? "Find the plan" : "Fix the problems first" }))];
   const r = state.result;
   if (!r) return out;
   const labels = r.source_labels || {};
@@ -678,13 +678,15 @@ function viewPlan() {
   return out;
 }
 async function solveNow() {
+  if (state.solving) return;
+  state.solving = true; render();                       // the exact search can take a while: show it, and refuse a second click
   try {
     state.result = await api("POST", "/api/solve", { project: P(), budget_usd: state.budget });
   } catch (err) {
     state.result = null;
     if (err.data && err.data.problems) { state.check.problems = err.data.problems; renderChecks(); }
     toast("Could not plan: " + err.message);
-  }
+  } finally { state.solving = false; }
   render();
 }
 async function openReport(save) {
