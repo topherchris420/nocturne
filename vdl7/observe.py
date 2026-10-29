@@ -188,8 +188,12 @@ def write_ida(readings: Sequence[Reading], path: str, tz: str = POSIX_TZ, name: 
 
 
 # --------------------------------------------------------------- filters
-def dark(readings: Sequence[Reading], lat: float, lon: float, sun_max: float = -18.0,
-         moon_max: float = -5.0) -> List[Reading]:
+DARK_SUN_DEG = -18.0                       # astronomical darkness
+DARK_MOON_DEG = -5.0                       # the Moon well below the horizon; DC Tonight reuses both
+
+
+def dark(readings: Sequence[Reading], lat: float, lon: float, sun_max: float = DARK_SUN_DEG,
+         moon_max: float = DARK_MOON_DEG) -> List[Reading]:
     """Astronomical darkness with the Moon below `moon_max`."""
     return [(t, m) for t, m in readings
             if solar_elevation_exact(lat, lon, t) < sun_max and moon(t, lat, lon).alt_deg < moon_max]

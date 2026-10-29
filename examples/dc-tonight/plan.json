@@ -127,6 +127,101 @@
   "potential_kwh": 4.8,
   "unquantified_count": 0,
   "containment_hours": 8.0,
+  "sky": {
+    "place": "Washington, DC",
+    "latitude": 38.8977,
+    "longitude": -77.0365,
+    "title": "The night of Thursday, October 15",
+    "sunset": "2026-10-15T18:30-04:00",
+    "sunrise": "2026-10-16T07:19-04:00",
+    "dark": {
+      "start": "2026-10-15T19:58-04:00",
+      "end": "2026-10-16T05:50-04:00",
+      "minutes": 592
+    },
+    "bands": [
+      {
+        "kind": "civil",
+        "start": "2026-10-15T18:30-04:00",
+        "end": "2026-10-15T18:56-04:00"
+      },
+      {
+        "kind": "nautical",
+        "start": "2026-10-15T18:56-04:00",
+        "end": "2026-10-15T19:27-04:00"
+      },
+      {
+        "kind": "astronomical",
+        "start": "2026-10-15T19:27-04:00",
+        "end": "2026-10-15T19:58-04:00"
+      },
+      {
+        "kind": "dark",
+        "start": "2026-10-15T19:58-04:00",
+        "end": "2026-10-16T05:50-04:00"
+      },
+      {
+        "kind": "astronomical",
+        "start": "2026-10-16T05:50-04:00",
+        "end": "2026-10-16T06:21-04:00"
+      },
+      {
+        "kind": "nautical",
+        "start": "2026-10-16T06:21-04:00",
+        "end": "2026-10-16T06:52-04:00"
+      },
+      {
+        "kind": "civil",
+        "start": "2026-10-16T06:52-04:00",
+        "end": "2026-10-16T07:19-04:00"
+      }
+    ],
+    "moon": {
+      "illuminated": 0.276,
+      "waxing": true,
+      "phase": "waxing crescent",
+      "at": "2026-10-16T00:55-04:00",
+      "up": [
+        {
+          "start": "2026-10-15T18:30-04:00",
+          "end": "2026-10-15T21:23-04:00"
+        }
+      ],
+      "summary": "A waxing crescent, 28% lit, sets at 21:23."
+    },
+    "moonless_dark": [
+      {
+        "start": "2026-10-15T21:50-04:00",
+        "end": "2026-10-16T05:50-04:00"
+      }
+    ],
+    "moonless_dark_minutes": 480,
+    "headline": "Dark from 19:58 to 05:50.",
+    "moonless_summary": "Moonless from 21:50 to 05:50.",
+    "windows": [
+      {
+        "action_id": "facade",
+        "label": "Decorative facade",
+        "start": "2026-10-15T22:00-04:00",
+        "end": "2026-10-16T06:00-04:00",
+        "dark_minutes": 470,
+        "moonless_dark_minutes": 470,
+        "summary": "Covers 7 h 50 min of darkness, all of it moonless."
+      },
+      {
+        "action_id": "windows",
+        "label": "Occupied office windows",
+        "start": "2026-10-15T22:00-04:00",
+        "end": "2026-10-16T06:00-04:00",
+        "dark_minutes": 470,
+        "moonless_dark_minutes": 470,
+        "summary": "Covers 7 h 50 min of darkness, all of it moonless."
+      }
+    ],
+    "rule": "Dark means the Sun is more than 18\u00b0 below the horizon; moonless adds the Moon more than 5\u00b0 below it, the rule Nocturne applies to sky-meter readings.",
+    "method": "Computed on this computer for 38.898\u00b0 N, 77.037\u00b0 W with the NOAA solar position algorithm and the Astronomical Almanac's lunar series (about 0.3\u00b0), to the minute.",
+    "claim": "It describes the night, not any light: no sky brightness is measured or inferred."
+  },
   "sources": [
     {
       "title": "DC street and alley light repair",

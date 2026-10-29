@@ -4,7 +4,7 @@ Every owner, permission, circuit load and observation in this directory is inven
 
 The example contains two owner-ready actions (a facade switch and office blinds), one shop awaiting permission and one streetlight investigation draft. Its conditional estimate is **4.8 kWh** for the 600 W facade over eight hours; the blinds receive **no electricity credit**. All completion rows are deliberately blank.
 
-Open `action-sheet.html` locally for the printable handoff. The calendar marks its events as fictional. For actual work, start fresh in `nocturne app --tonight`.
+Open `action-sheet.html` locally for the printable handoff, set against that night's darkness and Moon: dark from 19:58 to 05:50, a waxing crescent setting at 21:23. The calendar marks its events as fictional. For actual work, start fresh in `nocturne app --tonight`.
 
 Reproduce into a new directory:
 

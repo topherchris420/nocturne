@@ -159,6 +159,14 @@ def make_handler(session, port_box):
             if route in ("/api/tonight/blank", "/api/tonight/example"):
                 from .tonight import blank_project, example_project
                 return self._send(HTTPStatus.OK, example_project() if route.endswith("example") else blank_project())
+            if route == "/api/tonight/sky":
+                from urllib.parse import parse_qs
+                from .tonight import _night, night_sky, sky_html
+                try:
+                    sky = night_sky(_night((parse_qs(self.path.partition("?")[2]).get("night") or [""])[0]))
+                except ValueError:
+                    return self._send(HTTPStatus.BAD_REQUEST, {"error": "Choose a night between 2000 and 2100 to see its sky."})
+                return self._send(HTTPStatus.OK, {"sky": sky, "html": sky_html(sky)})
             if route.startswith("/api/example/"):
                 found = examples().get(route.rsplit("/", 1)[1])
                 if not found:
@@ -189,11 +197,11 @@ def make_handler(session, port_box):
             route = self.path.split("?", 1)[0]
             try:
                 if route == "/api/tonight":
-                    from .tonight import plan, render, calendar, receipt_template, read_receipts, reconcile
+                    from .tonight import plan, render, calendar, receipt_template, read_receipts, reconcile, sky_html
                     project = body.get("project")
                     result = plan(project)
                     response = {"plan": result, "report": render(result), "calendar": calendar(result),
-                                "receipts_csv": receipt_template(result)}
+                                "receipts_csv": receipt_template(result), "sky_html": sky_html(result["sky"])}
                     if "receipts_csv" in body:
                         if not isinstance(body["receipts_csv"], str):
                             raise ValueError("receipts_csv: expected CSV text")

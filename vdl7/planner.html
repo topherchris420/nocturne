@@ -8,116 +8,151 @@
 <style>
 /* A working tool for one engineer at a desk: tabs for the inputs in the order
    they are usually gathered, a check panel that is always visible, and the plan
-   one click away. System fonts only: it must work offline. */
+   one click away. It shares DC Tonight's night palette, tokens and header.
+   System fonts only, Georgia for display: it must work offline. */
 :root {
-  --bg: #0a0f1c; --panel: #111a2c; --panel-2: #172238; --line: #27344d;
-  --fg: #e8ebf3; --muted: #94a0bb; --faint: #5f6b85;
-  --accent: #73d5c8; --accent-ink: #062320;
-  --good: #3fbf6b; --warn: #f0b454; --bad: #ff8a80; --bad-bg: #3a1c22; --warn-bg: #3a2e14;
-  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --bg: #071519; --panel: #0e2429; --raised: #173238; --field: #081b1f; --sunken: #0a1c21;
+  --line: #2c4549; --edge: #446268; --text: #edf4ed; --muted: #adc3c2; --faint: #8aa3a2;
+  --teal: #9fe2cf; --gold: #f7cf8d; --bad: #ffb4aa; --ink: #08201b;
+  --notice: #332a1c; --notice-ink: #f8dfb5; --danger: #3b2423; --serif: Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #f3f4f7; --panel: #ffffff; --panel-2: #eef1f6; --line: #d3d8e3;
-    --fg: #121826; --muted: #4f5b73; --faint: #8a94a8;
-    --accent: #0f7b6f; --accent-ink: #ffffff;
-    --good: #1f7a3f; --warn: #8a5a00; --bad: #b42318; --bad-bg: #fde8e6; --warn-bg: #fdf3dc;
-    color-scheme: light;
-  }
-}
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--sans); }
+a { color: var(--teal); }
 button, input, select, textarea { font: inherit; color: inherit; }
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 16px;
-  border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
-.brand { font-weight: 650; letter-spacing: .02em; }
-.brand b { color: var(--accent); font-weight: 650; }
-.file { color: var(--muted); font-family: var(--mono); font-size: 13px; flex: 1; min-width: 140px; overflow-wrap: anywhere; }
-.file .dirty { color: var(--warn); }
+input:focus, textarea:focus, select:focus, button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* The same brand and tool switch as DC Tonight */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; padding: 14px 24px;
+  border-bottom: 1px solid var(--line); background: var(--bg); }
+@media (min-width: 961px) { .top { position: sticky; top: 0; z-index: 5; } }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: .14em; font-size: 13px; }
+.mark { width: 18px; height: 18px; fill: var(--teal); } .mark circle { fill: none; stroke: var(--teal); stroke-width: 1.3; opacity: .5; }
+.apps { display: flex; gap: 4px; flex-wrap: wrap; }
+.apps > a, .apps > span { font-size: 14px; line-height: 1; padding: 9px 14px; border-radius: 999px; color: var(--muted);
+  text-decoration: none; border: 1px solid transparent; }
+.apps > a:hover { color: var(--text); border-color: var(--line); }
+.apps > [aria-current] { color: var(--text); background: var(--raised); border-color: var(--line); }
+.file { color: var(--muted); font-size: 13px; flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+.file .dirty { color: var(--gold); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
-.actions select { flex: 1 1 160px; min-width: 0; max-width: 100%; }
-.btn, button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px;
+
+.btn, button { background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; color: var(--text);
   cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.btn:hover, button:hover { border-color: var(--accent); }
+.btn:hover, button:hover { border-color: var(--teal); }
 button:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; }
+button.primary { background: var(--teal); color: var(--ink); border-color: var(--teal); font-weight: 700; }
+button.link { background: none; border: none; padding: 0; color: var(--teal); text-decoration: underline; }
 button.danger { color: var(--bad); }
-select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
-.notice { margin: 12px 16px 0; padding: 10px 14px; border-left: 3px solid var(--warn); background: var(--warn-bg); border-radius: 4px; }
-.tabs { display: flex; gap: 4px; padding: 10px 16px 0; overflow-x: auto; border-bottom: 1px solid var(--line); }
-.tabs button { border-radius: 8px 8px 0 0; border-bottom: none; background: transparent; color: var(--muted); white-space: nowrap; }
-.tabs button[aria-selected="true"] { background: var(--panel); color: var(--fg); border-color: var(--line); }
+select { background: var(--field); border: 1px solid var(--edge); border-radius: 6px; padding: 7px 8px; }
+
+/* New: a menu of buttons, so browsing it never replaces the project */
+.menu { position: relative; }
+.menu > summary { list-style: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu[open] > summary { border-color: var(--teal); }
+.menu-list { position: absolute; z-index: 6; top: calc(100% + 6px); left: 0; width: max-content; max-width: min(340px, 86vw);
+  display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45); }
+.menu-list button { background: none; border-color: transparent; text-align: left; width: 100%; }
+.menu-list button:hover { background: var(--raised); border-color: var(--line); }
+
+.notice { margin: 14px 24px 0; padding: 11px 15px; border-left: 3px solid var(--gold); background: var(--notice); color: var(--notice-ink);
+  border-radius: 4px; font-size: 14px; }
+.tabs { display: flex; gap: 2px; padding: 0 24px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted);
+  white-space: nowrap; padding: 14px 12px 12px; }
+.tabs button:hover { color: var(--text); border-bottom-color: var(--edge); }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--teal); }
+.tabs .num { font: 600 11px var(--mono); color: var(--teal); }
 .tabs button .count { font-size: 12px; color: var(--bad); }
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; align-items: start; }
-@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; padding: 26px 24px 40px; align-items: start; }
+@media (max-width: 960px) {
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 20px 18px 32px; }
+  .top { padding: 12px 18px; } .tabs { padding: 0 10px; } .notice { margin: 12px 18px 0; }
+}
+.short { display: none; }
+@media (max-width: 600px) { .long { display: none; } .short { display: inline; } }
 section[role="tabpanel"] { min-width: 0; }
-h1 { font-size: 22px; margin: 0 0 6px; font-weight: 650; }
-h2 { font-size: 17px; margin: 22px 0 8px; }
+.eyebrow { color: var(--teal); font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin: 2px 0 10px; }
+h1 { font: normal 34px/1.12 var(--serif); letter-spacing: -.02em; margin: 0 0 10px; }
+h1.display { font-size: clamp(34px, 4.2vw, 50px); line-height: 1.06; letter-spacing: -.035em; max-width: 900px; margin-bottom: 16px; }
+h1 em { color: var(--teal); }
+h1.display em { display: block; }
+h2 { font-size: 18px; margin: 28px 0 10px; }
 h3 { font-size: 15px; margin: 0; }
-.lead { color: var(--muted); max-width: 760px; margin: 0 0 14px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0 0 12px; }
-.card.sub { background: var(--panel-2); }
+.lead { color: var(--muted); max-width: 760px; margin: 0 0 18px; font-size: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 0 0 14px; }
+.card.sub { background: var(--sunken); border-radius: 10px; }
 .row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
-label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 120px; }
+label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); min-width: 120px; }
 label.field.wide { flex: 1 1 280px; }
-label.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
-input[type="text"], input:not([type]), textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
-  padding: 6px 8px; width: 100%; color: var(--fg); }
+label.check { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--teal); flex-shrink: 0; }
+input[type="text"], input:not([type]), textarea { background: var(--field); border: 1px solid var(--edge); border-radius: 6px;
+  padding: 8px 10px; width: 100%; color: var(--text); }
 textarea { min-height: 64px; resize: vertical; }
-input:focus, textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.bad { border-color: var(--bad) !important; background: var(--bad-bg) !important; }
+.bad { border-color: var(--bad) !important; background: var(--danger) !important; }
 .flash { animation: flash 1.2s ease-out; }
-@keyframes flash { from { box-shadow: 0 0 0 4px var(--warn); } to { box-shadow: 0 0 0 0 transparent; } }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--gold); } to { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
 .id { font-family: var(--mono); font-size: 12px; color: var(--faint); }
 .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
 .scroll { overflow-x: auto; }
 table.grid { border-collapse: collapse; min-width: 100%; }
-table.grid th, table.grid td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: middle; }
+table.grid th, table.grid td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: middle; }
 table.grid th { font-size: 13px; color: var(--muted); font-weight: 600; }
 table.grid td input { min-width: 92px; font-family: var(--mono); font-size: 13px; }
 table.grid tr.unmanaged td:first-child { color: var(--muted); font-style: italic; }
 .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-aside { position: sticky; top: 112px; }
+.head h1 { margin: 0; }
+aside { position: sticky; top: 92px; }
 @media (max-width: 960px) { aside { position: static; } }
-.status { font-weight: 650; margin: 0 0 8px; }
-.status.ok { color: var(--good); } .status.no { color: var(--bad); }
+.status { font-weight: 650; margin: 0 0 12px; }
+.status.ok { color: var(--teal); } .status.no { color: var(--bad); }
 .issues { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
 .issues li { margin: 0 0 8px; font-size: 13px; }
-.issues li button { text-align: left; display: block; width: 100%; background: transparent; border: 1px solid var(--line); }
+.issues li button { text-align: left; display: block; width: 100%; background: var(--sunken); padding: 9px 12px; }
 .issues li.problem button { border-left: 3px solid var(--bad); }
-.issues li.warning button { border-left: 3px solid var(--warn); }
-.issues .where { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; }
-.verdict { font-size: 26px; margin: 4px 0 10px; font-weight: 650; }
-.stats { display: flex; flex-wrap: wrap; gap: 28px; margin: 6px 0 16px; }
-.stats div { font-size: 13px; color: var(--muted); } .stats strong { display: block; font-size: 22px; color: var(--fg); }
-.targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.target { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
-.target.uncertain { border-color: var(--warn); } .target.not_met { border-color: var(--bad); }
-.target .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
-.bar { position: relative; height: 10px; border-radius: 5px; background: var(--line); margin: 8px 0; }
-.bar span { position: absolute; left: 0; top: 0; height: 100%; border-radius: 5px; background: var(--accent); }
+.issues li.warning button { border-left: 3px solid var(--gold); }
+.issues .where { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; margin-top: 3px; }
+.verdict { font: normal clamp(30px, 3.4vw, 44px)/1.1 var(--serif); letter-spacing: -.025em; margin: 22px 0 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 6px 0 20px; }
+.stats div { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+.stats strong { display: block; font-size: 28px; line-height: 1.2; color: var(--teal); font-weight: 650; margin-bottom: 2px; }
+.targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.target { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 13px; }
+.target.uncertain { border-color: var(--gold); } .target.not_met { border-color: var(--bad); }
+.target strong { display: block; font-size: 15px; margin: 2px 0; }
+.target .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--teal); }
+.bar { position: relative; height: 10px; border-radius: 5px; background: #34555b; margin: 12px 0 10px; }
+.bar span { position: absolute; left: 0; top: 0; height: 100%; border-radius: 5px; background: var(--teal); }
 .bar i { position: absolute; top: 0; height: 100%; background: repeating-linear-gradient(45deg, rgba(255,255,255,.45) 0 3px, transparent 3px 6px); }
-.bar b { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--fg); }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
-.pill.met { background: var(--good); color: #fff; } .pill.uncertain { background: var(--warn); color: #1b1300; } .pill.not_met { background: var(--bad); color: #fff; }
+.bar b { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--text); }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; color: var(--ink); }
+.pill.met { background: var(--teal); } .pill.uncertain { background: var(--gold); } .pill.not_met { background: var(--bad); }
 details summary { cursor: pointer; color: var(--muted); }
 .muted { color: var(--muted); }
-.empty { color: var(--muted); font-style: italic; }
-.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--accent);
-  padding: 10px 16px; border-radius: 8px; z-index: 10; max-width: 90vw; }
-.steps { margin: 0; padding-left: 20px; } .steps li { margin: 4px 0; }
+.empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 20px 18px; text-align: center; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--teal);
+  padding: 11px 18px; border-radius: 10px; z-index: 10; max-width: 90vw; box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 12px; max-width: 820px; }
+.steps li { counter-increment: step; border-top: 1px solid var(--line); padding: 10px 0 0 36px; position: relative; color: var(--muted); }
+.steps li::before { content: counter(step, decimal-leading-zero); position: absolute; left: 0; top: 10px; color: var(--teal); font-weight: 700; }
+.steps strong { color: var(--text); }
 </style>
 </head>
 <body>
 <header class="top">
-  <div class="brand">Nocturne <b>Planner</b> · <a id="tonightLink" style="color:var(--accent)" href="/tonight">DC Tonight</a></div>
+  <div class="brand"><svg class="mark" viewBox="-11 -11 22 22" aria-hidden="true"><circle r="9.5"/><path d="M0 -10A10 10 0 0 1 0 10A3.5 10 0 0 0 0 -10Z"/></svg>NOCTURNE</div>
+  <nav class="apps" aria-label="Nocturne tools"><span aria-current="page"><span class="long">Restoration planner</span><span class="short">Planner</span></span><a id="tonightLink" href="/tonight">DC Tonight</a></nav>
   <div class="file" id="file" aria-live="polite">Loading…</div>
   <div class="actions">
-    <select id="examples" aria-label="Open an example or a blank project"><option value="">New or example…</option></select>
-    <label class="btn">Open file…<input type="file" id="open" accept=".json,application/json" hidden></label>
+    <details class="menu" id="newMenu"><summary class="btn">New <span aria-hidden="true">▾</span></summary><div class="menu-list" id="examples"></div></details>
+    <button id="openFile" type="button">Open file…</button><input type="file" id="open" accept=".json,application/json" hidden>
     <button id="save" title="Save back to the file this session was started with">Save</button>
     <button id="download">Download project</button>
   </div>
@@ -127,6 +162,7 @@ details summary { cursor: pointer; color: var(--muted); }
 <div class="layout">
   <section role="tabpanel" id="panel" aria-live="polite"></section>
   <aside class="card" aria-label="Checks">
+    <p class="eyebrow">Checks</p>
     <p class="status" id="status">Checking…</p>
     <ul class="issues" id="issues"></ul>
     <p class="hint">Checked as you type, with the same rules the command line uses. Click an item to go to the field.</p>
@@ -174,15 +210,21 @@ const token = new URLSearchParams(location.hash.slice(1)).get("token") || sessio
 document.getElementById("tonightLink").href = "/tonight#token=" + encodeURIComponent(token);
 if (token) { sessionStorage.setItem("nocturne-token", token); history.replaceState(null, "", location.pathname); }
 const state = { project: null, file: "", writable: false, fromFile: false, dirty: false, tab: "project",
-                check: { problems: [], warnings: [] }, result: null, budget: null };
+                check: { problems: [], warnings: [] }, result: null, budget: null, solving: false };
 const TABS = [["project", "Project"], ["places", "Places & targets"], ["conditions", "Conditions"],
               ["sources", "Sources & options"], ["light", "Light contributions"], ["interactions", "Interactions"], ["plan", "Plan"]];
 
 async function api(method, route, body) {
-  const res = await fetch(route, { method, headers: Object.assign({ "X-Nocturne-Token": token },
-    body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined });
+  let res;
+  try {
+    res = await fetch(route, { method, headers: Object.assign({ "X-Nocturne-Token": token },
+      body ? { "Content-Type": "application/json" } : {}), body: body ? JSON.stringify(body) : undefined });
+  } catch (err) {
+    throw new Error("Nocturne isn’t answering. Is “nocturne app” still running in your terminal?");
+  }
   const type = res.headers.get("Content-Type") || "";
   const data = type.startsWith("application/json") ? await res.json() : await res.text();
+  if (res.status === 403) throw new Error("This page’s session has ended. Open the address “nocturne app” printed in your terminal.");
   if (!res.ok) { const err = new Error((data && data.error) || res.statusText); err.data = data; err.status = res.status; throw err; }
   return data;
 }
@@ -359,10 +401,11 @@ function togglePerPlace(obj, key) {
 function renderTabs() {
   const nav = document.getElementById("tabs");
   const left = nav.scrollLeft;
-  nav.replaceChildren(...TABS.map(([id, label]) => {
+  nav.replaceChildren(...TABS.map(([id, label], i) => {
     const n = state.check.problems.filter((p) => tabFor(p.path) === id).length;
     return h("button", { role: "tab", "aria-selected": String(state.tab === id),
-      onclick: () => { state.tab = id; render(); } }, label, n ? h("span", { class: "count", text: " " + n }) : null);
+      onclick: () => { state.tab = id; render(); } }, h("span", { class: "num", "aria-hidden": "true", text: "0" + (i + 1) + " " }),
+      label, n ? h("span", { class: "count", text: " " + n }) : null);
   }));
   nav.scrollLeft = left;                     // on a phone the bar scrolls: keep the chosen tab in view
   const chosen = nav.querySelector('[aria-selected="true"]');
@@ -381,7 +424,7 @@ function tabFor(path) {
 function render() {
   renderTabs();
   const panel = document.getElementById("panel");
-  if (!P()) { panel.replaceChildren(h("p", { class: "empty", text: "Open a project, an example or a blank project to begin." })); return; }
+  if (!P()) { panel.replaceChildren(h("p", { class: "empty", text: "Choose New for a blank project or an example, or Open file… for your own." })); return; }
   const views = { project: viewProject, places: viewPlaces, conditions: viewConditions, sources: viewSources,
                   light: viewLight, interactions: viewInteractions, plan: viewPlan };
   panel.replaceChildren(...[views[state.tab]()].flat(Infinity).filter((x) => x !== null && x !== undefined && x !== false));
@@ -391,7 +434,8 @@ function render() {
 function viewProject() {
   const p = P();
   return [
-    h("h1", { text: "Project" }),
+    h("p", { class: "eyebrow", text: "Project" }),
+    h("h1", { class: "display" }, "Light where it is needed. ", h("em", { text: "Darkness where it is not." })),
     h("p", { class: "lead", text: "Work backward from a darker sky: say which places must reach which brightness, what light reaches them, " +
       "and which complete changes each owner could make. The planner finds the cheapest set of changes that meets every target in every condition." }),
     h("div", { class: "card" },
@@ -404,11 +448,11 @@ function viewProject() {
       h("ul", {}, (p.provenance.limits || []).map((x) => h("li", { class: "hint", text: x })))) : null,
     h("h2", { text: "How to use this" }),
     h("ol", { class: "steps" },
-      h("li", { text: "Places & targets: the observation points to protect, and the most artificial sky brightness each may have." }),
-      h("li", { text: "Conditions: the nights to plan for (clear, hazy, snow…). Every target must hold in each one." }),
-      h("li", { text: "Sources & options: who owns each kind of light, and the complete changes they could make, with cost and effect." }),
-      h("li", { text: "Light contributions: how much each source adds at each place in each condition, from measurements or `nocturne derive`." }),
-      h("li", { text: "Plan: find the cheapest set of changes, then open the printable brief for the people who decide." })),
+      h("li", {}, h("strong", { text: "Places & targets:" }), " the observation points to protect, and the most artificial sky brightness each may have."),
+      h("li", {}, h("strong", { text: "Conditions:" }), " the nights to plan for (clear, hazy, snow…). Every target must hold in each one."),
+      h("li", {}, h("strong", { text: "Sources & options:" }), " who owns each kind of light, and the complete changes they could make, with cost and effect."),
+      h("li", {}, h("strong", { text: "Light contributions:" }), " how much each source adds at each place in each condition, from measurements or `nocturne derive`."),
+      h("li", {}, h("strong", { text: "Plan:" }), " find the cheapest set of changes, then open the printable brief for the people who decide.")),
     h("p", { class: "hint", text: "Values may be ranges (type 0.3 – 0.5): the plan must then work at the pessimistic end. Nothing here controls a light." })];
 }
 
@@ -581,8 +625,8 @@ function viewPlan() {
     h("div", { class: "card row" },
       valueField(budget, "v", "", "Budget for this run (USD; the project keeps its own)",
         { money: true, onvalue: (v) => { state.budget = v; } }),          // a what-if, not an edit to the project
-      h("button", { class: "primary", disabled: !ready, onclick: solveNow,
-        text: ready ? "Find the plan" : "Fix the problems first" }))];
+      h("button", { class: "primary", disabled: !ready || state.solving, "aria-busy": state.solving ? "true" : null, onclick: solveNow,
+        text: state.solving ? "Finding the plan…" : ready ? "Find the plan" : "Fix the problems first" }))];
   const r = state.result;
   if (!r) return out;
   const labels = r.source_labels || {};
@@ -634,13 +678,15 @@ function viewPlan() {
   return out;
 }
 async function solveNow() {
+  if (state.solving) return;
+  state.solving = true; render();                       // the exact search can take a while: show it, and refuse a second click
   try {
     state.result = await api("POST", "/api/solve", { project: P(), budget_usd: state.budget });
   } catch (err) {
     state.result = null;
     if (err.data && err.data.problems) { state.check.problems = err.data.problems; renderChecks(); }
     toast("Could not plan: " + err.message);
-  }
+  } finally { state.solving = false; }
   render();
 }
 async function openReport(save) {
@@ -728,11 +774,18 @@ document.getElementById("download").addEventListener("click", () => {
   download(JSON.stringify(P(), null, 2) + "\n", fileBase() + ".json", "application/json");
   toast("Downloaded. Run it from the command line with: nocturne restore " + fileBase() + ".json");
 });
-document.getElementById("examples").addEventListener("change", async (e) => {
-  const id = e.target.value; e.target.value = "";
-  if (!id || !leaving()) return;
+// New is a menu of buttons: browsing it with the keyboard never replaces the project.
+const menu = document.getElementById("newMenu");
+document.getElementById("examples").addEventListener("click", async (e) => {
+  const id = (e.target.closest("button") || {}).dataset.example;
+  if (!id) return;
+  menu.open = false;
+  if (!leaving()) return;
   try { load(await api("GET", "/api/example/" + id), false, ""); } catch (err) { toast("Could not open the example: " + err.message); }
 });
+document.addEventListener("click", (e) => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+menu.addEventListener("keydown", (e) => { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
+document.getElementById("openFile").addEventListener("click", () => document.getElementById("open").click());
 document.getElementById("open").addEventListener("change", async (e) => {
   const file = e.target.files[0]; e.target.value = "";
   if (!file || !leaving()) return;
@@ -750,17 +803,18 @@ document.getElementById("open").addEventListener("change", async (e) => {
 window.addEventListener("beforeunload", (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
 (async function start() {
-  if (!token) { document.getElementById("panel").replaceChildren(h("p", { text: "Open the address printed by `nocturne app`, including its #token part." })); return; }
+  if (!token) { document.getElementById("panel").replaceChildren(h("p", { class: "empty", text: "Open the address “nocturne app” printed in your terminal, including its #token part." })); return; }
   try {
     const s = await api("GET", "/api/session");
     state.file = s.file; state.writable = s.writable;
-    const select = document.getElementById("examples");
-    for (const x of s.examples) select.append(h("option", { value: x.id, text: x.title }));
+    const list = document.getElementById("examples");
+    for (const x of s.examples) list.append(h("button", { type: "button", dataset: { example: x.id }, text: x.title }));
     if (s.project) load(s.project, true, s.notice);
     else load(await api("GET", "/api/example/" + (s.examples.some((x) => x.id === "district") ? "district" : "blank")), false,
-      "This is an example with invented numbers. Choose “New or example…” for a blank project, or open your own file.");
+      "This example uses invented numbers. Choose New for a blank project, or Open file… for your own.");
   } catch (err) {
-    document.getElementById("panel").replaceChildren(h("p", { text: "Could not reach the planner: " + err.message + ". Is `nocturne app` still running?" }));
+    document.getElementById("panel").replaceChildren(h("p", { class: "empty", text: err.message }));
+    document.getElementById("file").textContent = "";
   }
 })();
 </script>

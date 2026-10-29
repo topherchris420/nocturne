@@ -75,6 +75,59 @@ def test_tonight_uses_the_same_engine_and_existing_security_boundary(served):
     assert call("POST", "/api/tonight", {"project": p, "receipts_csv": []})[0] == 400
 
 
+def test_tonight_shows_the_chosen_night_behind_the_same_boundary(served):
+    from vdl7.tonight import example_project
+    call, _, _ = served()
+    assert call("GET", "/api/tonight/sky?night=2026-10-15", token=None)[0] == 403
+    status, body, _ = call("GET", "/api/tonight/sky?night=2026-10-15")
+    assert status == 200 and body["sky"]["headline"] == "Dark from 19:58 to 05:50." and body["sky"]["windows"] == []
+    assert "Dark from 19:58 to 05:50." in body["html"] and "sky-strip" in body["html"]
+    for bad in ("", "2026-02-30", "1999-12-31", "tomorrow"):
+        status, body, _ = call("GET", "/api/tonight/sky?night=" + bad)
+        assert status == 400 and "between 2000 and 2100" in body["error"]
+    status, result, _ = call("POST", "/api/tonight", {"project": example_project("2026-10-15")})
+    assert status == 200 and "Covers 7 h 50 min of darkness, all of it moonless." in result["sky_html"]
+
+
+def _tokens(name):
+    root = re.search(r":root\s*\{(.*?)\}", (ROOT / "vdl7" / name).read_text(), re.S).group(1)
+    return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", root))
+
+
+def _contrast(a, b):
+    def luminance(colour):
+        channels = [int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b_ = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b_
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_the_planner_and_dc_tonight_share_one_night():
+    planner, tonight = _tokens("planner.html"), _tokens("tonight.html")
+    assert len(planner) >= 16 and planner == {k: v for k, v in tonight.items() if k in planner}
+    for name in ("planner.html", "tonight.html"):
+        page = (ROOT / "vdl7" / name).read_text()
+        assert '<nav class="apps" aria-label="Nocturne tools">' in page and page.count('aria-current="page"') == 1
+    # WCAG AA for text: every text colour on every surface it sits on, and dark ink on the bright fills.
+    for fg in ("text", "muted", "faint", "teal", "gold", "bad"):
+        for bg in ("bg", "panel", "raised", "field", "sunken"):
+            assert _contrast(planner[fg], planner[bg]) >= 4.5, (fg, bg)
+    for fill in ("teal", "gold", "bad"):
+        assert _contrast(planner["ink"], planner[fill]) >= 4.5, fill
+    assert _contrast(planner["notice-ink"], planner["notice"]) >= 4.5 and _contrast(planner["bad"], planner["danger"]) >= 4.5
+
+
+def test_starting_points_are_buttons_and_open_file_is_a_real_button(served):
+    """New lists buttons: a select that replaced the project on "change" did so as soon as an
+    arrow key moved through it. Open file… was a label around a hidden input, which the
+    keyboard cannot reach."""
+    call, _, _ = served()
+    page = call("GET", "/", token=None)[1]
+    assert '<details class="menu" id="newMenu">' in page and '<select id="examples"' not in page
+    assert '<button id="openFile" type="button">Open file…</button>' in page and '<label class="btn">Open file' not in page
+
+
 def test_data_needs_the_session_token_and_a_local_host(served):
     call, _, _ = served()
     assert call("GET", "/api/session", token=None)[0] == 403

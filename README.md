@@ -33,6 +33,8 @@ The local browser page lets you:
 3. Export an action sheet, a start-and-morning-check calendar, the project and an empty completion CSV.
 4. Import the completed CSV to separate reported work, missed checks and actions needing review.
 
+It also shows the night you chose: sunset, when real darkness begins and ends, what the Moon is doing, and how much of each owner's window falls in moonless darkness. These are times from Nocturne's own solar and lunar models, checked against the U.S. Naval Observatory's tables for Washington. They describe the night, not the light.
+
 **No new equipment is required for these first actions. Staff time and permission still matter.** Every change is manual and reversible. Streetlights and federal assets become operator requests, never instructions to turn them off. DC Tonight links to [Lights Out DC](https://www.lightsoutdc.info/) and the [existing DDOT/311 service](https://ddot.dc.gov/service/street-and-alley-light-repair); a request can start today, while an actual repair may take much longer.
 
 The distinction between *planned* and *done* is built into the accounting. A blank ledger claims no completed work. Unknown watts stay unquantified. Blinds get no electricity credit. A receipt must match the exact project and date; a service problem or replacement floodlight withholds credit pending review. Completion remains self-reported, and no circuit-level result is presented as measured citywide skyglow reduction.
@@ -53,6 +55,7 @@ For a real project, use **Start fresh**, record your own observations, and save 
 | Start with a question | Use Nocturne to… |
 |---|---|
 | What can I change tonight with the equipment already here? | Make owner action sheets, route spill reports, export calendar handoffs and reconcile completion receipts in **DC Tonight**. |
+| When is it truly dark tonight, and where is the Moon? | See sunset, astronomical darkness and the Moon for any DC night, with each owner's window laid over it, in **DC Tonight** and its action sheet. |
 | Which changes would reach our darkness target? | Choose a portfolio across named owners, observation points and weather scenarios, within a budget and declared service constraints. |
 | What if the target cannot be reached? | Identify a budget shortfall or show that the available actions are insufficient. |
 | Will the plan hold in haze, under snow, or if our numbers are off? | Derive each source's effect from positions, lumens, shielding and the atmosphere; give uncertain values as ranges and plan for their pessimistic end; charge rebounds and synergies to the plans that trigger them. |
@@ -70,7 +73,7 @@ Download the repository through **Code → Download ZIP**, extract it, and open 
 
 | File | What to explore |
 |---|---|
-| [DC Tonight action sheet](examples/dc-tonight/action-sheet.html) | A fictional block's actionable owner handoff, pending checks and streetlight request. Open locally; no server needed to read the sheet. |
+| [DC Tonight action sheet](examples/dc-tonight/action-sheet.html) | A fictional block's actionable owner handoff, pending checks and streetlight request, set against that night's darkness and Moon. Open locally; no server needed to read the sheet. |
 | [Restoration report](examples/restoration/report.html) | An offline brief showing the selected interventions, costs and remaining sky brightness in the synthetic district. |
 | [Derived-district report](examples/restoration/derived-report.html) | The same kind of brief for a district whose coefficients were computed from geometry, haze and snow, with uncertainty ranges and a rebound. |
 | [Decision brief](docs/brief.html) | Interactive estimates of energy costs, lighting through the night, modeled skies and the proposed rollout. |
@@ -324,7 +327,7 @@ A practical starting point is **one willing building owner, one avoidable spill 
 |---|---|
 | [One-building field pilot](docs/FIELD_PILOT.md) | Owner-permitted randomized crossover, calibration, controls, preregistered measurements and report rules. |
 | [Evidence ladder](docs/CLAIMS.md) | Definitions and limits for design, simulated, owner-reported, field-measured and deployed claims. |
-| [DC Tonight](docs/TONIGHT.md) | Same-night owner actions, a coordinated closing routine, official reporting routes, packet format and completion accounting. |
+| [DC Tonight](docs/TONIGHT.md) | Same-night owner actions, a coordinated closing routine, official reporting routes, the night's darkness and Moon, packet format and completion accounting. |
 | [Restoration workflow](docs/RESTORATION.md) | Project schema, units, optimization guarantees, ranges, interactions, physical derivation, trial design and measurement analysis. |
 | [Integration](docs/INTEGRATION.md) | Controller capability profiles, the readiness record and its gates, and reconciling what the CMS loaded. |
 | [Synthetic example](examples/restoration/README.md) | Inputs, provenance, generated results and reproduction instructions. |
