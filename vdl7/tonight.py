@@ -14,10 +14,13 @@ import math
 import re
 import shutil
 from datetime import date, datetime, time, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .clock import DC_LAT, DC_LON, SUNRISE_ELEVATION_DEG, night_bounds
 from .nightsignal import _ics_fold, _ics_text
+from .observe import DARK_MOON_DEG, DARK_SUN_DEG, moon
 
 TZ = ZoneInfo("America/New_York")
 UTC = timezone.utc
@@ -108,6 +111,167 @@ def example_project(night_of=None):
     return p
 
 
+# ------------------------------------------------------------ tonight's sky
+# When the night is dark, and how much of each owner's window falls in it. Times only: the
+# solar clock the controller runs and the lunar series vdl7.observe checks against JPL-grade
+# ephemerides. Kept out of the plan fingerprint, so receipts do not depend on it.
+TWILIGHT = (("civil", -6.0), ("nautical", -12.0), ("astronomical", DARK_SUN_DEG))
+SKY_RULE = ("Dark means the Sun is more than 18° below the horizon; moonless adds the Moon more than 5° below it, "
+            "the rule Nocturne applies to sky-meter readings.")
+SKY_METHOD = (f"Computed on this computer for {DC_LAT:.3f}° N, {-DC_LON:.3f}° W with the NOAA solar position algorithm "
+              "and the Astronomical Almanac's lunar series (about 0.3°), to the minute.")
+SKY_CLAIM = "It describes the night, not any light: no sky brightness is measured or inferred."
+
+
+def _minute(t):
+    return (t + timedelta(seconds=30)).replace(second=0, microsecond=0)
+
+
+def _iso(t):
+    return t.astimezone(TZ).isoformat(timespec="minutes")
+
+
+def _hm(t):
+    return t.astimezone(TZ).strftime("%H:%M")
+
+
+def _duration(minutes):
+    h, m = divmod(round(minutes), 60)
+    return f"{h} h {m} min" if h and m else f"{h} h" if h else f"{m} min"
+
+
+def _moon_below(start, end, degrees):
+    """[(from, to)] within [start, end] while the Moon's topocentric altitude is under
+    `degrees`: a ten-minute scan, then each crossing bisected to the second."""
+    low = lambda t: moon(t, DC_LAT, DC_LON).alt_deg < degrees
+    out, t, was = [], start, low(start)
+    since = start
+    while t < end:
+        t2 = min(t + timedelta(minutes=10), end)
+        if low(t2) != was:
+            lo, hi = t, t2
+            for _ in range(20):
+                mid = lo + (hi - lo) / 2
+                lo, hi = (mid, hi) if low(mid) == was else (lo, mid)
+            if was:
+                out.append((since, hi))
+            since, was = hi, not was
+        t = t2
+    if was:
+        out.append((since, end))
+    return [(a, b) for a, b in ((_minute(a), _minute(b)) for a, b in out) if b > a]
+
+
+def _overlap(start, end, spans):
+    return sum(max(0.0, (min(end, b) - max(start, a)).total_seconds()) for a, b in spans) / 60
+
+
+@lru_cache(maxsize=256)
+def _night_events(day):
+    """Sunset, twilight, darkness and the Moon over DC for the night beginning on `day`.
+    At DC's latitude every night of the year has all three twilights and a dark interval."""
+    sunset, sunrise = (_minute(t) for t in night_bounds(DC_LAT, DC_LON, day, SUNRISE_ELEVATION_DEG))
+    dusk, dawn = {}, {}
+    for name, degrees in TWILIGHT:
+        dusk[name], dawn[name] = (_minute(t) for t in night_bounds(DC_LAT, DC_LON, day, degrees))
+    below = _moon_below(sunset, sunrise, SUNRISE_ELEVATION_DEG)        # rise and set: the upper limb on the horizon
+    up, t = [], sunset
+    for a, b in below:
+        if a > t:
+            up.append((t, a))
+        t = b
+    if t < sunrise:
+        up.append((t, sunrise))
+    middle = _minute(sunset + (sunrise - sunset) / 2)
+    now, later = moon(middle, DC_LAT, DC_LON), moon(middle + timedelta(hours=1), DC_LAT, DC_LON)
+    return {"sunset": sunset, "sunrise": sunrise, "dusk": dusk, "dawn": dawn, "up": up, "middle": middle,
+            "moonless": _moon_below(dusk["astronomical"], dawn["astronomical"], DARK_MOON_DEG),
+            "lit": now.illuminated, "waxing": later.elongation_deg > now.elongation_deg}
+
+
+def night_sky(day, windows=()):
+    """Tonight's sky for the page, the action sheet and plan.json. `windows` holds
+    (action id, label, start, end) for each owner-ready action."""
+    e = _night_events(day)
+    dark = (e["dusk"]["astronomical"], e["dawn"]["astronomical"])
+    lit, moonless = e["lit"], e["moonless"]
+    phase = ("new Moon" if lit < 0.03 else "full Moon" if lit > 0.97 else
+             ("waxing " if e["waxing"] else "waning ") + ("crescent" if lit < 0.5 else "gibbous"))
+    events = sorted([(a, "rises") for a, _ in e["up"] if a > e["sunset"]] + [(b, "sets") for _, b in e["up"] if b < e["sunrise"]])
+    when = ("stays below the horizon all night" if not e["up"] else "is up all night" if not events else
+            " and ".join(f"{verb} at {_hm(t)}" for t, verb in events))
+    if not moonless:
+        moonless_text = "No moonless darkness."
+    elif moonless == [dark]:
+        moonless_text = "All of it moonless."
+    else:
+        moonless_text = "Moonless from " + " and from ".join(f"{_hm(a)} to {_hm(b)}" for a, b in moonless) + "."
+    edges = [e["sunset"], e["dusk"]["civil"], e["dusk"]["nautical"], dark[0], dark[1], e["dawn"]["nautical"],
+             e["dawn"]["civil"], e["sunrise"]]
+    kinds = ["civil", "nautical", "astronomical", "dark", "astronomical", "nautical", "civil"]
+    out = []
+    for aid, label, start, end in windows:
+        d, m = round(_overlap(start, end, [dark])), round(_overlap(start, end, moonless))
+        summary = ("None of this window falls in darkness." if not d else
+                   f"Covers {_duration(d)} of darkness, " + ("all of it moonless." if m == d else
+                   "none of it moonless." if not m else f"{_duration(m)} of it moonless."))
+        out.append({"action_id": aid, "label": label, "start": _iso(start), "end": _iso(end),
+                    "dark_minutes": d, "moonless_dark_minutes": m, "summary": summary})
+    return {"place": "Washington, DC", "latitude": DC_LAT, "longitude": DC_LON,
+            "title": f"The night of {day:%A}, {day:%B} {day.day}",
+            "sunset": _iso(e["sunset"]), "sunrise": _iso(e["sunrise"]),
+            "dark": {"start": _iso(dark[0]), "end": _iso(dark[1]), "minutes": round((dark[1] - dark[0]).total_seconds() / 60)},
+            "bands": [{"kind": k, "start": _iso(a), "end": _iso(b)} for k, a, b in zip(kinds, edges, edges[1:])],
+            "moon": {"illuminated": round(lit, 3), "waxing": e["waxing"], "phase": phase, "at": _iso(e["middle"]),
+                     "up": [{"start": _iso(a), "end": _iso(b)} for a, b in e["up"]],
+                     "summary": f"A {phase}, {round(100 * lit)}% lit, {when}."},
+            "moonless_dark": [{"start": _iso(a), "end": _iso(b)} for a, b in moonless],
+            "moonless_dark_minutes": round(sum((b - a).total_seconds() for a, b in moonless) / 60),
+            "headline": f"Dark from {_hm(dark[0])} to {_hm(dark[1])}.", "moonless_summary": moonless_text,
+            "windows": out, "rule": SKY_RULE, "method": SKY_METHOD, "claim": SKY_CLAIM}
+
+
+def _moon_path(lit, waxing, r=10):
+    """The lit part of the disc as seen from DC: the bright limb is a semicircle, the terminator
+    half an ellipse. SVG's y axis points down, so sweep flag 1 runs clockwise on screen."""
+    return (f"M0 {-r}A{r} {r} 0 0 {int(waxing)} 0 {r}"
+            f"A{r * abs(1 - 2 * lit):.2f} {r} 0 0 {int((lit < 0.5) != waxing)} 0 {-r}Z")
+
+
+def sky_html(sky):
+    """Tonight's sky as one fragment for the page and the action sheet, which style its classes:
+    the Moon, the headline, a timeline from sunset to sunrise and each owner-ready window."""
+    esc = lambda x: html.escape(str(x), quote=True)
+    at = lambda iso: datetime.fromisoformat(iso).astimezone(UTC)
+    hm = lambda iso: _hm(at(iso))
+    sunset, sunrise, windows, m = at(sky["sunset"]), at(sky["sunrise"]), sky["windows"], sky["moon"]
+    hour = lambda t: t.replace(minute=0, second=0, microsecond=0)       # DC's offsets are whole hours
+    t0 = hour(min([sunset] + [at(w["start"]) for w in windows]) - timedelta(minutes=20))
+    t1 = hour(max([sunrise] + [at(w["end"]) for w in windows]) + timedelta(minutes=20)) + timedelta(hours=1)
+    pct = lambda t: 100 * (t - t0).total_seconds() / (t1 - t0).total_seconds()
+    span = lambda a, b: f'style="left:{pct(a):.2f}%;width:{pct(b) - pct(a):.2f}%"'
+    ticks = [t for t in (t0 + timedelta(hours=n) for n in range(int((t1 - t0).total_seconds() // 3600) + 1))
+             if t.astimezone(TZ).hour % 2 == 0 and 4 < pct(t) < 96]
+    bands = ([("day", t0, sunset)] + [(b["kind"], at(b["start"]), at(b["end"])) for b in sky["bands"]]
+             + [("day", sunrise, t1)])
+    moon_up = "".join(f'<span {span(t0 if at(u["start"]) == sunset else at(u["start"]), t1 if at(u["end"]) == sunrise else at(u["end"]))}>'
+                      "Moon up</span>" for u in m["up"])
+    rows = "".join(f'<div class="sky-window"><p><span><b>{esc(w["label"])}</b> · {hm(w["start"])}–{hm(w["end"])}</span><small>{esc(w["summary"])}</small></p>'
+                   f'<div class="sky-track" aria-hidden="true"><span {span(at(w["start"]), at(w["end"]))}></span></div></div>'
+                   for w in windows)
+    return (f'<div class="sky"><p class="sky-eyebrow">{esc(sky["title"])}</p><div class="sky-head">'
+            f'<svg class="sky-moon" viewBox="-11 -11 22 22" role="img" aria-label="{esc(m["summary"])}"><circle r="10"/>'
+            f'<path d="{_moon_path(m["illuminated"], m["waxing"])}"/></svg><div>'
+            f'<h2 class="sky-headline">{esc(sky["headline"])} <em>{esc(sky["moonless_summary"])}</em></h2>'
+            f'<p class="sky-line">Sunset {hm(sky["sunset"])} · sunrise {hm(sky["sunrise"])}. {esc(m["summary"])}</p></div></div>'
+            '<div class="sky-chart">' + "".join(f'<i class="sky-grid" style="left:{pct(t):.2f}%"></i>' for t in ticks)
+            + f'<div class="sky-track sky-moonup" aria-hidden="true">{moon_up}</div><div class="sky-track sky-strip" aria-hidden="true">'
+            + "".join(f'<i class="sky-{k}" {span(a, b)}></i>' for k, a, b in bands if b > a) + f'</div>{rows}'
+            + '<div class="sky-ticks" aria-hidden="true">'
+            + "".join(f'<span style="left:{pct(t):.2f}%">{_hm(t)}</span>' for t in ticks) + "</div></div>"
+            f'<p class="sky-note">{esc(sky["rule"])} {esc(sky["method"])} {esc(sky["claim"])}</p></div>')
+
+
 def plan(project):
     if not isinstance(project, dict) or project.get("schema") != SCHEMA:
         raise ValueError(f"project.schema: expected {SCHEMA}")
@@ -117,7 +281,7 @@ def plan(project):
     raw_actions = project.get("actions")
     if not isinstance(raw_actions, list) or len(raw_actions) > 200:
         raise ValueError("actions: provide a list of at most 200 separately controlled circuits or requests")
-    actions, ids, circuits = [], set(), set()
+    actions, ids, circuits, spans = [], set(), set(), {}
     for index, raw in enumerate(raw_actions):
         path = f"actions[{index}]"
         if not isinstance(raw, dict):
@@ -143,6 +307,7 @@ def plan(project):
             raise ValueError(f"{path}.end: must follow start within this noon-to-noon night")
         a.update(start_at=start.astimezone(TZ).isoformat(), end_at=end.astimezone(TZ).isoformat(),
                  hours=(end - start).total_seconds() / 3600)
+        spans[a["id"]] = (start, end)
         if a["kind"] != "report" and a["circuit"]:
             circuit_key = a["circuit"].casefold()
             if circuit_key in circuits:
@@ -182,6 +347,7 @@ def plan(project):
                 potential_kwh=sum(a["potential_kwh"] or 0 for a in ready),
                 unquantified_count=sum(a["kind"] == "switch_off" and a["potential_kwh"] is None for a in ready),
                 containment_hours=sum(a["hours"] for a in ready if a["kind"] == "close_blinds"),
+                sky=night_sky(day, [(a["id"], a["label"], *spans[a["id"]]) for a in ready]),
                 sources=SOURCES, sources_checked="2026-10-15",
                 claim="Plan only. Energy is conditional on the supplied baseline and circuit power; no measured skyglow reduction.")
 
@@ -313,6 +479,7 @@ def calendar(p):
 
 def render(p):
     esc = lambda x: html.escape(str(x), quote=True)
+    night = {w["action_id"]: w["summary"] for w in p["sky"]["windows"]}
     cards = []
     for a in p["actions"]:
         status = {"owner_ready": "Owner-ready plan", "needs_owner_check": "Owner check needed", "request_only": "Request only"}[a["status"]]
@@ -320,7 +487,7 @@ def render(p):
         if a["kind"] == "close_blinds":
             energy = "Containment only; zero electricity credit"
         details = (f"<p>{esc(a['start_at'])} → {esc(a['end_at'])} · {a['hours']:.2f} elapsed hours</p>"
-                   f"<p><b>Preserve:</b> {esc(a['preserve'])}</p><p><b>Restore:</b> {esc(a['rollback'])}</p>"
+                   f"<p><b>Night:</b> {esc(night.get(a['id'], ''))}</p><p><b>Preserve:</b> {esc(a['preserve'])}</p><p><b>Restore:</b> {esc(a['rollback'])}</p>"
                    f"<p><b>Basis:</b> {esc(a['evidence'])}</p>"
                    f"<p>{esc(energy)}. {esc(a['power_basis'])}</p>" if a["status"] == "owner_ready" else
                    "<ul>" + "".join(f"<li>{esc(r)}</li>" for r in a["reasons"]) + "</ul>")
@@ -334,13 +501,21 @@ def render(p):
 body{{font:16px/1.6 system-ui,sans-serif;max-width:960px;margin:auto;padding:32px;color:#172d32;background:#f4f6f2}}
 h1{{font-size:48px;line-height:1.1}}h2{{margin:.3em 0}}small,a{{color:#0b5d63}}article{{padding:22px;margin:18px 0;background:white;border:1px solid #cbd6d4;border-radius:12px}}
 pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}}.notice{{padding:16px;border-left:4px solid #a96b22;background:#fff2d8}}code{{overflow-wrap:anywhere}}
-@media print{{body{{background:white;padding:0;font-size:11pt}}article{{break-inside:avoid}}h1{{font-size:30pt}}}}
+.sky{{margin:26px 0;padding:22px 24px;background:white;border:1px solid #cbd6d4;border-radius:12px}}.sky-eyebrow{{margin:0 0 12px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#0b5d63}}
+.sky-head{{display:flex;gap:14px;align-items:flex-start}}.sky-moon{{width:48px;height:48px;flex:none;margin-top:3px}}.sky-moon circle{{fill:#2b3b40}}.sky-moon path{{fill:#f6efd9}}
+.sky-headline{{font:26px/1.2 Georgia,serif;margin:0 0 6px}}.sky-headline em{{display:block;font-size:20px;color:#0b5d63;margin-top:3px}}.sky-line{{margin:0;color:#3d5257}}
+.sky-chart{{position:relative;margin:20px 0 4px;padding-bottom:22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}}.sky-grid{{position:absolute;top:0;bottom:22px;width:1px;background:#d5dedd}}
+.sky-track{{position:relative;height:10px;margin:5px 0}}.sky-track span{{position:absolute;top:0;height:100%;border-radius:5px;background:#0b5d63}}
+.sky-moonup{{height:16px}}.sky-moonup span{{background:#f4e7bd;border:1px solid #c8a54a;color:#5b4610;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:14px;padding-left:7px;border-radius:8px;overflow:hidden;white-space:nowrap}}
+.sky-strip{{height:20px;border-radius:10px;overflow:hidden}}.sky-strip i{{position:absolute;top:0;height:100%}}.sky-day{{background:#dfe8ec}}.sky-civil{{background:#9db4c4}}.sky-nautical{{background:#5a7a93}}.sky-astronomical{{background:#2c4a63}}.sky-dark{{background:#0f1c27}}
+.sky-window p{{position:relative;margin:14px 0 4px;font-size:14px;line-height:1.45}}.sky-window span,.sky-window small{{display:table;background:white;padding-right:6px}}.sky-window small{{font-size:14px;color:#3d5257}}.sky-ticks{{position:absolute;left:0;right:0;bottom:0;height:16px}}.sky-ticks span{{position:absolute;transform:translateX(-50%);font-size:11px;color:#55696d}}.sky-note{{font-size:12px;color:#55696d;margin:12px 0 0}}
+@media print{{body{{background:white;padding:0;font-size:11pt}}article,.sky{{break-inside:avoid}}h1{{font-size:30pt}}}}
 </style><body><small>NOCTURNE / WASHINGTON, DC / {esc(p['night_of'])}</small><h1>Less spill. Tonight.</h1>
 <p>{esc(p['title'])}</p>{demo}<p><b>{p['ready_count']} owner-ready actions · {p['pending_count']} pending checks · {p['request_count']} requests</b></p>
 <p>{p['potential_kwh']:.2f} kWh estimated from known circuit power; {p['unquantified_count']} switch actions unquantified.
 {p['containment_hours']:.2f} window-group hours of planned containment (not an intensity or area measurement).</p>
 <p class="notice">These are manual owner tasks. Recheck occupancy and lighting needs before each action. Keep exits, stairs, crossings, accessibility and required security lighting served. Restore immediately if useful lighting suffers.</p>
-{''.join(cards) or '<p>Add a circuit or a spill observation to make your first action sheet.</p>'}
+{sky_html(p['sky'])}{''.join(cards) or '<p>Add a circuit or a spill observation to make your first action sheet.</p>'}
 <h2>Tomorrow: close the loop</h2><p>Fill receipts.csv with the actual start and end times (including UTC offset), observer, and evidence reference. Confirm required service stayed intact and no replacement floodlight or longer operating time cancelled the change. A missed check remains unconfirmed. Retain the original project.json; changing it changes the plan fingerprint.</p>
 <p>For streetlights, file the draft yourself through <a href="https://311.dc.gov/">DC 311</a> and retain the request number. DDOT lists 2–5 days for investigations/simple maintenance and up to 12 months for upgrades including lights that are too bright; a request is not a promised same-night repair.</p>
 <p>{esc(p['claim'])} Phone photos document a scene; automatic exposure is not calibrated sky photometry.</p>

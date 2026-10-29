@@ -75,6 +75,20 @@ def test_tonight_uses_the_same_engine_and_existing_security_boundary(served):
     assert call("POST", "/api/tonight", {"project": p, "receipts_csv": []})[0] == 400
 
 
+def test_tonight_shows_the_chosen_night_behind_the_same_boundary(served):
+    from vdl7.tonight import example_project
+    call, _, _ = served()
+    assert call("GET", "/api/tonight/sky?night=2026-10-15", token=None)[0] == 403
+    status, body, _ = call("GET", "/api/tonight/sky?night=2026-10-15")
+    assert status == 200 and body["sky"]["headline"] == "Dark from 19:58 to 05:50." and body["sky"]["windows"] == []
+    assert "Dark from 19:58 to 05:50." in body["html"] and "sky-strip" in body["html"]
+    for bad in ("", "2026-02-30", "1999-12-31", "tomorrow"):
+        status, body, _ = call("GET", "/api/tonight/sky?night=" + bad)
+        assert status == 400 and "between 2000 and 2100" in body["error"]
+    status, result, _ = call("POST", "/api/tonight", {"project": example_project("2026-10-15")})
+    assert status == 200 and "Covers 7 h 50 min of darkness, all of it moonless." in result["sky_html"]
+
+
 def _tokens(name):
     root = re.search(r":root\s*\{(.*?)\}", (ROOT / "vdl7" / name).read_text(), re.S).group(1)
     return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", root))
