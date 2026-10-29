@@ -162,6 +162,19 @@ def _moon_below(start, end, degrees):
     return [(a, b) for a, b in ((_minute(a), _minute(b)) for a, b in out) if b > a]
 
 
+def _moon_up(start, end):
+    """[(from, to)] within [start, end] while the Moon is up: rise and set put the upper
+    limb on the horizon, the sunrise's -0.833° (the lunar series is topocentric)."""
+    up, t = [], start
+    for a, b in _moon_below(start, end, SUNRISE_ELEVATION_DEG):
+        if a > t:
+            up.append((t, a))
+        t = b
+    if t < end:
+        up.append((t, end))
+    return up
+
+
 def _overlap(start, end, spans):
     return sum(max(0.0, (min(end, b) - max(start, a)).total_seconds()) for a, b in spans) / 60
 
@@ -174,14 +187,7 @@ def _night_events(day):
     dusk, dawn = {}, {}
     for name, degrees in TWILIGHT:
         dusk[name], dawn[name] = (_minute(t) for t in night_bounds(DC_LAT, DC_LON, day, degrees))
-    below = _moon_below(sunset, sunrise, SUNRISE_ELEVATION_DEG)        # rise and set: the upper limb on the horizon
-    up, t = [], sunset
-    for a, b in below:
-        if a > t:
-            up.append((t, a))
-        t = b
-    if t < sunrise:
-        up.append((t, sunrise))
+    up = _moon_up(sunset, sunrise)
     middle = _minute(sunset + (sunrise - sunset) / 2)
     now, later = moon(middle, DC_LAT, DC_LON), moon(middle + timedelta(hours=1), DC_LAT, DC_LON)
     return {"sunset": sunset, "sunrise": sunrise, "dusk": dusk, "dawn": dawn, "up": up, "middle": middle,
@@ -254,8 +260,7 @@ def sky_html(sky):
              if t.astimezone(TZ).hour % 2 == 0 and 4 < pct(t) < 96]
     bands = ([("day", t0, sunset)] + [(b["kind"], at(b["start"]), at(b["end"])) for b in sky["bands"]]
              + [("day", sunrise, t1)])
-    moon_up = "".join(f'<span {span(t0 if at(u["start"]) == sunset else at(u["start"]), t1 if at(u["end"]) == sunrise else at(u["end"]))}>'
-                      "Moon up</span>" for u in m["up"])
+    moon_up = "".join(f'<span {span(a, b)}>Moon up</span>' for a, b in _moon_up(t0, t1))   # the whole chart, day edges too
     rows = "".join(f'<div class="sky-window"><p><span><b>{esc(w["label"])}</b> · {hm(w["start"])}–{hm(w["end"])}</span><small>{esc(w["summary"])}</small></p>'
                    f'<div class="sky-track" aria-hidden="true"><span {span(at(w["start"]), at(w["end"]))}></span></div></div>'
                    for w in windows)

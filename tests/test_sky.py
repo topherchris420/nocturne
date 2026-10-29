@@ -81,6 +81,16 @@ def test_a_new_moon_and_a_full_moon_night():
     assert full["moonless_dark_minutes"] == 0 and new["moonless_dark_minutes"] == new["dark"]["minutes"]
 
 
+def test_the_moon_band_starts_at_moonrise_even_before_sunset():
+    """The chart opens at 16:00 on the full-Moon night, but the Moon rises at
+    16:35: the band must not claim the half hour before it was up."""
+    page = sky_html(night_sky(date(2026, 11, 24)))                # 16:00 to 08:00, sixteen hours
+    band = re.search(r'sky-moonup".*?</div>', page).group(0)
+    (left, width), = [tuple(map(float, x)) for x in re.findall(r"left:([\d.]+)%;width:([\d.]+)%", band)]
+    assert left == pytest.approx(100 * 35 / 960, abs=100 * 2 / 960)   # 16:35, within the tables' two minutes
+    assert left + width == pytest.approx(100, abs=0.01)           # still up when the chart ends at 08:00 (sets 08:27)
+
+
 @pytest.mark.parametrize("night", ["2026-10-15", "2026-10-31", "2026-06-21", "2026-03-07"])
 def test_moonless_darkness_is_what_the_sky_meter_filter_keeps(night):
     """Readings every five minutes through the night: observe.dark() keeps
