@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nocturne — Light where it is needed</title>
+<meta name="description" content="Nocturne is an open-source toolkit for reducing unnecessary light: owner action sheets for tonight, least-cost plans to a sky-brightness target, and trials that measure the result.">
+<meta property="og:title" content="Nocturne — Light where it is needed. Darkness where it is not.">
+<meta property="og:description" content="An open-source toolkit for reducing unnecessary light, starting with the controls people already have.">
+<meta property="og:image" content="assets/images/console.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-11 -11 22 22'%3E%3Ccircle r='10.5' fill='%231c1a17'/%3E%3Cpath d='M0 -8A8 8 0 0 1 0 8A2.8 8 0 0 0 0 -8Z' fill='%23fb923c'/%3E%3C/svg%3E">
+<!-- Web fonts are optional: loaded as a non-matching media sheet so a slow or blocked font host never
+     holds up the page; the system stack below takes over. -->
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Layout: a single scrolling landing page. A full-height hero where the headline sits between
+   the night sky and the city, then approach (sticky title | numbered principles), example pages
+   (2-up cards), tools (bordered 2-up list), questions (accordion), a dark call to action and footer.
+   Warm neutrals with charcoal; one amber accent, the colour of the light itself. */
+:root {
+  --background: oklch(0.97 0.005 85);
+  --foreground: oklch(0.18 0.01 75);
+  --primary: oklch(0.2 0.01 75);
+  --primary-foreground: oklch(0.97 0.005 85);
+  --secondary: oklch(0.92 0.008 80);
+  --muted-foreground: oklch(0.45 0.015 75);
+  --border: oklch(0.88 0.01 80);
+  --amber: rgb(251 146 60);
+  --amber-soft: #fed7aa;
+  --font-sans: "Satoshi", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ease-reveal: cubic-bezier(0.76, 0, 0.24, 1);
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans);
+  font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+h1, h2, h3, h4, p { margin: 0; }
+h1, h2 { text-wrap: balance; }
+a { color: inherit; text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.container { width: 100%; margin-inline: auto; padding-inline: 24px; }
+@media (min-width: 640px) { .container { max-width: 640px; } }
+@media (min-width: 768px) { .container { max-width: 768px; padding-inline: 48px; } }
+@media (min-width: 1024px) { .container { max-width: 1024px; } }
+@media (min-width: 1280px) { .container { max-width: 1280px; } }
+@media (min-width: 1536px) { .container { max-width: 1536px; } }
+
+.section { padding-block: 128px; }
+@media (min-width: 768px) { .section { padding-block: 116px; } }
+.eyebrow { font-size: 14px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 24px; }
+.display { font-size: clamp(48px, 7.2vw, 96px); font-weight: 500; line-height: 1.15; letter-spacing: -0.025em; margin-bottom: 24px; }
+.lede { color: var(--muted-foreground); font-size: 18px; line-height: 1.65; }
+.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Hand-drawn amber underline that draws itself in when the word scrolls into view */
+.hl { position: relative; display: inline-block; }
+.hl svg { position: absolute; left: 0; bottom: -4px; width: 100%; height: 16px; overflow: visible; }
+.hl path { fill: none; stroke: var(--amber); stroke-width: 2; stroke-linecap: round;
+  stroke-dasharray: 200; stroke-dashoffset: 200; transition: stroke-dashoffset 0.8s ease-out; }
+.hl.is-visible path { stroke-dashoffset: 0; }
+
+/* Header: transparent over the hero, a floating charcoal bar once the page scrolls */
+.site-header { position: fixed; z-index: 50; top: 0; left: 0; right: 0; padding-block: 16px; background: transparent;
+  transition: all 0.5s ease; }
+.site-header.is-scrolled, .site-header.is-open { top: 16px; left: 16px; right: 16px; border-radius: 16px;
+  background: var(--primary); backdrop-filter: blur(12px); }
+.site-header nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; font-size: 15px; letter-spacing: 0.18em; }
+.brand svg { width: 20px; height: 20px; }
+.nav-links { display: none; list-style: none; margin: 0; padding: 0; align-items: center; gap: 40px; font-size: 14px; letter-spacing: 0.025em; }
+.nav-links a { position: relative; color: #fff; transition: color 0.3s; }
+.nav-links a::after { content: ""; position: absolute; left: 0; bottom: -2px; height: 1px; width: 0; background: var(--amber); transition: width 0.3s; }
+.nav-links a:hover { color: var(--amber); }
+.nav-links a:hover::after { width: 100%; }
+.btn-light { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; padding: 10px 20px;
+  background: #fff; color: var(--foreground); border: 1px solid color-mix(in oklch, var(--foreground) 20%, transparent);
+  transition: all 0.3s; }
+.btn-light:hover { background: var(--foreground); color: #fff; }
+.site-header .btn-light { display: none; }
+.menu-toggle { color: #fff; width: 24px; height: 24px; }
+.menu-toggle svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.menu-toggle .close, .is-open .menu-toggle .open { display: none; }
+.is-open .menu-toggle .close { display: block; }
+.mobile-menu { overflow: hidden; max-height: 0; opacity: 0; transition: all 0.3s ease-in-out; }
+.is-open .mobile-menu { max-height: 600px; opacity: 1; margin-top: 32px; }
+.mobile-menu ul { list-style: none; margin: 0 0 32px; padding: 0; display: flex; flex-direction: column; gap: 24px; }
+.mobile-menu ul a { display: block; color: #fff; font-size: 36px; font-weight: 300; line-height: 1.1; transition: color 0.3s; }
+.mobile-menu ul a:hover { color: var(--amber); }
+.mobile-menu .btn-light { margin-bottom: 16px; }
+@media (min-width: 768px) {
+  .nav-links, .site-header .btn-light { display: flex; }
+  .menu-toggle, .mobile-menu { display: none; }
+}
+
+/* Hero: sky behind, headline in the middle, the city in front */
+.hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; background: #070b16; isolation: isolate; }
+.sky { position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(180deg, #05080f 0%, #0a1020 38%, #141a2c 66%, #2a2430 84%, #3a2a2a 100%); }
+.stars { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stars .faint { opacity: var(--stars, 0.15); transition: opacity 0.2s linear; }
+.skyglow { position: absolute; left: -10%; right: -10%; bottom: 0; height: 75%; pointer-events: none;
+  background: radial-gradient(ellipse 60% 70% at 50% 100%, rgb(255 150 70 / 0.55), rgb(255 120 60 / 0.18) 45%, transparent 72%);
+  opacity: var(--glow, 1); transition: opacity 0.2s linear; }
+.hero-content { position: relative; z-index: 10; padding-top: 32px; will-change: transform; transform-style: preserve-3d; }
+.hero-content .inner { margin-bottom: 200px; }
+@media (min-width: 768px) { .hero-content { padding-top: 0; } .hero-content .inner { margin-bottom: 240px; } }
+@media (min-width: 1024px) { .hero-content .inner { margin-bottom: 320px; } }
+.hero .eyebrow { color: var(--secondary); text-align: center; margin-bottom: 12px; }
+.hero h1 { color: #fff; text-align: center; font-weight: 500; font-size: clamp(46px, 7.4vw, 104px); line-height: 0.95; letter-spacing: -0.03em; }
+.hero h1 span { color: var(--amber-soft); }
+.city { position: absolute; left: 0; right: 0; bottom: 0; height: 56%; z-index: 20; pointer-events: none; }
+.city .skyline { width: 100%; height: 100%; max-width: none; }
+@media (max-width: 767px) { .city { height: 46%; } }
+.scroll-cue { position: absolute; z-index: 30; bottom: 40px; left: 50%; transform: translateX(-50%); color: rgb(255 255 255 / 0.7);
+  animation: bounce 1s infinite; transition: opacity 0.3s; }
+.scroll-cue .icon { width: 20px; height: 20px; }
+@keyframes bounce { 0%, 100% { transform: translate(-50%, -25%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+  50% { transform: translate(-50%, 0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); } }
+
+/* Approach */
+.split { display: grid; gap: 64px; }
+@media (min-width: 1024px) {
+  .split { grid-template-columns: 1fr 1fr; gap: 96px; }
+  .split .sticky { position: sticky; top: 128px; align-self: start; }
+  .split .rhs { padding-top: 192px; }
+}
+.sketch { display: none; margin-top: 16px; color: var(--foreground); }
+@media (min-width: 1024px) { .sketch { display: block; } }
+.sketch .ln { fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.sketch .thin { stroke-width: 0.8; opacity: 0.55; }
+.sketch .dash { stroke-dasharray: 3 5; }
+.sketch .light { fill: var(--amber); opacity: 0.28; }
+.sketch .bulb { fill: var(--amber); }
+.sketch text { font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; fill: var(--muted-foreground); }
+.principles { display: flex; flex-direction: column; gap: 24px; }
+.principles .lede { max-width: 28rem; margin-bottom: 48px; }
+.principle { display: flex; gap: 24px; }
+.principle .num { color: color-mix(in oklch, var(--muted-foreground) 50%, transparent); font-size: 14px; font-weight: 500; line-height: 1.9; }
+.principle h3 { font-size: 20px; font-weight: 500; margin-bottom: 12px; }
+.principle p { color: var(--muted-foreground); line-height: 1.65; }
+
+.reveal { opacity: 0; transform: translateY(32px); transition: opacity 0.7s, transform 0.7s; }
+.reveal.is-visible { opacity: 1; transform: none; }
+
+/* Example pages */
+.examples { background: color-mix(in oklch, var(--secondary) 50%, transparent); }
+.section-head { display: flex; flex-direction: column; gap: 24px; margin-bottom: 64px; }
+@media (min-width: 768px) { .section-head { flex-direction: row; align-items: flex-end; justify-content: space-between; } }
+.section-head h2 { font-size: clamp(30px, 3.6vw, 48px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.1; }
+.text-link { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted-foreground); transition: color 0.2s; }
+.text-link:hover { color: var(--foreground); }
+.text-link .icon { transition: transform 0.2s; }
+.text-link:hover .icon { transform: translate(2px, -2px); }
+.cards { display: grid; gap: 24px; }
+@media (min-width: 768px) { .cards { grid-template-columns: 1fr 1fr; gap: 32px; } }
+.card { display: block; }
+.card .frame { position: relative; overflow: hidden; aspect-ratio: 4 / 3; margin-bottom: 24px; background: var(--primary); }
+.card img { width: 100%; height: 100%; object-fit: cover; object-position: top left; transition: transform 0.7s; }
+.card:hover img, .card:focus-visible img { transform: scale(1.05); }
+.card .curtain { position: absolute; inset: 0; background: var(--primary); transform-origin: top; transition: transform 1.5s var(--ease-reveal); }
+.card .frame.is-visible .curtain { transform: scaleY(0); }
+.card .meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.card h3 { font-size: 20px; font-weight: 500; margin-bottom: 8px; text-underline-offset: 4px; }
+.card:hover h3 { text-decoration: underline; }
+.card p { color: var(--muted-foreground); font-size: 14px; }
+.card .tag { color: color-mix(in oklch, var(--muted-foreground) 60%, transparent); font-size: 14px; white-space: nowrap; }
+
+/* Tools */
+.tools-head { max-width: 48rem; margin-bottom: 80px; }
+.tools { display: grid; gap: 64px 48px; }
+@media (min-width: 768px) { .tools { grid-template-columns: 1fr 1fr; } }
+.tool { position: relative; padding-left: 32px; border-left: 1px solid var(--border); }
+.tool .glyph { width: 40px; height: 40px; margin-bottom: 16px; fill: none; stroke: var(--foreground); stroke-width: 1.25;
+  stroke-linecap: round; stroke-linejoin: round; }
+.tool.is-visible .glyph * { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: draw-stroke 1.5s ease-out forwards; animation-delay: inherit; }
+@keyframes draw-stroke { to { stroke-dashoffset: 0; } }
+.tool h3 { font-size: 20px; font-weight: 500; margin-bottom: 16px; }
+.tool p { color: var(--muted-foreground); line-height: 1.65; }
+
+/* Questions */
+.faq-section { padding-block: 80px; }
+@media (min-width: 768px) { .faq-section { padding-block: 116px; } }
+.faq-head { max-width: 48rem; margin-bottom: 64px; }
+.faq-head .display { font-size: clamp(48px, 6.4vw, 72px); }
+.qa { border-bottom: 1px solid var(--border); }
+.qa button { width: 100%; padding-block: 24px; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; text-align: left; }
+.qa button span { font-size: 18px; font-weight: 500; line-height: 1.5; transition: color 0.2s; }
+.qa button:hover span { color: color-mix(in oklch, var(--foreground) 70%, transparent); }
+.qa button .icon { width: 24px; height: 24px; stroke-width: 1.5; transition: transform 0.3s; margin-top: 2px; }
+.qa button[aria-expanded="true"] .icon { transform: rotate(45deg); }
+.qa .answer { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.5s ease-in-out, opacity 0.5s ease-in-out; }
+.qa .answer > div { overflow: hidden; }
+.qa.is-open .answer { grid-template-rows: 1fr; opacity: 1; }
+.qa .answer p { color: var(--muted-foreground); line-height: 1.65; padding: 0 48px 24px 0; }
+.qa code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.9em; color: var(--foreground);
+  background: var(--secondary); padding: 1px 6px; border-radius: 3px; }
+.qa .answer a, .footer-note a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Call to action */
+.cta { background: var(--foreground); color: var(--primary-foreground); text-align: center; }
+.cta .wrap { max-width: 56rem; margin-inline: auto; }
+.cta .eyebrow { color: color-mix(in oklch, var(--primary-foreground) 60%, transparent); margin-bottom: 32px; }
+.cta h2 { font-size: clamp(30px, 4.6vw, 60px); font-weight: 500; line-height: 1.1; letter-spacing: -0.025em; margin-bottom: 32px; }
+.cta p { color: color-mix(in oklch, var(--primary-foreground) 70%, transparent); font-size: clamp(18px, 1.6vw, 20px); line-height: 1.65;
+  max-width: 42rem; margin: 0 auto 48px; }
+.cta .actions { display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+@media (min-width: 640px) { .cta .actions { flex-direction: row; } }
+.btn-solid, .btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 32px;
+  font-size: 14px; letter-spacing: 0.025em; transition: background 0.3s; }
+.btn-solid { background: var(--primary-foreground); color: var(--foreground); }
+.btn-solid:hover { background: color-mix(in oklch, var(--primary-foreground) 90%, transparent); }
+.btn-solid .icon { transition: transform 0.2s; }
+.btn-solid:hover .icon { transform: translateX(4px); }
+.btn-ghost { border: 1px solid color-mix(in oklch, var(--primary-foreground) 30%, transparent); }
+.btn-ghost:hover { background: color-mix(in oklch, var(--primary-foreground) 10%, transparent); }
+
+/* Footer */
+.site-footer { padding-block: 64px; border-top: 1px solid var(--border); }
+@media (min-width: 768px) { .site-footer { padding-block: 96px; } }
+.footer-grid { display: grid; gap: 48px; margin-bottom: 64px; }
+@media (min-width: 768px) { .footer-grid { grid-template-columns: 2fr 1fr 1fr; } }
+.site-footer .brand { color: var(--foreground); margin-bottom: 24px; }
+.site-footer .about { color: var(--muted-foreground); line-height: 1.65; max-width: 24rem; }
+.site-footer h4 { font-size: 14px; font-weight: 500; margin-bottom: 16px; }
+.site-footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; font-size: 14px; color: var(--muted-foreground); }
+.site-footer ul a:hover { color: var(--foreground); }
+.footer-bar { padding-top: 32px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px;
+  font-size: 14px; color: var(--muted-foreground); }
+@media (min-width: 768px) { .footer-bar { flex-direction: row; align-items: center; justify-content: space-between; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  .reveal { opacity: 1; transform: none; }
+  .card .curtain { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="mark" viewBox="-11 -11 22 22"><circle r="9.5" fill="none" stroke="currentColor" stroke-width="1.3" opacity="0.5"/><path d="M0 -10A10 10 0 0 1 0 10A3.5 10 0 0 0 0 -10Z" fill="rgb(251 146 60)"/></symbol>
+</svg>
+
+<header class="site-header" id="header">
+  <nav class="container" aria-label="Main">
+    <a href="#hero" class="brand" id="home-link" aria-label="Nocturne, back to top"><svg aria-hidden="true"><use href="#mark"/></svg>NOCTURNE</a>
+    <ul class="nav-links">
+      <li><a href="#hero">Home</a></li>
+      <li><a href="#about">Approach</a></li>
+      <li><a href="#projects">Examples</a></li>
+      <li><a href="#services">What you can do</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <a href="#contact" class="btn-light">Get started</a>
+    <button class="menu-toggle" id="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+      <svg class="open" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/></svg>
+      <svg class="close" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </nav>
+  <div class="mobile-menu" id="mobile-menu">
+    <div class="container">
+      <ul>
+        <li><a href="#hero">Home</a></li>
+        <li><a href="#about">Approach</a></li>
+        <li><a href="#projects">Examples</a></li>
+        <li><a href="#services">What you can do</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+      <a href="#contact" class="btn-light">Get started</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="hero">
+    <div class="sky" aria-hidden="true">
+      <svg class="stars" id="stars" preserveAspectRatio="none"></svg>
+      <div class="skyglow"></div>
+    </div>
+    <div class="hero-content container" id="hero-content">
+      <div class="inner">
+        <p class="eyebrow">Open-source night restoration</p>
+        <h1>Light where it is needed.<br><span>Darkness where it is not.</span></h1>
+      </div>
+    </div>
+    <div class="city">
+      <svg class="skyline" viewBox="0 0 1600 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false"><defs><linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffcf87" stop-opacity=".55"/><stop offset="1" stop-color="#ffcf87" stop-opacity="0"/></linearGradient><radialGradient id="pool"><stop offset="0" stop-color="#ffcf87" stop-opacity=".45"/><stop offset="1" stop-color="#ffcf87" stop-opacity="0"/></radialGradient></defs><g fill="#1a2232"><rect x="-10" y="611" width="81" height="89"/><rect x="71" y="621" width="46" height="79"/><rect x="119" y="584" width="52" height="116"/><rect x="174" y="514" width="47" height="186"/><rect x="223" y="626" width="67" height="74"/><rect x="285" y="577" width="95" height="123"/><rect x="375" y="619" width="70" height="81"/><rect x="447" y="623" width="94" height="77"/><rect x="544" y="602" width="55" height="98"/><rect x="603" y="557" width="47" height="143"/><rect x="653" y="624" width="90" height="76"/><rect x="740" y="559" width="45" height="141"/><rect x="781" y="577" width="77" height="123"/><rect x="854" y="615" width="109" height="85"/><rect x="966" y="559" width="79" height="141"/><rect x="1049" y="617" width="63" height="83"/><rect x="1115" y="583" width="64" height="117"/><rect x="1174" y="539" width="110" height="161"/><rect x="1279" y="551" width="47" height="149"/><rect x="1323" y="543" width="103" height="157"/><rect x="1428" y="531" width="94" height="169"/><rect x="1521" y="556" width="99" height="144"/></g><rect x="328" y="587" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="771" y="601" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="836" y="603" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="812" y="635" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="921" y="625" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1033" y="617" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="997" y="633" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1217" y="629" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1205" y="645" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1265" y="645" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1310" y="625" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1286" y="641" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1366" y="585" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1402" y="601" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1342" y="617" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1402" y="617" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1447" y="589" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1447" y="605" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1435" y="621" width="4" height="6" fill="#e7b56f" opacity=".35"/><rect x="1552" y="582" width="4" height="6" fill="#e7b56f" opacity=".35"/><g fill="#111826"><path d="M1108 700 L1115 236 L1130 204 L1145 236 L1152 700 Z"/><rect x="240" y="604" width="460" height="96"/><rect x="370" y="566" width="200" height="40"/><path d="M402 568 L470 534 L538 568 Z"/><rect x="396" y="506" width="148" height="62"/><rect x="414" y="474" width="112" height="34"/><path d="M418 476 C418 424 444 394 470 392 C496 394 522 424 522 476 Z"/><rect x="461" y="364" width="18" height="30"/><path d="M458 366 C460 352 480 352 482 366 Z"/><rect x="468" y="334" width="4" height="22"/><rect x="1240" y="520" width="120" height="180"/><rect x="1370" y="470" width="96" height="230"/><rect x="1474" y="540" width="140" height="160"/><rect x="700" y="560" width="110" height="140"/><rect x="820" y="590" width="90" height="110"/></g><g fill="#e7c99a" opacity=".22"><rect x="252" y="616" width="4" height="70"/><rect x="264" y="616" width="4" height="70"/><rect x="276" y="616" width="4" height="70"/><rect x="288" y="616" width="4" height="70"/><rect x="300" y="616" width="4" height="70"/><rect x="312" y="616" width="4" height="70"/><rect x="324" y="616" width="4" height="70"/><rect x="336" y="616" width="4" height="70"/><rect x="348" y="616" width="4" height="70"/><rect x="360" y="616" width="4" height="70"/><rect x="576" y="616" width="4" height="70"/><rect x="588" y="616" width="4" height="70"/><rect x="600" y="616" width="4" height="70"/><rect x="612" y="616" width="4" height="70"/><rect x="624" y="616" width="4" height="70"/><rect x="636" y="616" width="4" height="70"/><rect x="648" y="616" width="4" height="70"/><rect x="660" y="616" width="4" height="70"/><rect x="672" y="616" width="4" height="70"/><rect x="684" y="616" width="4" height="70"/><rect x="402" y="514" width="3" height="46"/><rect x="412" y="514" width="3" height="46"/><rect x="422" y="514" width="3" height="46"/><rect x="432" y="514" width="3" height="46"/><rect x="442" y="514" width="3" height="46"/><rect x="452" y="514" width="3" height="46"/><rect x="462" y="514" width="3" height="46"/><rect x="472" y="514" width="3" height="46"/><rect x="482" y="514" width="3" height="46"/><rect x="492" y="514" width="3" height="46"/><rect x="502" y="514" width="3" height="46"/><rect x="512" y="514" width="3" height="46"/><rect x="522" y="514" width="3" height="46"/><rect x="532" y="514" width="3" height="46"/><rect x="420" y="480" width="3" height="22"/><rect x="429" y="480" width="3" height="22"/><rect x="438" y="480" width="3" height="22"/><rect x="447" y="480" width="3" height="22"/><rect x="456" y="480" width="3" height="22"/><rect x="465" y="480" width="3" height="22"/><rect x="474" y="480" width="3" height="22"/><rect x="483" y="480" width="3" height="22"/><rect x="492" y="480" width="3" height="22"/><rect x="501" y="480" width="3" height="22"/><rect x="510" y="480" width="3" height="22"/><rect x="519" y="480" width="3" height="22"/></g><rect x="1247" y="530" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1275" y="530" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1331" y="530" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1345" y="530" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1303" y="548" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1289" y="566" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1261" y="584" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1275" y="584" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1303" y="584" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1317" y="584" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1247" y="602" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1303" y="602" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1317" y="602" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1247" y="620" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1289" y="620" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1345" y="620" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1303" y="638" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1317" y="638" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1261" y="656" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1331" y="656" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1377" y="480" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1391" y="480" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1447" y="480" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1405" y="498" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1433" y="498" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1391" y="534" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1405" y="534" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1433" y="534" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1391" y="552" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1405" y="552" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1377" y="570" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1391" y="570" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1433" y="588" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1419" y="606" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1377" y="624" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1377" y="642" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1495" y="550" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1509" y="550" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1537" y="550" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1481" y="568" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1509" y="568" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1523" y="568" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1551" y="568" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1523" y="586" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1537" y="586" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1565" y="586" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1579" y="586" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1481" y="604" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1523" y="604" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1537" y="604" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1565" y="604" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1481" y="622" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1523" y="622" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1537" y="622" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1579" y="622" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1593" y="622" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1579" y="640" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1593" y="640" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1495" y="658" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1523" y="658" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1551" y="658" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="1579" y="658" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="707" y="570" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="791" y="570" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="735" y="588" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="749" y="588" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="707" y="606" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="749" y="606" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="763" y="606" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="777" y="606" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="791" y="606" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="707" y="624" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="763" y="624" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="735" y="642" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="749" y="642" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="763" y="642" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="883" y="600" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="827" y="618" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="855" y="618" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="869" y="636" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="869" y="654" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="883" y="654" width="5" height="7" fill="#ffd08a" opacity=".8"/><rect x="897" y="654" width="5" height="7" fill="#ffd08a" opacity=".8"/><g fill="#080b12"><rect x="0" y="672" width="1600" height="28"/><path d="M0 700 V600 L35 578 L70 600 V700 Z"/><path d="M70 700 V612 L102 590 L134 612 V700 Z"/><path d="M134 700 V596 L170 574 L206 596 V700 Z"/><path d="M206 700 V618 L236 596 L266 618 V700 Z"/><path d="M1336 700 V610 L1369 588 L1402 610 V700 Z"/><path d="M1402 700 V596 L1437 574 L1472 596 V700 Z"/><path d="M1472 700 V614 L1504 592 L1536 614 V700 Z"/><path d="M1536 700 V600 L1571 578 L1606 600 V700 Z"/><circle cx="300" cy="643" r="35"/><circle cx="324" cy="651" r="26"/><circle cx="276" cy="653" r="24"/><circle cx="352" cy="647" r="31"/><circle cx="374" cy="655" r="23"/><circle cx="330" cy="657" r="22"/><circle cx="610" cy="647" r="31"/><circle cx="632" cy="655" r="23"/><circle cx="588" cy="657" r="22"/><circle cx="668" cy="648" r="30"/><circle cx="689" cy="656" r="22"/><circle cx="647" cy="658" r="21"/><circle cx="760" cy="647" r="31"/><circle cx="782" cy="655" r="23"/><circle cx="738" cy="657" r="22"/><circle cx="980" cy="643" r="35"/><circle cx="1004" cy="651" r="26"/><circle cx="956" cy="653" r="24"/><circle cx="1036" cy="652" r="26"/><circle cx="1054" cy="660" r="20"/><circle cx="1018" cy="662" r="18"/><circle cx="1210" cy="648" r="30"/><circle cx="1231" cy="656" r="22"/><circle cx="1189" cy="658" r="21"/><circle cx="1262" cy="641" r="37"/><circle cx="1288" cy="649" r="28"/><circle cx="1236" cy="651" r="26"/></g><rect x="55" y="610" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="7" y="654" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="109" y="622" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="189" y="606" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="141" y="628" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="189" y="628" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="141" y="650" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="189" y="672" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="213" y="628" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1375" y="620" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1343" y="664" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1391" y="664" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1441" y="650" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1457" y="672" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1495" y="624" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1511" y="624" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1591" y="610" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1575" y="632" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1543" y="654" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1559" y="654" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1559" y="676" width="7" height="9" fill="#ffcf87" opacity=".9"/><rect x="1575" y="676" width="7" height="9" fill="#ffcf87" opacity=".9"/><path d="M104 596 L64 700 L144 700 L112 596 Z" fill="url(#cone)"/><ellipse cx="104" cy="690" rx="62" ry="10" fill="url(#pool)"/><g fill="#080b12"><rect x="109" y="590" width="3" height="110"/><rect x="97" y="588" width="16" height="3"/><path d="M92 590 h18 l-3 6 h-12 Z"/></g><rect x="96" y="595" width="10" height="2" fill="#ffe2b0"/><path d="M384 596 L344 700 L424 700 L392 596 Z" fill="url(#cone)"/><ellipse cx="384" cy="690" rx="62" ry="10" fill="url(#pool)"/><g fill="#080b12"><rect x="389" y="590" width="3" height="110"/><rect x="377" y="588" width="16" height="3"/><path d="M372 590 h18 l-3 6 h-12 Z"/></g><rect x="376" y="595" width="10" height="2" fill="#ffe2b0"/><path d="M534 596 L494 700 L574 700 L542 596 Z" fill="url(#cone)"/><ellipse cx="534" cy="690" rx="62" ry="10" fill="url(#pool)"/><g fill="#080b12"><rect x="539" y="590" width="3" height="110"/><rect x="527" y="588" width="16" height="3"/><path d="M522 590 h18 l-3 6 h-12 Z"/></g><rect x="526" y="595" width="10" height="2" fill="#ffe2b0"/><path d="M874 596 L834 700 L914 700 L882 596 Z" fill="url(#cone)"/><ellipse cx="874" cy="690" rx="62" ry="10" fill="url(#pool)"/><g fill="#080b12"><rect x="879" y="590" width="3" height="110"/><rect x="867" y="588" width="16" height="3"/><path d="M862 590 h18 l-3 6 h-12 Z"/></g><rect x="866" y="595" width="10" height="2" fill="#ffe2b0"/><path d="M1164 596 L1124 700 L1204 700 L1172 596 Z" fill="url(#cone)"/><ellipse cx="1164" cy="690" rx="62" ry="10" fill="url(#pool)"/><g fill="#080b12"><rect x="1169" y="590" width="3" height="110"/><rect x="1157" y="588" width="16" height="3"/><path d="M1152 590 h18 l-3 6 h-12 Z"/></g><rect x="1156" y="595" width="10" height="2" fill="#ffe2b0"/><path d="M1434 596 L1394 700 L1474 700 L1442 596 Z" fill="url(#cone)"/><ellipse cx="1434" cy="690" rx="62" ry="10" fill="url(#pool)"/><g fill="#080b12"><rect x="1439" y="590" width="3" height="110"/><rect x="1427" y="588" width="16" height="3"/><path d="M1422 590 h18 l-3 6 h-12 Z"/></g><rect x="1426" y="595" width="10" height="2" fill="#ffe2b0"/></svg>
+    </div>
+    <a href="#about" class="scroll-cue" id="scroll-cue" aria-label="Scroll to the approach"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down"/></svg></a>
+  </section>
+
+  <section class="section" id="about">
+    <div class="container split">
+      <div class="sticky">
+        <p class="eyebrow">Our approach</p>
+        <h2 class="display">Begin with<br>the <span class="hl">night</span></h2>
+        <svg class="sketch" viewBox="0 0 480 520" role="img" aria-labelledby="sketch-title">
+          <title id="sketch-title">Line drawing: a shielded streetlight lights only the pavement and the doorway beside it, while an unshielded globe sends light up into the sky.</title>
+          <path class="ln thin dash" d="M60 60 L132 150 M100 40 L140 140 M150 36 L150 136 M200 40 L160 140 M240 60 L168 150"/>
+          <text x="98" y="28">Spill</text>
+          <path class="ln" d="M150 160 m-18 0 a18 18 0 1 0 36 0 a18 18 0 1 0 -36 0"/>
+          <path class="ln thin" d="M132 168 L96 200 M168 168 L204 200"/>
+          <path class="ln" d="M150 178 V470"/>
+          <path class="ln" d="M330 470 V196 M330 196 H368"/>
+          <path class="light" d="M362 210 L312 470 H460 L398 210 Z"/>
+          <path class="ln" d="M356 196 H404 L396 210 H364 Z"/>
+          <rect class="bulb" x="368" y="208" width="24" height="3"/>
+          <text x="318" y="182">Useful light</text>
+          <path class="ln" d="M220 470 V292 H300 V470 M244 470 V396 H276 V470"/>
+          <path class="ln thin" d="M236 312 H260 V340 H236 Z M266 312 H290 V340 H266 Z"/>
+          <path class="ln" d="M20 470 H470"/>
+          <path class="ln thin" d="M312 486 H460 M312 480 V492 M460 480 V492"/>
+          <text x="346" y="510">Task area</text>
+        </svg>
+      </div>
+      <div class="rhs principles">
+        <p class="lede">A lit crossing does not need an illuminated sky. An occupied office does not need a glowing facade. Nocturne keeps the service people need, then works backward from the night you want to restore.</p>
+        <div class="principle reveal" style="transition-delay:0ms">
+          <span class="num">01</span>
+          <div><h3>Useful light, not spill</h3><p>Exits, stairs, crossings, accessibility and required security lighting stay served. Only the light that escapes them is counted as something to remove.</p></div>
+        </div>
+        <div class="principle reveal" style="transition-delay:100ms">
+          <span class="num">02</span>
+          <div><h3>Start with what is already there</h3><p>An existing switch, timer or blind. The first actions need no new equipment and every change is manual and reversible. Staff time and permission still matter.</p></div>
+        </div>
+        <div class="principle reveal" style="transition-delay:200ms">
+          <span class="num">03</span>
+          <div><h3>Planned is not done</h3><p>A blank ledger claims no completed work. Unknown watts stay unquantified, and a receipt must match the exact project and date before it earns credit.</p></div>
+        </div>
+        <div class="principle reveal" style="transition-delay:300ms">
+          <span class="num">04</span>
+          <div><h3>Honest about evidence</h3><p>Washington results are model estimates and the demonstrations use invented data. Every claim sits on a ladder: modeled, self-reported or measured.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section examples" id="projects">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Explore without installing</p>
+          <h2>See it working</h2>
+        </div>
+        <a href="https://github.com/topherchris420/nocturne" class="text-link">View the source on GitHub <svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"/></svg></a>
+      </div>
+      <div class="cards">
+        <a class="card" href="examples/dc-tonight/action-sheet.html">
+          <div class="frame"><img src="assets/images/action-sheet.jpg" alt="DC Tonight action sheet: owner-ready actions set against the night's darkness and Moon" width="1200" height="900" loading="lazy"><div class="curtain"></div></div>
+          <div class="meta"><div><h3>DC Tonight action sheet</h3><p>Owner handoff · Washington, DC</p></div><span class="tag">Fictional</span></div>
+        </a>
+        <a class="card" href="examples/restoration/report.html">
+          <div class="frame"><img src="assets/images/restoration-report.jpg" alt="Restoration brief: selected package cost, budget and targets met in a synthetic district" width="1200" height="900" loading="lazy"><div class="curtain"></div></div>
+          <div class="meta"><div><h3>Restoration report</h3><p>Least-cost plan · Invented district</p></div><span class="tag">Synthetic</span></div>
+        </a>
+        <a class="card" href="docs/brief.html">
+          <div class="frame"><img src="assets/images/brief.jpg" alt="Decision brief: Nocturne for Washington, with energy savings and streetlight counts" width="1200" height="900" loading="lazy"><div class="curtain"></div></div>
+          <div class="meta"><div><h3>Decision brief</h3><p>Energy, skies and rollout · Washington, DC</p></div><span class="tag">Model estimates</span></div>
+        </a>
+        <a class="card" href="console/index.html">
+          <div class="frame"><img src="assets/images/console.jpg" alt="Operator console: a simulated night of streetlight controller behavior across five streets" width="1200" height="900" loading="lazy"><div class="curtain"></div></div>
+          <div class="meta"><div><h3>Operator console</h3><p>Streetlight controllers · Five sample streets</p></div><span class="tag">Simulated</span></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="services">
+    <div class="container">
+      <div class="tools-head">
+        <p class="eyebrow">What you can do</p>
+        <h2 class="display"><span class="hl">Darkness</span> you<br>can plan for</h2>
+        <p class="lede">From one building tonight to a citywide trial, with the same accounting from a single circuit to every streetlight.</p>
+      </div>
+      <div class="tools">
+        <div class="tool reveal" style="transition-delay:0ms">
+          <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.8 11.2c.8-.9 1.2-2 1.2-3.2a6 6 0 0 0-9.3-5"/><path d="m2 2 20 20"/><path d="M6.3 6.3a4.67 4.67 0 0 0 1.2 5.2c.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+          <h3>Act tonight</h3>
+          <p>Turn an existing switch, timer or blind into a named-owner action, a calendar handoff and a record of what actually happened, laid over that night's real darkness and Moon.</p>
+        </div>
+        <div class="tool reveal" style="transition-delay:150ms">
+          <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          <h3>Plan to a target</h3>
+          <p>Set a sky-brightness target and find the least-cost combination of changes across buildings, signs, sports fields and streetlights, in clear skies, haze or snow.</p>
+        </div>
+        <div class="tool reveal" style="transition-delay:300ms">
+          <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>
+          <h3>Trial and measure</h3>
+          <p>Preregister a one-building field pilot, design randomized source-isolation trials and analyze calibrated target and control readings.</p>
+        </div>
+        <div class="tool reveal" style="transition-delay:450ms">
+          <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg>
+          <h3>Coordinate the city</h3>
+          <p>Export streetlight schedules, phase a rollout, check them against each controller's declared limits and publish a shared Night Signal calendar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq-section" id="faq">
+    <div class="container">
+      <div class="faq-head">
+        <p class="eyebrow">FAQ</p>
+        <h2 class="display">Questions &amp; Answers</h2>
+      </div>
+      <div id="faq-list">
+        <div class="qa">
+          <button aria-expanded="false" aria-controls="a1" id="q1"><span>Does Nocturne switch off streetlights?</span><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <div class="answer" id="a1" role="region" aria-labelledby="q1"><div><p>No. Nocturne does not connect to a city's lighting system. Streetlights and federal assets become requests to their operator, never instructions to turn them off. Contracts, equipment tests, safety reviews and the import itself remain deployment work, and the software records them rather than assuming them.</p></div></div>
+        </div>
+        <div class="qa">
+          <button aria-expanded="false" aria-controls="a2" id="q2"><span>Do I need new equipment?</span><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <div class="answer" id="a2" role="region" aria-labelledby="q2"><div><p>Not for the first actions. DC Tonight starts with the controls a building already has: a switch, a timer or a blind. Every change is manual and reversible, though staff time and permission still matter.</p></div></div>
+        </div>
+        <div class="qa">
+          <button aria-expanded="false" aria-controls="a3" id="q3"><span>Are the Washington numbers real?</span><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <div class="answer" id="a3" role="region" aria-labelledby="q3"><div><p>They are model estimates built from public data, such as DDOT's streetlight asset layer. The restoration demonstrations use entirely invented data, and each page says so. <a href="https://github.com/topherchris420/nocturne/blob/main/docs/CLAIMS.md">The evidence ladder</a> spells out what is modeled, self-reported or measured.</p></div></div>
+        </div>
+        <div class="qa">
+          <button aria-expanded="false" aria-controls="a4" id="q4"><span>How is completed work counted?</span><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <div class="answer" id="a4" role="region" aria-labelledby="q4"><div><p>Planned and done are kept apart. Unknown watts stay unquantified and blinds get no electricity credit. A receipt must match the exact project and date; a service problem or a replacement floodlight withholds credit pending review. Completion is self-reported, and no circuit-level result is presented as a measured citywide reduction in skyglow.</p></div></div>
+        </div>
+        <div class="qa">
+          <button aria-expanded="false" aria-controls="a5" id="q5"><span>What does it run on?</span><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <div class="answer" id="a5" role="region" aria-labelledby="q5"><div><p>Python 3.10 or newer, under the MIT license. The planner opens in your browser, runs on your own computer and sends nothing to lights. The example pages on this site open without installing anything.</p></div></div>
+        </div>
+        <div class="qa">
+          <button aria-expanded="false" aria-controls="a6" id="q6"><span>How do I get started?</span><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <div class="answer" id="a6" role="region" aria-labelledby="q6"><div><p>Install it from GitHub, then run <code>nocturne app --tonight</code> to plan a first night, or <code>nocturne app</code> for the restoration planner. <a href="https://github.com/topherchris420/nocturne/blob/main/docs/TONIGHT.md">The DC Tonight field guide</a> walks through a first night step by step.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section cta" id="contact">
+    <div class="container">
+      <div class="wrap">
+        <p class="eyebrow">Start tonight</p>
+        <h2>Ready to give the night<br>some <span class="hl">room</span>?</h2>
+        <p>Choose one unnecessary circuit or one glowing window. Give the change an owner, a time and a morning check, then coordinate the next willing neighbour.</p>
+        <div class="actions">
+          <a class="btn-solid" href="https://github.com/topherchris420/nocturne#quick-start">Get the code <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
+          <a class="btn-ghost" href="https://github.com/topherchris420/nocturne/blob/main/docs/TONIGHT.md">Read the field guide</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="#hero" class="brand"><svg aria-hidden="true"><use href="#mark"/></svg>NOCTURNE</a>
+        <p class="about">Light where it is needed. Darkness where it is not. An open-source toolkit for reducing unnecessary light, built by Christopher Woodyard / Vers3Dynamics with Washington, DC as the worked example.</p>
+      </div>
+      <div>
+        <h4>Explore</h4>
+        <ul>
+          <li><a href="examples/dc-tonight/action-sheet.html">Action sheet</a></li>
+          <li><a href="examples/restoration/report.html">Restoration report</a></li>
+          <li><a href="docs/brief.html">Decision brief</a></li>
+          <li><a href="console/index.html">Operator console</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/topherchris420/nocturne">GitHub</a></li>
+          <li><a href="https://github.com/topherchris420/nocturne/blob/main/docs/TONIGHT.md">Field guide</a></li>
+          <li><a href="https://github.com/topherchris420/nocturne/blob/main/docs/CLAIMS.md">Evidence ladder</a></li>
+          <li><a href="https://github.com/topherchris420/nocturne/blob/main/LICENSE">MIT license</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bar">
+      <p>© 2026 Christopher Woodyard / Vers3Dynamics</p>
+      <p>Research prototype · These pages do not connect to live lights</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var header = document.getElementById("header");
+  var toggle = document.getElementById("menu-toggle");
+
+  // Header: float once the page scrolls; the mobile menu opens it too
+  function setMenu(open) {
+    header.classList.toggle("is-open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+  }
+  toggle.addEventListener("click", function () { setMenu(!header.classList.contains("is-open")); });
+  document.querySelectorAll("#mobile-menu a").forEach(function (a) { a.addEventListener("click", function () { setMenu(false); }); });
+  document.getElementById("home-link").addEventListener("click", function (e) {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  });
+
+  // Stars: a fixed field (seeded, so every visit sees the same sky). The faint ones are the stars
+  // skyglow hides; they come out as the glow fades.
+  var stars = document.getElementById("stars");
+  var seed = 20261015;
+  function rand() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+  var NS = "http://www.w3.org/2000/svg";
+  stars.setAttribute("viewBox", "0 0 1000 1000");
+  ["bright", "faint"].forEach(function (cls) {
+    var g = document.createElementNS(NS, "g");
+    g.setAttribute("class", cls);
+    g.setAttribute("fill", "#fff");
+    var n = cls === "bright" ? 40 : 260;
+    for (var i = 0; i < n; i++) {
+      var c = document.createElementNS(NS, "circle");
+      var y = Math.pow(rand(), 1.4) * 720;
+      c.setAttribute("cx", (rand() * 1000).toFixed(1));
+      c.setAttribute("cy", y.toFixed(1));
+      c.setAttribute("r", (cls === "bright" ? 0.9 + rand() * 0.9 : 0.4 + rand() * 0.7).toFixed(2));
+      c.setAttribute("opacity", ((1 - y / 900) * (0.45 + rand() * 0.55)).toFixed(2));
+      g.appendChild(c);
+    }
+    stars.appendChild(g);
+  });
+
+  // Hero: as the page scrolls, the headline tips back and sinks behind the city,
+  // the skyglow fades and the hidden stars come out.
+  var hero = document.getElementById("hero");
+  var content = document.getElementById("hero-content");
+  var cue = document.getElementById("scroll-cue");
+  var ticking = false;
+  function update() {
+    ticking = false;
+    var y = window.scrollY;
+    header.classList.toggle("is-scrolled", y > 50);
+    var p = Math.max(0, Math.min(1, y / (hero.offsetHeight * 0.7)));
+    if (!reduceMotion) {
+      content.style.transform = "perspective(1000px) translateY(" + (p * 200) + "px) rotateX(" + (p * 45) + "deg) scale(" + (1 - p * 0.3) + ")";
+    }
+    hero.style.setProperty("--glow", (1 - p * 0.85).toFixed(3));
+    hero.style.setProperty("--stars", (0.15 + p * 0.85).toFixed(3));
+    cue.style.opacity = p > 0.05 ? "0" : "1";
+  }
+  window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  window.addEventListener("resize", update);
+  update();
+
+  // Reveals: principles, tools, card curtains and underlines, once each
+  function observe(selector, threshold) {
+    var els = document.querySelectorAll(selector);
+    if (!("IntersectionObserver" in window)) { els.forEach(function (el) { el.classList.add("is-visible"); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { entry.target.classList.add("is-visible"); io.unobserve(entry.target); }
+      });
+    }, { threshold: threshold });
+    els.forEach(function (el) { io.observe(el); });
+  }
+  document.querySelectorAll(".hl").forEach(function (el) {
+    el.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8 Q50 2, 100 6 T200 8"/></svg>');
+  });
+  observe(".principle", 0.3);
+  observe(".tool", 0.2);
+  observe(".card .frame", 0.2);
+  observe(".hl", 0.5);
+
+  // Questions: one open at a time
+  var items = document.querySelectorAll(".qa");
+  items.forEach(function (qa) {
+    qa.querySelector("button").addEventListener("click", function () {
+      var wasOpen = qa.classList.contains("is-open");
+      items.forEach(function (other) {
+        other.classList.remove("is-open");
+        other.querySelector("button").setAttribute("aria-expanded", "false");
+      });
+      if (!wasOpen) {
+        qa.classList.add("is-open");
+        this.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
