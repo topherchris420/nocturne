@@ -73,6 +73,7 @@ Download the repository through **Code → Download ZIP**, extract it, and open 
 
 | File | What to explore |
 |---|---|
+| [Nocturne homepage](index.html) | The project overview served at the site root, linking to each of the pages below. |
 | [DC Tonight action sheet](examples/dc-tonight/action-sheet.html) | A fictional block's actionable owner handoff, pending checks and streetlight request, set against that night's darkness and Moon. Open locally; no server needed to read the sheet. |
 | [Restoration report](examples/restoration/report.html) | An offline brief showing the selected interventions, costs and remaining sky brightness in the synthetic district. |
 | [Derived-district report](examples/restoration/derived-report.html) | The same kind of brief for a district whose coefficients were computed from geometry, haze and snow, with uncertainty ranges and a rebound. |
