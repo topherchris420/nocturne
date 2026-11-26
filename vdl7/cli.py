@@ -681,6 +681,14 @@ def cmd_experiment(a) -> int:
     return 0
 
 
+def cmd_trial_sky(a) -> int:
+    from .attribution import sky_preflight
+    from .restore import read_project
+    result = sky_preflight(read_project(a.trial), a.lat, a.lon)
+    print(json.dumps(result, indent=2, allow_nan=False))
+    return 3 if result["flagged_windows"] else 0
+
+
 def cmd_field_check(a) -> int:
     from .field import audit
     from .restore import read_project
@@ -755,6 +763,13 @@ def main(argv=None) -> int:
     ex.add_argument("--control-scale", type=float, default=1.0, help="preregistered additive control coefficient")
     ex.add_argument("--out", required=True, help="new trial directory (will not overwrite)")
     ex.set_defaults(fn=cmd_experiment)
+
+    ts = sub.add_parser("trial-sky", help="screen both trial windows for modeled sun and moon altitude",
+                        epilog="Exit 0: no windows flagged; 3: one or more flagged; 2: invalid input. Not a field readiness check.")
+    ts.add_argument("trial", help="trial.json created by nocturne experiment")
+    ts.add_argument("--lat", type=float, required=True, help="observer latitude in decimal degrees")
+    ts.add_argument("--lon", type=float, required=True, help="observer longitude in decimal degrees, west is negative")
+    ts.set_defaults(fn=cmd_trial_sky)
 
     fg = sub.add_parser("field-check", help="check first-site declarations against a preregistered trial",
                         epilog="Exit 0: declared preparations recorded; 3: blocked; 2: invalid. This is NOT an operator approval.")

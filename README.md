@@ -205,7 +205,7 @@ To prepare a new study design:
 nocturne experiment --source facades --source signs --start 2027-01-04 --seed "publish-before-measuring" --pairs 12 --fraction 0.5 --out my-trial
 ```
 
-This creates `my-trial/trial.json` and an empty `my-trial/readings.csv`. It schedules separate source groups on separate nights, with independently randomized baseline/dimmed window order. It does not operate any lights. Twelve nights per source is an example, not a power calculation.
+This creates `my-trial/trial.json` and an empty `my-trial/readings.csv`. It schedules separate source groups on separate nights, with independently randomized baseline/dimmed window order. It does not operate any lights. Twelve nights per source is an example, not a power calculation. These dates illustrate the generator, not a suitable calendar. Use the [astronomy preflight](docs/FIELD_PILOT.md#2-pre-register-the-exact-first-source-experiment) before freezing a field design.
 
 A field study needs consenting owners, reviewed lighting levels, calibrated target and control stations, preregistered quality rules, and records of the delivered light output. After collecting and screening observations:
 
