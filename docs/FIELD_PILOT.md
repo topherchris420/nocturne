@@ -24,12 +24,20 @@ The experiment measures **zenith sky brightness**, not window illuminance. Windo
 Install the project as in [README](../README.md#quick-start). Review the operating window with the owner, then run:
 
 ```bash
-nocturne experiment --source facade --start 2027-01-04 \
+nocturne experiment --source facade --start 2027-01-30 \
   --seed "replace-with-a-public-fixed-seed" --pairs 12 --fraction 0 \
   --out my-building-trial
 ```
 
 This creates `trial.json` with a SHA-256 fingerprint and a blank `readings.csv`. The generated crossover alternates two **independently randomized baseline/off periods each night**, nominally 23:20–23:40 and 00:20–00:40, one source per night. Off requires the actual circuit to support that state safely; use a tested partial fraction instead if and only if the existing hardware supports it. The independent unit is **the night**, not individual meter samples. Twelve nights is an example, **not a power calculation**.
+
+Before freezing the trial, screen both periods per night at the observing site:
+
+```bash
+nocturne trial-sky my-building-trial/trial.json --lat 38.8977 --lon -77.0365
+```
+
+These are example Washington, DC coordinates, not a selected study site. The January 30 start passes the model for all 12 pairs there; use your observer coordinates and check the control site too if it is far away. The preflight samples each UTC window every minute, including both endpoints, and flags periods where the modeled Sun is not below −18° or the Moon is not below −5° (a planning margin). Exit 0 means no sampled windows were flagged; 3 means at least one was flagged; 2 means invalid input. If needed, generate and review a new plan **before preregistration**. The report does not change the trial or prove actual observing conditions, operator authorization, or readiness.
 
 Fix the seed, primary receptor, fixed control coefficient (default 1.0), sensor settings, weather quality screen and exclusions in a dated, immutable copy of the protocol **before any data exist**. Verify the site's source is not already off during either planned period. The randomized order must be followed by the human operator, subject to safety overrides, with actual switch/meter logs. Mark any deviations excluded with reasons; do not relabel periods after seeing the readings.
 
@@ -80,3 +88,5 @@ Predeclared outcomes:
 The first success is not a stunning photograph of stars. It is a clear **measurement with an audit trail**, possibly even a null result. Publish negative findings as carefully as positive ones.
 
 Related: [DC Tonight](TONIGHT.md), [restoration study design](RESTORATION.md), [evidence/claim levels](CLAIMS.md) and [municipal integration gates](INTEGRATION.md).
+
+For field-method precedent, [Barentine et al.](https://doi.org/10.1016/j.jqsrt.2020.107120) measured different zenith responses at two locations during a city-scale dimming experiment. Its effect sizes do not predict a one-building result.

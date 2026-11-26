@@ -16,6 +16,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .clock import solar_elevation_exact
+from .observe import DARK_MOON_DEG, DARK_SUN_DEG, moon
 from .restore import fields, number, text
 from .skyglow import cd_from_msas
 
@@ -84,6 +86,38 @@ def validate_trial(trial):
                           trial["dim_fraction"], trial["timezone"], trial["control_scale"], trial["synthetic"])
     if trial != expected:
         raise ValueError("trial does not match its reproducible design/hash; use the original preregistration")
+
+
+def sky_preflight(trial, lat, lon):
+    """Screen the trial's UTC windows without changing design, readings or readiness."""
+    validate_trial(trial)
+    lat = number(lat, "latitude", -90, 90)
+    lon = number(lon, "longitude", -180, 180)
+    step = timedelta(minutes=1)
+    nights = {a["pair_id"] for a in trial["assignments"]}
+    flagged = set()
+    windows = []
+    for a in trial["assignments"]:
+        start = datetime.fromisoformat(a["start_utc"])
+        end = datetime.fromisoformat(a["end_utc"])
+        grid = [start + i * step for i in range((end - start) // step)] + [end]
+        sun_max = max(solar_elevation_exact(lat, lon, t) for t in grid)
+        moon_max = max(moon(t, lat, lon).alt_deg for t in grid)
+        flags = []
+        if sun_max >= DARK_SUN_DEG:
+            flags.append("sun_not_below_limit")
+        if moon_max >= DARK_MOON_DEG:
+            flags.append("moon_not_below_limit")
+        if flags:
+            flagged.add(a["pair_id"])
+            windows.append({"pair_id": a["pair_id"], "night": a["night"], "period": a["period"],
+                            "start_utc": a["start_utc"], "end_utc": a["end_utc"],
+                            "sun_max_deg": sun_max, "moon_max_deg": moon_max, "flags": flags})
+    return {"trial_sha256": trial["trial_sha256"], "planned_pairs": len(nights),
+            "ephemeris_eligible_pairs": len(nights - flagged), "flagged_windows": windows,
+            "limits_deg": {"sun": DARK_SUN_DEG, "moon": DARK_MOON_DEG},
+            "sample_interval_minutes": 1,
+            "scope": "Approximate sampled ephemeris only. Does not verify weather, local sky conditions, or field readiness."}
 
 
 def write_template(trial, path):
