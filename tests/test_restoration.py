@@ -187,6 +187,23 @@ def write_constant_response(trial, path, effect=0, shared_drift=.1):
                 "control_msas": msas_from_cd((1 + drift) / 1000)})
 
 
+@pytest.mark.parametrize(("nights", "adjusted", "status"), [
+    (6, 0.0625, "not_resolved"),
+    (7, 0.03125, "reduction_detected"),
+])
+def test_two_source_detection_floor(tmp_path, nights, adjusted, status):
+    trial = make_trial(["facades", "signs"], "2027-01-04", "exact-floor", pairs=nights)
+    path = tmp_path / "unanimous.csv"
+    write_constant_response(trial, path, effect=.2)
+    result = analyze(trial, path)
+    assert {item["source"] for item in result["estimates"]} == {"facades", "signs"}
+    for item in result["estimates"]:
+        assert item["complete"]
+        assert item["p_two_sided"] == 2 / 2**nights
+        assert item["p_bonferroni"] == adjusted
+        assert item["status"] == status
+
+
 def test_shared_weather_change_is_not_mistaken_for_source_reduction(tmp_path):
     trial = make_trial(["facades"], "2027-01-04", "weather-null")
     path = tmp_path / "null.csv"
