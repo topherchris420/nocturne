@@ -31,6 +31,17 @@ nocturne experiment --source facade --start 2027-01-04 \
 
 This creates `trial.json` with a SHA-256 fingerprint and a blank `readings.csv`. The generated crossover alternates two **independently randomized baseline/off periods each night**, nominally 23:20–23:40 and 00:20–00:40, one source per night. Off requires the actual circuit to support that state safely; use a tested partial fraction instead if and only if the existing hardware supports it. The independent unit is **the night**, not individual meter samples. Twelve nights is an example, **not a power calculation**.
 
+**Check the detection floor before scheduling multiple sources.** With the two-sided exact test (up to 16 usable pairs), the smallest possible adjusted p-value is `min(1, 2 × planned sources / 2^usable pairs)`: the observed sign assignment and its reversal both count. At the analyzer's 0.05 threshold, a complete trial needs at least:
+
+| Preregistered sources | Usable nightly pairs per source for detection to be possible |
+|---|---:|
+| 1 | 6 |
+| 2–3 | 7 |
+| 4–6 | 8 |
+| 7–10 | 9 |
+
+For example, two sources with six nights each cannot produce a detection even if every pair agrees (adjusted p ≥ 0.0625). These are mathematical floors, not recommended sample sizes. Ties can raise the minimum, and power depends on the effect size and variability. Plan for unusable nights before preregistering; the analyzer treats incomplete trials as exploratory and still adjusts for every planned source.
+
 Fix the seed, primary receptor, fixed control coefficient (default 1.0), sensor settings, weather quality screen and exclusions in a dated, immutable copy of the protocol **before any data exist**. Verify the site's source is not already off during either planned period. The randomized order must be followed by the human operator, subject to safety overrides, with actual switch/meter logs. Mark any deviations excluded with reasons; do not relabel periods after seeing the readings.
 
 Copy [the blank readiness manifest](../examples/field-pilot/readiness.json) to a private work directory. Set `site_id`, `source` and `trial_sha256` from the generated trial; reference each signed check or calibration record without publishing personal data. Test:
