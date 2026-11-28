@@ -114,6 +114,12 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--amber); outline
 .hero .eyebrow { color: var(--secondary); text-align: center; margin-bottom: 12px; }
 .hero h1 { color: #fff; text-align: center; font-weight: 500; font-size: clamp(46px, 7.4vw, 104px); line-height: 0.95; letter-spacing: -0.03em; }
 .hero h1 span { color: var(--amber-soft); }
+.hero-example { display: flex; flex-direction: column; gap: 6px; align-items: center; margin: 21px 0 0; text-align: center; }
+.hero-example a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid #ffd6a0;
+  border-radius: 100px; background: #f0d6ac; color: #151521; text-decoration: none; font-size: 14px; font-weight: 650; }
+.hero-example a:hover, .hero-example a:focus-visible { background: #fff2dd; color: #080b12; }
+.hero-example small { color: #e2dacb; font-size: 12px; }
+
 .city { position: absolute; left: 0; right: 0; bottom: 0; height: 56%; z-index: 20; pointer-events: none; }
 .city .skyline { width: 100%; height: 100%; max-width: none; }
 @media (max-width: 767px) { .city { height: 46%; } }
@@ -291,6 +297,10 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--amber); outline
       <div class="inner">
         <p class="eyebrow">Open-source night restoration</p>
         <h1>Light where it is needed.<br><span>Darkness where it is not.</span></h1>
+        <div class="hero-example">
+          <a href="examples/dc-tonight/action-sheet.html">Open a sample action sheet</a>
+          <small>Fictional example · no installation</small>
+        </div>
       </div>
     </div>
     <div class="city">
