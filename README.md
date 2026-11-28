@@ -12,7 +12,7 @@ Built by **Christopher Woodyard / Vers3Dynamics**, with Washington, DC as the wo
 
 > **Research prototype · Python 3.10+ · MIT license.** The planner (in a browser or on the command line), physics derivation, simulations, reports, integration checks and trial-analysis tools run today. Nocturne does not connect to a city's lighting system: contracts, equipment tests, safety reviews and the import itself remain deployment work, and the software records them rather than assuming them. DC results are model estimates; the restoration demonstrations use entirely invented data.
 
-[Do something tonight](#do-something-tonight) · [Quick start](#quick-start) · [Restoration planner](#plan-in-your-browser) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
+[Open the live sample action sheet](https://nocturne-blue-delta.vercel.app/examples/dc-tonight/action-sheet.html) · [Visit Nocturne](https://nocturne-blue-delta.vercel.app/) · [Do something tonight](#do-something-tonight) · [Quick start](#quick-start) · [Restoration planner](#plan-in-your-browser) · [Restoration example](#a-complete-restoration-example) · [DC estimates](#washington-dc-the-worked-example) · [Documentation](#documentation)
 
 **First real-world validation:** [One-building field pilot](docs/FIELD_PILOT.md) turns a consenting owner's reversible lighting change into a preregistered target/control experiment, with a manifest checked against the trial fingerprint. No owner has been recruited or physical result claimed in this repository. See [the evidence ladder](docs/CLAIMS.md) for what is modeled, self-reported, or measured.
 
@@ -69,18 +69,17 @@ For a real project, use **Start fresh**, record your own observations, and save 
 
 ## Explore without installing
 
-Download the repository through **Code → Download ZIP**, extract it, and open one of these files in your browser:
+These hosted examples run without an account or installation. They do not connect to live lights.
 
-| File | What to explore |
+| Open in your browser | What to explore |
 |---|---|
-| [Nocturne homepage](index.html) | The project overview served at the site root, linking to each of the pages below. |
-| [DC Tonight action sheet](examples/dc-tonight/action-sheet.html) | A fictional block's actionable owner handoff, pending checks and streetlight request, set against that night's darkness and Moon. Open locally; no server needed to read the sheet. |
-| [Restoration report](examples/restoration/report.html) | An offline brief showing the selected interventions, costs and remaining sky brightness in the synthetic district. |
-| [Derived-district report](examples/restoration/derived-report.html) | The same kind of brief for a district whose coefficients were computed from geometry, haze and snow, with uncertainty ranges and a rebound. |
-| [Decision brief](docs/brief.html) | Interactive estimates of energy costs, lighting through the night, modeled skies and the proposed rollout. |
-| [Operator console](console/index.html) | A standalone browser demonstration of streetlight controller behavior. |
+| [DC Tonight action sheet](https://nocturne-blue-delta.vercel.app/examples/dc-tonight/action-sheet.html) | A fictional block's owner handoff and pending morning checks, set against that night's darkness and Moon. |
+| [Restoration report](https://nocturne-blue-delta.vercel.app/examples/restoration/report.html) | The selected interventions, costs and remaining sky brightness in a synthetic district. |
+| [Derived-district report](https://nocturne-blue-delta.vercel.app/examples/restoration/derived-report.html) | The same brief with geometry-derived effects, atmosphere scenarios, uncertainty ranges and a rebound. |
+| [Decision brief](https://nocturne-blue-delta.vercel.app/docs/brief.html) | Interactive Washington estimates for energy, lighting, modeled skies and the proposed rollout. |
+| [Operator console](https://nocturne-blue-delta.vercel.app/console/index.html) | A simulated night of streetlight controller behavior, not a live controller. |
 
-GitHub displays HTML source at these links. Open the downloaded files locally to see the interfaces. These demonstrations do not connect to live lights.
+To use the examples offline, download and extract the repository, then open [`index.html`](index.html) in your browser. To build a project with your own data, use the local planner below.
 
 ## Quick start
 
